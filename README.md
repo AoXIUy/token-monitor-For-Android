@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.0.5](https://img.shields.io/badge/version-1.0.5-38BDF8)
+![Version 1.0.6](https://img.shields.io/badge/version-1.0.6-38BDF8)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![Token Monitor Android 展示图：用量总览、会话与额度，使用演示数据](docs/showcase.png)

@@ -1,6 +1,6 @@
 {
   "name": "token-monitor-for-android",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "description": "Standalone read-only Android client for Token Monitor Hub",
   "license": "MIT",

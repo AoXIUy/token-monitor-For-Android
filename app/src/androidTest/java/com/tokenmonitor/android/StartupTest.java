@@ -1,5 +1,6 @@
 package com.tokenmonitor.android;
 
+import android.content.Intent;
 import android.graphics.Insets;
 import android.graphics.Rect;
 import android.os.Build;
@@ -47,8 +48,11 @@ public final class StartupTest {
 
     @After public void closeViewer() {
         SessionMonitorService.stop(InstrumentationRegistry.getInstrumentation().getTargetContext(), "测试结束", true);
-        if (scenario != null) scenario.close();
-        clearConnection();
+        try {
+            if (scenario != null) scenario.close();
+        } finally {
+            clearConnection();
+        }
     }
 
     private void clearConnection() {
@@ -453,8 +457,21 @@ public final class StartupTest {
                     if (completion.getTag().equals(item.getTag())) assertEquals("Repeated ended snapshots must not re-notify", postedAt, item.getPostTime());
                 }
                 scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);
+                AtomicReference<Intent> launchIntent = new AtomicReference<>();
+                scenario.onActivity(activity -> launchIntent.set(new Intent(activity.getIntent())));
                 completion.getNotification().contentIntent.send();
                 awaitScript("document.getElementById('page-title').textContent === '会话详情' && document.body.innerText.includes('codex:test')");
+                scenario.onActivity(activity -> {
+                    assertTrue("Notification routing must preserve the Activity launch identity",
+                            launchIntent.get().filterEquals(activity.getIntent()));
+                    assertFalse("Notification routing must be consumed once",
+                            activity.getIntent().hasExtra(SessionNotifications.EXTRA_KEY));
+                });
+                // ActivityScenario must still observe lifecycle events after onNewIntent.
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);
+                assertEquals(androidx.lifecycle.Lifecycle.State.RESUMED, scenario.getState());
+                awaitScript("document.getElementById('page-title').textContent === '会话详情'");
                 assertEquals("true", evaluate("window.handleBackNavigation()"));
                 awaitScript("document.getElementById('page-title').textContent === '会话与状态'");
                 assertTrue(requests.contains("GET /api/stats HTTP/1.1"));

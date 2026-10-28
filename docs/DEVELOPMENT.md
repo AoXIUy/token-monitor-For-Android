@@ -33,6 +33,8 @@
 
 Android 15+ 对 `dataSync` 前台服务有后台运行预算；应用处理服务超时并停止，用户需在 App 内重新开启。网络、省电、系统清理及强行停止也可能中断送达。应用不自动申请电池白名单、不在开机后自动启动监控。
 
+已有 Activity 收到通知点击时，只更新启动 Intent 中的会话键与连接指纹，页面就绪后校验并消费一次；通知 URI 仅区分 PendingIntent，不替换 Activity 的启动身份。AndroidX `ActivityScenario` 按启动 Intent 的 action、data 和 categories 等字段匹配生命周期事件，替换整个 Intent 会使通知跳转后的销毁事件被忽略，最终在测试清理时停留于 `PAUSED` 并超时。回归用真实通知 PendingIntent 检查跳转、参数消费及跳转后的后台 / 前台转换，清理仍须正常等待 Activity 销毁。
+
 ## 桌面微件
 
 `UsageWidgetProvider` 使用原生 `RemoteViews`；刷新由 `UsageWidgetRefreshService` 通过 `JobScheduler` 执行。系统每 30 分钟请求刷新，实际运行可能延后；前台成功读取也会更新卡片。

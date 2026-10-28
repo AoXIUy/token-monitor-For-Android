@@ -219,7 +219,11 @@ public final class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        setIntent(intent);
+        // The notification URI distinguishes PendingIntents, not Activity launches.
+        // Keep the launch identity stable (including across recreation), and retain
+        // only the latest routing extras until the WebView is ready to consume them.
+        getIntent().putExtra(SessionNotifications.EXTRA_KEY, intent.getStringExtra(SessionNotifications.EXTRA_KEY));
+        getIntent().putExtra(SessionNotifications.EXTRA_DESTINATION, intent.getStringExtra(SessionNotifications.EXTRA_DESTINATION));
         openNotificationSession();
     }
 
