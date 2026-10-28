@@ -1,0 +1,26 @@
+{
+  "sourceProject": "https://github.com/Javis603/token-monitor",
+  "sourceWorkspaceCommit": "f945fba0dc70f6772c4f3173327b05e368937c0f",
+  "files": [
+    {
+      "path": "src/shared/compactTokens.js",
+      "sha256": "a61a1adf24b4124ab397210e84d77a9d5618dc32ecf02d9b53bba9d8feb56b27"
+    },
+    {
+      "path": "src/shared/limits/balanceDisplay.js",
+      "sha256": "2d6cd781bf8866cb5ccfbadb5c0e727c8ad44b7d8950633fbb9e711762421618"
+    },
+    {
+      "path": "src/shared/sessionActivityProviders.js",
+      "sha256": "41a5ddf96d6115f04157d46865fa2aa0bafa601759c053418a867ffa2bf6759d"
+    },
+    {
+      "path": "src/shared/sessionGroups.js",
+      "sha256": "dbe1ef588755dbb7b76a045790646f7112f1dc7b257f0b6a9947372c7f389bb7"
+    },
+    {
+      "path": "src/shared/sessionLive.js",
+      "sha256": "ad1783221fcd0681bf4d54d769504160310486ba63471e60f04feede42cc8d56"
+    }
+  ]
+}

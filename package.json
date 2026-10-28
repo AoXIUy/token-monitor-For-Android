@@ -1,0 +1,16 @@
+{
+  "name": "token-monitor-for-android",
+  "version": "1.0.5",
+  "private": true,
+  "description": "Standalone read-only Android client for Token Monitor Hub",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:java": "node scripts/check-java.js",
+    "build:ui": "npm run build --prefix ui",
+    "verify": "npm test && npm run build:ui && npm run test:java"
+  }
+}

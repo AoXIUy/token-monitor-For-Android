@@ -1,0 +1,92 @@
+plugins { id 'com.android.application' }
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+    def missing = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].findAll {
+        !keystoreProperties.getProperty(it)?.trim()
+    }
+    if (!missing.isEmpty()) {
+        throw new GradleException("Missing release signing properties: ${missing.join(', ')}")
+    }
+}
+
+android {
+    namespace 'com.tokenmonitor.android'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.tokenmonitor.android'
+        minSdk 26
+        targetSdk 36
+        versionCode 6
+        versionName '1.0.5'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties.getProperty('storeFile'))
+                storePassword keystoreProperties.getProperty('storePassword')
+                keyAlias keystoreProperties.getProperty('keyAlias')
+                keyPassword keystoreProperties.getProperty('keyPassword')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // React output and authoritative shared calculations are packaged locally.
+    sourceSets.main.assets.srcDirs += layout.buildDirectory.dir('generated/assets')
+    sourceSets.main.assets.srcDirs += layout.buildDirectory.dir('generated/ui')
+}
+
+dependencies {
+    // Official local HTTPS asset mapping; keep navigation and network policy in
+    // LocalContentClient rather than rewriting HTML into a data document.
+    implementation 'androidx.webkit:webkit:1.14.0'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
+
+tasks.register('syncDisplayAssets', Sync) {
+    from('../src/shared') {
+        include 'compactTokens.js', 'limits/balanceDisplay.js', 'sessionLive.js', 'sessionActivityProviders.js', 'sessionGroups.js'
+    }
+    into layout.buildDirectory.dir('generated/assets/shared')
+}
+
+tasks.register('buildUi', Exec) {
+    def ui = rootProject.file('ui')
+    workingDir ui
+    inputs.files(fileTree(ui) {
+        include 'src/**', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'vite.config.ts'
+    })
+    outputs.dir layout.buildDirectory.dir('generated/ui')
+    doFirst {
+        if (!new File(ui, 'node_modules/.package-lock.json').exists()) {
+            throw new GradleException('Install Android UI dependencies first: npm ci --prefix ui (from repository root)')
+        }
+    }
+    commandLine System.getProperty('os.name').toLowerCase().contains('windows')
+            ? ['cmd', '/c', 'npm', 'run', 'build'] : ['npm', 'run', 'build']
+}
+tasks.named('preBuild').configure { dependsOn 'syncDisplayAssets', 'buildUi' }
+
+tasks.register('validateReleaseSigning') {
+    doLast {
+        if (!keystorePropertiesFile.isFile()) {
+            throw new GradleException('Release signing requires keystore.properties; see README.md')
+        }
+    }
+}
+tasks.matching { it.name in ['packageRelease', 'signReleaseBundle'] }.configureEach {
+    dependsOn 'validateReleaseSigning'
+}

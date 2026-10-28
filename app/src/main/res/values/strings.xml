@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="resources_unavailable">应用资源加载失败，请重新安装 Token Monitor</string>
+    <string name="widget_name">Token Monitor · 今日用量</string>
+    <string name="widget_description">今日 Token、费用和缓存占比，轻触查看全部用量。</string>
+    <string name="widget_today">今日用量</string>
+    <string name="widget_brand">TOKEN MONITOR</string>
+    <string name="widget_tokens_unit">tokens</string>
+    <string name="widget_placeholder">—</string>
+    <string name="widget_cost">费用 · USD</string>
+    <string name="widget_cost_partial">费用小计 · USD</string>
+    <string name="widget_cache">缓存读取占比</string>
+    <string name="widget_devices">近期上报设备</string>
+    <string name="widget_refresh">刷新</string>
+    <string name="widget_refresh_description">刷新桌面微件数据</string>
+    <string name="widget_connect">轻触卡片，连接 Hub</string>
+    <string name="widget_waiting">等待首次读取 · 可轻触刷新</string>
+    <string name="widget_snapshot">上次读取</string>
+    <string name="widget_authentication">认证失败 · 请打开应用检查连接</string>
+    <string name="widget_offline_snapshot">刷新失败 · 保留快照</string>
+    <string name="widget_offline">读取失败 · 轻触刷新重试</string>
+</resources>

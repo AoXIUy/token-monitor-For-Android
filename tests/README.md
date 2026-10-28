@@ -1,0 +1,7 @@
+# Standalone verification
+
+Run `npm run verify` from the repository root after `npm ci --prefix ui`. It runs the portable Node regressions, TypeScript checking and the production UI build, then the Java 17-compatible connection and completion checks. No root npm dependencies are required. Native Android build, lint and emulator tests run separately through Gradle and GitHub Actions.
+
+The Node tests preserve the Android model, session details and live status, family grouping, native-message state and limit-display coverage from the source project. Grouping expectations are explicit fixtures instead of importing the desktop renderer. Limits use normalized Hub response fixtures instead of importing the production aggregator or Ollama parser.
+
+The two authenticated, real-Node-Hub integration cases from the original `model.test.js` and `upstreamLimits.test.js` remain in the original source workspace described in [UPSTREAM.md](../docs/UPSTREAM.md). This repository does not bundle a Hub, provider parser or Electron app merely to run them. The portable fixtures exercise the Android consumer and do not claim to verify Hub authentication or provider parsing. Native authenticated GET requests, Keystore, completion notifications and widget rendering are covered by `app/src/androidTest/`; run `sh ./gradlew connectedDebugAndroidTest` on a dedicated emulator or device. Browser or Node tests do not replace native device acceptance.

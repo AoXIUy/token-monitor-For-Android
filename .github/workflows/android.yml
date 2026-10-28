@@ -1,0 +1,67 @@
+name: Android
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install React UI build dependencies
+        run: npm ci --prefix ui
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Verify display models, native state, Java contracts and React build
+        run: npm run verify
+      - name: Build APK and run Android lint
+        run: bash ./gradlew assembleDebug assembleDebugAndroidTest lint
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify startup and authenticated native requests in Android WebView
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          # Tailwind v4 requires a modern WebView (Chromium 111+).
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: bash ./gradlew connectedDebugAndroidTest
+      - name: Upload Android test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-test-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/reports/lint-results*.html
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Token-Monitor-Android-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
