@@ -207,6 +207,23 @@ export interface HubNativeBridge {
   monitor?: (enabled: boolean) => void;
   testNotification?: () => void;
   notificationSettings?: () => void;
+  checkForUpdates?: () => void;
+  automaticUpdates?: (enabled: boolean) => void;
+  downloadUpdate?: () => void;
+}
+
+export interface AppUpdateState {
+  currentVersion: string;
+  latestVersion: string;
+  automatic: boolean;
+  checking: boolean;
+  available: boolean;
+  checkedAt: number;
+  name: string;
+  notes: string;
+  publishedAt: string;
+  size: number;
+  error: string;
 }
 
 declare global {
@@ -220,6 +237,8 @@ declare global {
 }
 
 export interface MonitorState {
+  appUpdate: AppUpdateState;
+  dismissedUpdateVersion: string;
   page: PageId;
   period: PeriodId;
   device: string;

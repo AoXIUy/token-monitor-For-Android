@@ -28,6 +28,7 @@ public final class MainActivity extends Activity {
     private ConnectionStore store;
     private ConnectionSpec spec;
     private HubClient client;
+    private AppUpdates updates;
     private boolean foreground;
     private boolean ready;
     private boolean busy;
@@ -61,6 +62,7 @@ public final class MainActivity extends Activity {
         web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         web.setWebViewClient(new LocalContentClient(this));
         web.addJavascriptInterface(new Bridge(), "HubNative");
+        updates = new AppUpdates(this, this::emit);
         // Resize the WebView itself: its padding does not protect fixed CSS controls.
         FrameLayout viewport = new FrameLayout(this);
         viewport.setBackgroundColor(Color.rgb(9, 12, 16));
@@ -311,7 +313,10 @@ public final class MainActivity extends Activity {
 
     private final class Bridge {
         @JavascriptInterface public void ready() {
-            main.post(() -> { ready = true; foregroundChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true); });
+            main.post(() -> {
+                ready = true; foregroundChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
+                if (foreground) updates.resume(); else updates.send();
+            });
         }
         @JavascriptInterface public void connect(String address, String secret, boolean allowHttp) {
             main.post(() -> {
@@ -334,6 +339,16 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void refresh() { main.post(() -> MainActivity.this.refresh(true)); }
         @JavascriptInterface public void subscriptions() { main.post(() -> MainActivity.this.refresh(true)); }
+        @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
+        @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
+        @JavascriptInterface public void downloadUpdate() {
+            main.post(() -> {
+                String url = updates.downloadUrl();
+                if (url == null || !foreground) return;
+                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)); }
+                catch (android.content.ActivityNotFoundException error) { updates.downloadFailed(); }
+            });
+        }
         @JavascriptInterface public void monitor(boolean enabled) {
             main.post(() -> {
                 if (enabled) notificationAction("enable");
@@ -370,9 +385,11 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) { }
         notificationState();
         refresh(false);
+        if (ready && updates != null) updates.resume();
     }
     @Override protected void onStop() {
         foreground = false;
+        if (updates != null) updates.pause();
         cancel();
         foregroundChanged();
         if (web != null) web.onPause();
@@ -381,6 +398,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         cancel();
         network.shutdownNow();
+        if (updates != null) updates.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }
         super.onDestroy();
     }

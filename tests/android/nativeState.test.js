@@ -4,6 +4,33 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const stateModule = import('../../ui/src/nativeState.js');
 
+test('app update information and dismissed notices survive Hub switches without accepting URLs or secrets', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = receiveNativeMessage(createInitialState(), { type: 'appUpdate', currentVersion: '1.0.8', latestVersion: '1.10.0',
+    available: true, automatic: false, checking: false, checkedAt: 123, name: 'Release', notes: '<img src=x onerror=alert(1)>',
+    size: 1024, error: '', secret: 'must-not-store', downloadUrl: 'https://evil.test/app.apk' });
+  assert.equal(state.appUpdate.available, true);
+  assert.equal(state.appUpdate.automatic, false);
+  assert.equal(state.appUpdate.notes, '<img src=x onerror=alert(1)>');
+  assert.equal(JSON.stringify(state).includes('evil.test'), false);
+  assert.equal(JSON.stringify(state).includes('must-not-store'), false);
+  state.dismissedUpdateVersion = '1.10.0';
+  const next = receiveNativeMessage(state, { type: 'connection', url: 'https://different-hub.example.com' });
+  assert.equal(next.appUpdate, state.appUpdate);
+  assert.equal(next.dismissedUpdateVersion, '1.10.0');
+  assert.equal(next.appUpdate.checkedAt, 123);
+});
+
+test('malformed app update messages do not fabricate availability, dates or download sizes', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  for (const bad of [NaN, Infinity, -1, '123']) {
+    const state = receiveNativeMessage(createInitialState(), { type: 'appUpdate', available: true, checkedAt: bad, size: bad });
+    assert.equal(state.appUpdate.available, false);
+    assert.equal(state.appUpdate.checkedAt, 0);
+    assert.equal(state.appUpdate.size, 0);
+  }
+});
+
 test('Android React connection changes discard previous Hub data and never store credentials', async () => {
   const { createInitialState, receiveNativeMessage } = await stateModule;
   const previous = { ...createInitialState(), stats: { devices: [{ deviceId: 'old' }] },

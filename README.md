@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.0.7](https://img.shields.io/badge/version-1.0.7-38BDF8)
+![Version 1.0.8](https://img.shields.io/badge/version-1.0.8-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -25,6 +25,7 @@
 | 额度与余额 | 查看 Hub 同步的账户额度、余额及共享订阅；账户仍在电脑端管理 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
+| 软件更新 | 在前台自动检查 GitHub 正式 Release，支持手动检查、更新说明与 APK 下载 |
 
 ### 界面预览
 
@@ -56,6 +57,8 @@
 完成提醒可在「会话」或「连接」页开启，需要通知权限并显示常驻通知。首次快照只建立基线，空闲、消失或推断活动不会被当作完成。Android 后台预算、省电策略和网络可能暂停或延迟监控；详细行为与验收步骤见 [开发指南](docs/DEVELOPMENT.md)。
 
 长按系统桌面 → 微件 → **Token Monitor · 今日用量** 可添加桌面卡片。微件显示带日期与时间的快照，系统约每 30 分钟请求刷新，实际执行可能延后；也可点击卡片右上角手动刷新。
+
+「连接」页的「软件更新」显示实际安装版本，可手动检查、查看更新说明并下载最新正式 APK。自动检查默认开启，在启动或回到前台且距上次尝试至少 12 小时时访问本仓库的 GitHub Release；可随时关闭。发现更高版本会显示提示，下载由系统浏览器处理，安装时需要确认。检查更新不需要连接 Hub；网络失败保留上次检查结果和时间。
 
 ## 从源码构建
 
@@ -98,7 +101,7 @@ sh ./gradlew connectedDebugAndroidTest  # 需要专用模拟器或测试设备
 
 ## 数据与隐私
 
-- 仅调用允许的 Hub GET 接口，不注册采集设备、不上传用量、不修改订阅、不删除设备。
+- Hub 连接仅调用允许的 GET 接口，不注册采集设备、不上传用量、不修改订阅、不删除设备。软件更新独立读取固定仓库的 GitHub 公开 Release 接口，不向它发送 Hub 凭据或统计。
 - shared secret 由原生层通过 Android Keystore 的 AES-GCM 密钥加密保存，已有凭据不返回网页；更换地址需要重新输入 secret。
 - WebView 仅加载 APK 中允许的本地资源，页面不直接访问网络；原生请求使用系统 TLS 校验并拒绝重定向。
 - 不持久化完整统计快照或对话正文；提醒去重和微件只保存必要的有界摘要，应用禁用云备份。

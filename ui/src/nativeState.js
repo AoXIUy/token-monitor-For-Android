@@ -8,6 +8,9 @@ function isConnectionStatus(value) {
 /** @returns {import('./types/monitor').MonitorState} */
 export function createInitialState() {
   return {
+    appUpdate: { currentVersion: '', latestVersion: '', automatic: true, checking: false, available: false,
+      checkedAt: 0, name: '', notes: '', publishedAt: '', size: 0, error: '' },
+    dismissedUpdateVersion: '',
     page: 'overview', period: 'today', device: '', stats: null, subscriptions: null,
     subscriptionError: '', connection: '', allowHttp: false, status: 'disconnected',
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
@@ -24,10 +27,24 @@ export function createInitialState() {
  */
 export function receiveNativeMessage(state, message) {
   switch (message.type) {
+    case 'appUpdate': {
+      /** @param {string} key @param {number} limit */
+      const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
+      const latestVersion = text('latestVersion', 64);
+      return { ...state, appUpdate: {
+        currentVersion: text('currentVersion', 64) || state.appUpdate.currentVersion,
+        latestVersion, automatic: typeof message.automatic === 'boolean' ? message.automatic : state.appUpdate.automatic,
+        checking: message.checking === true, available: message.available === true && Boolean(latestVersion),
+        checkedAt: typeof message.checkedAt === 'number' && Number.isFinite(message.checkedAt) && message.checkedAt > 0 ? message.checkedAt : 0,
+        size: typeof message.size === 'number' && Number.isFinite(message.size) && message.size > 0 ? message.size : 0,
+        name: text('name', 160), notes: text('notes', 12000), publishedAt: text('publishedAt', 40), error: text('error', 300),
+      } };
+    }
     case 'connection': {
       const connection = String(message.url || '');
       return {
         ...createInitialState(), connection, allowHttp: Boolean(message.allowHttp),
+        appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
       };

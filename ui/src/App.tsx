@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, Clock, LayoutGrid, Laptop, MessageSquare, RefreshCw, Server, Settings, Sparkles } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Clock, Download, LayoutGrid, Laptop, MessageSquare, RefreshCw, Server, Settings, Sparkles, X } from 'lucide-react';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
 import { DevicesView } from './components/DevicesView';
 import { LimitsView } from './components/LimitsView';
@@ -29,6 +29,12 @@ function Dashboard({ state, update }: Monitor) {
   const [sessionLimit, setSessionLimit] = useState(40);
   const [openSessions, setOpenSessions] = useState<Set<string>>(() => new Set());
   const [deadlineTick, setDeadlineTick] = useState(0);
+  const [revealAppUpdate, setRevealAppUpdate] = useState(false);
+  useEffect(() => {
+    if (!revealAppUpdate || page !== 'settings') return;
+    document.getElementById('app-update')?.scrollIntoView({ block: 'start' });
+    setRevealAppUpdate(false);
+  }, [page, revealAppUpdate]);
   const nowTick = Date.now();
   const selected = MonitorModel.select(stats, device, period, nowTick);
 
@@ -204,6 +210,18 @@ function Dashboard({ state, update }: Monitor) {
             </div>
           )}
 
+          {state.appUpdate.available && state.dismissedUpdateVersion !== state.appUpdate.latestVersion && (
+            <div id="app-update-banner" role="status" className="mb-3.5 rounded-2xl border border-sky-400/30 bg-sky-400/10 p-3 flex flex-wrap items-center gap-2 text-xs text-sky-200">
+              <Download className="w-4 h-4 shrink-0" />
+              <span className="flex-1 min-w-0">发现新版本 {state.appUpdate.latestVersion}</span>
+              <button type="button" onClick={() => { setPage('settings'); setRevealAppUpdate(true); }} className="min-h-[36px] px-2 font-semibold">查看更新</button>
+              <button type="button" aria-label="稍后更新" className="min-w-[36px] min-h-[36px] flex items-center justify-center"
+                onClick={() => update(previous => ({ ...previous, dismissedUpdateVersion: previous.appUpdate.latestVersion }))}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {showFilters && (
             <div id="filters" className="mb-3.5 space-y-2.5">
               {showPeriods && (
@@ -337,6 +355,7 @@ function Dashboard({ state, update }: Monitor) {
 
           {page === 'settings' ? (
             <SettingsView
+              appUpdate={state.appUpdate}
               connectionUrl={connection}
               allowHttpInitial={allowHttp}
               connectPending={connectPending}

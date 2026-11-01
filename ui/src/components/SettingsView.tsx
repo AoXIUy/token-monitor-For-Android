@@ -6,10 +6,12 @@ import {
   Link2,
   Sparkles,
 } from 'lucide-react';
-import { NotificationState } from '../types/monitor';
+import { NotificationState, AppUpdateState } from '../types/monitor';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
+import { AppUpdateCard } from './AppUpdateCard';
 
 interface SettingsViewProps {
+  appUpdate: AppUpdateState;
   connectionUrl: string;
   allowHttpInitial: boolean;
   connectPending: boolean;
@@ -24,6 +26,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
+  appUpdate,
   connectionUrl,
   allowHttpInitial,
   connectPending,
@@ -171,6 +174,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onOpenSystemSettings={onOpenSystemSettings}
       /></div>
 
+      <AppUpdateCard state={appUpdate} />
+
       <section className="glass-panel rounded-3xl p-4.5 space-y-2">
         <div className="flex items-center gap-2 text-sky-300">
           <HelpCircle className="w-4 h-4" />
@@ -185,7 +190,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       <p className="text-[11px] text-slate-400/80 text-center leading-relaxed pt-2 pb-2">
-        Token Monitor for Android · 1.0.4
+        Token Monitor for Android{appUpdate.currentVersion ? ` · ${appUpdate.currentVersion}` : ''}
         <br />
         凭据加密保存在本机 · 后台提醒按开关运行
       </p>

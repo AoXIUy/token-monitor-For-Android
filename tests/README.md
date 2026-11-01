@@ -1,6 +1,6 @@
 # Standalone verification
 
-Run `npm run verify` from the repository root after `npm ci --prefix ui`. It runs the portable Node regressions, TypeScript checking and the production UI build, then the Java 17-compatible connection and completion checks. No root npm dependencies are required. Native Android build, lint and emulator tests run separately through Gradle and GitHub Actions.
+Run `npm run verify` from the repository root after `npm ci --prefix ui`. It runs the portable Node regressions, TypeScript checking and the production UI build, then the Java 17-compatible connection, completion and update-policy checks. No root npm dependencies are required. Native Android build, lint and emulator tests run separately through Gradle and GitHub Actions.
 
 The Node tests preserve the Android model, session details and live status, family grouping, native-message state and limit-display coverage from the source project. Grouping expectations are explicit fixtures instead of importing the desktop renderer. Limits use normalized Hub response fixtures instead of importing the production aggregator or Ollama parser.
 

@@ -43,6 +43,8 @@ public final class StartupTest {
     @Before public void launchFreshViewer() {
         SessionMonitorService.stop(InstrumentationRegistry.getInstrumentation().getTargetContext(), "测试重置", true);
         clearConnection();
+        InstrumentationRegistry.getInstrumentation().getTargetContext().getSharedPreferences("app-updates", 0)
+                .edit().clear().putBoolean("automatic", false).commit();
         scenario = ActivityScenario.launch(MainActivity.class);
     }
 
@@ -111,6 +113,25 @@ public final class StartupTest {
             assertFalse(view.getSettings().getAllowFileAccess());
             assertFalse(view.getSettings().getAllowContentAccess());
         });
+    }
+
+    @Test public void appUpdatesRenderSafeNotesAndRemainIndependentOfHubConnections() throws Exception {
+        awaitConnectionPage();
+        String installed = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageManager()
+                .getPackageInfo("com.tokenmonitor.android", 0).versionName;
+        awaitScript("document.getElementById('app-update').textContent.includes(" + org.json.JSONObject.quote("当前版本 " + installed) + ") && document.getElementById('check-app-update')");
+        evaluate("window.receiveNative({type:'appUpdate',currentVersion:'1.0.8',latestVersion:'9.9.0',available:true,automatic:false,checkedAt:123,size:1048576,name:'New release',notes:'<img id=unsafe-update src=x onerror=alert(1)>'})");
+        awaitScript("document.getElementById('app-update-banner') && document.getElementById('app-update-status').textContent.includes('9.9.0')");
+        evaluate("document.querySelector('#app-update summary').click()");
+        assertEquals("true", evaluate("document.getElementById('app-update').textContent.includes('<img id=unsafe-update') && !document.getElementById('unsafe-update')"));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        awaitScript("document.getElementById('app-update-banner')");
+        evaluate("document.querySelector('#app-update-banner button').click()");
+        awaitScript("document.getElementById('download-app-update').textContent.includes('9.9.0')");
+        evaluate("document.querySelector('[aria-label=\"稍后更新\"]').click()");
+        awaitScript("!document.getElementById('app-update-banner')");
+        evaluate("window.receiveNative({type:'connection',url:''})");
+        awaitScript("document.getElementById('download-app-update') && !document.getElementById('app-update-banner')");
     }
 
     @Test public void systemBarsAndKeyboardResizeTheWholeWebViewport() throws Exception {
