@@ -58,7 +58,7 @@ sh ./gradlew assembleRelease lintRelease
 
 Windows 使用 `.\gradlew.bat assembleRelease lintRelease`。输出为 `app/build/outputs/apk/release/app-release.apk`。缺少签名配置会明确失败，不会回退到调试签名。可使用 SDK Build Tools 的 `apksigner verify --verbose --print-certs` 验证生成的 APK。
 
-首次从不同签名的调试版或正式版切换时需要先卸载旧版，连接配置会随卸载清除。仓库不包含发布私钥，GitHub CI 默认只构建调试包。
+首次从不同签名的调试版或正式版切换时需要先卸载旧版，连接配置会随卸载清除。仓库不包含发布私钥；普通 GitHub CI 只构建调试包，正式发布工作流从 Actions Secrets 恢复签名，详见 [发布指南](RELEASING.md)。`release-signing.sha256` 是正式签名的公开证书指纹；发布校验必须与它匹配，不能换用临时密钥或调试签名。
 
 ## 验证范围
 

@@ -4,7 +4,8 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.0.6](https://img.shields.io/badge/version-1.0.6-38BDF8)
+![Version 1.0.7](https://img.shields.io/badge/version-1.0.7-38BDF8)
+[![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![Token Monitor Android 展示图：用量总览、会话与额度，使用演示数据](docs/showcase.png)
@@ -44,7 +45,7 @@
 需要 Android 8.0（API 26）及以上版本，并将系统 Android WebView 更新至 Chromium 111 或以上。
 
 1. 在 [主线项目](https://github.com/Javis603/token-monitor) 的桌面端启用 Hub，或部署 Node / Cloudflare Hub，并让电脑端持续上传数据。
-2. 从本仓库 [GitHub Actions](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml) 的成功运行中下载 `Token-Monitor-Android-debug` 产物，解压后安装 APK；也可按下文自行构建。下载 Actions 产物需要登录 GitHub。
+2. 从本仓库 [Releases](https://github.com/AoXIUy/token-monitor-For-Android/releases/latest) 下载正式签名 APK 安装；可用附带的 `SHA256SUMS` 校验文件。开发调试包仍可从 [GitHub Actions](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml) 的成功运行下载，也可按下文自行构建。
 3. 在 App 的「连接」页填写 Hub 根地址和 shared secret，例如 `https://monitor.example.com` 或 `http://192.168.1.10:17321`。
 4. 局域网 HTTP 需要显式打开「允许 HTTP」。HTTP 会明文传输凭据，跨网络连接应使用有效 HTTPS 或已有 VPN。
 
@@ -91,7 +92,7 @@ sh ./gradlew assembleDebug assembleDebugAndroidTest lint
 sh ./gradlew connectedDebugAndroidTest  # 需要专用模拟器或测试设备
 ```
 
-浏览器预览不会自动伪造 Hub 连接，也不能替代 Android 原生 WebView、Keystore、通知和微件验收。仪器测试会清空测试设备中本 App 的连接配置。GitHub CI 配置见 [android.yml](.github/workflows/android.yml)。
+浏览器预览不会自动伪造 Hub 连接，也不能替代 Android 原生 WebView、Keystore、通知和微件验收。仪器测试会清空测试设备中本 App 的连接配置。GitHub CI 配置见 [android.yml](.github/workflows/android.yml)。[Release 工作流](.github/workflows/release.yml) 在推送版本标签或手动触发后，先复用完整 CI，通过后正式签名并发布；配置与后续版本发布步骤见 [Actions 发布指南](docs/RELEASING.md)。
 
 工程以 Java 原生层处理网络、加密存储、通知和微件，React + TypeScript 在本地 WebView 中展示界面；运行时不依赖 CDN 或远程字体。源码与边界约定见 [开发指南](docs/DEVELOPMENT.md)。
 

@@ -1,0 +1,147 @@
+name: Release Android
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate version, tag and release source
+        id: version
+        run: |
+          node scripts/release-metadata.js
+          tag="v$(node -p "require('./package.json').version")"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            test "$(git rev-parse "$tag^{commit}")" = "$GITHUB_SHA"
+          fi
+
+  verify:
+    needs: metadata
+    uses: ./.github/workflows/android.yml
+
+  build:
+    needs: [metadata, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Restore release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PROPERTIES_BASE64: ${{ secrets.ANDROID_KEYSTORE_PROPERTIES_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo 'Missing ANDROID_KEYSTORE_BASE64 secret'; exit 1; }
+          test -n "$ANDROID_KEYSTORE_PROPERTIES_BASE64" || { echo 'Missing ANDROID_KEYSTORE_PROPERTIES_BASE64 secret'; exit 1; }
+          umask 077
+          mkdir -p signing
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > signing/ci-release.jks
+          printf '%s' "$ANDROID_KEYSTORE_PROPERTIES_BASE64" | base64 --decode > keystore.properties
+          node <<'NODE'
+          const fs = require('node:fs');
+          for (const line of fs.readFileSync('keystore.properties', 'utf8').split(/\r?\n/)) {
+            const value = line.match(/^(?:storePassword|keyPassword)\s*[=:](.*)$/)?.[1];
+            if (value) process.stdout.write(`::add-mask::${value.replace(/%/g, '%25')}\n`);
+          }
+          NODE
+          # Java Properties uses the last value; local absolute paths never enter CI.
+          printf '\nstoreFile=signing/ci-release.jks\n' >> keystore.properties
+      - name: Build signed release and run lint
+        run: bash ./gradlew --no-daemon assembleRelease lintRelease
+      - name: Verify signature, package identity and alignment
+        run: node scripts/package-release.js
+      - name: Remove temporary signing files
+        if: always()
+        run: rm -f keystore.properties signing/ci-release.jks
+      - name: Upload signed release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-release-${{ needs.metadata.outputs.version }}
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload release lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-release-lint
+          path: app/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+
+  publish:
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Android-release-${{ needs.metadata.outputs.version }}
+          path: artifacts
+      - name: Publish verified APK and checksums
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          sha256sum --check SHA256SUMS
+          # Fail on network/authentication errors; only an actual 404 means absent.
+          if gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > /tmp/existing-release.json 2>/tmp/release-lookup.err; then
+            node -e 'const r=require("/tmp/existing-release.json"); if (!r.draft || r.target_commitish !== process.env.SOURCE_SHA) throw Error("Refusing to replace a published release or a draft from another commit")'
+          elif ! grep -q '(HTTP 404)' /tmp/release-lookup.err; then
+            cat /tmp/release-lookup.err >&2
+            exit 1
+          else
+            gh release create "$RELEASE_TAG" --target "$SOURCE_SHA" --draft \
+              --title "Token Monitor Android $RELEASE_VERSION" --notes-file RELEASE_NOTES.md
+          fi
+          # Uploads may be retried while the release is still a draft.
+          gh release upload "$RELEASE_TAG" "Token-Monitor-Android-$RELEASE_VERSION.apk" \
+            SHA256SUMS signature.txt release-metadata.json --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest
+          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

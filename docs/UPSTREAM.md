@@ -2,7 +2,7 @@
 
 本项目是 [Javis603/token-monitor](https://github.com/Javis603/token-monitor) 的 Android 只读客户端独立工程，保留原作者 Javis 的 [MIT 版权声明](../LICENSE)。桌面端、Agent、Hub 部署与服务端能力继续以主线项目为准。
 
-Android 源码从现有工作区的 `android/` 提取，应用版本保持 **1.0.5 / versionCode 6**。提取时源工作区提交为 `f945fba0dc70f6772c4f3173327b05e368937c0f`。这是本次本地源快照标识，不表示该提交一定存在于主线 GitHub 仓库。提取不包含源工作区未提交的桌面端或 Linux Agent 改动。
+Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **1.0.5 / versionCode 6**；当前版本以 `app/build.gradle` 与 `package.json` 为准。提取时源工作区提交为 `f945fba0dc70f6772c4f3173327b05e368937c0f`。这是本次本地源快照标识，不表示该提交一定存在于主线 GitHub 仓库。提取不包含源工作区未提交的桌面端或 Linux Agent 改动。
 
 ## 共享模块
 
