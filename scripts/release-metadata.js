@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync, spawnSync } = require('node:child_process');
 
 function releaseMetadata(root, event = {}) {
   const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
@@ -25,17 +26,43 @@ function releaseMetadata(root, event = {}) {
   return { version, versionCode, tag };
 }
 
-if (require.main === module) {
-  const metadata = releaseMetadata(path.resolve(__dirname, '..'), {
-    name: process.env.GITHUB_EVENT_NAME,
-    refType: process.env.GITHUB_REF_TYPE,
-    refName: process.env.GITHUB_REF_NAME
+function validateReleaseSource(root, tag, sourceSha) {
+  if (!/^[a-f0-9]{40}$/.test(sourceSha)) throw new Error('Actions source must be an exact Git commit');
+  const commit = ref => execFileSync('git', ['rev-parse', '--verify', `${ref}^{commit}`], {
+    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']
+  }).trim();
+  const head = commit('HEAD');
+  if (head !== sourceSha) throw new Error(`Checkout ${head} does not match Actions source commit ${sourceSha}`);
+  const lookup = spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/tags/${tag}`], {
+    cwd: root, encoding: 'utf8'
   });
-  if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT,
-      `tag=${metadata.tag}\nversion=${metadata.version}\nversion_code=${metadata.versionCode}\n`);
+  if (lookup.error) throw lookup.error;
+  if (lookup.status === 1) return;
+  if (lookup.status !== 0) throw new Error(`Cannot inspect release tag ${tag}: ${lookup.stderr.trim()}`);
+  const taggedCommit = commit(`refs/tags/${tag}`);
+  if (taggedCommit !== sourceSha) {
+    throw new Error(`Tag ${tag} already points to ${taggedCommit}, but this run builds ${sourceSha}. Use a new version in package.json and Android versionName, increment versionCode and add docs/releases/<version>.md. Keep the existing release tag unchanged.`);
   }
-  console.log(JSON.stringify(metadata));
+}
+
+if (require.main === module) {
+  try {
+    const root = path.resolve(__dirname, '..');
+    const metadata = releaseMetadata(root, {
+      name: process.env.GITHUB_EVENT_NAME,
+      refType: process.env.GITHUB_REF_TYPE,
+      refName: process.env.GITHUB_REF_NAME
+    });
+    if (process.env.GITHUB_SHA) validateReleaseSource(root, metadata.tag, process.env.GITHUB_SHA);
+    if (process.env.GITHUB_OUTPUT) {
+      fs.appendFileSync(process.env.GITHUB_OUTPUT,
+        `tag=${metadata.tag}\nversion=${metadata.version}\nversion_code=${metadata.versionCode}\n`);
+    }
+    console.log(JSON.stringify(metadata));
+  } catch (error) {
+    console.error(`Release validation failed: ${error.message}`);
+    process.exitCode = 1;
+  }
 }
 
 module.exports = { releaseMetadata };

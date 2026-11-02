@@ -29,12 +29,7 @@ jobs:
           node-version: '22'
       - name: Validate version, tag and release source
         id: version
-        run: |
-          node scripts/release-metadata.js
-          tag="v$(node -p "require('./package.json').version")"
-          if git show-ref --verify --quiet "refs/tags/$tag"; then
-            test "$(git rev-parse "$tag^{commit}")" = "$GITHUB_SHA"
-          fi
+        run: node scripts/release-metadata.js
 
   verify:
     needs: metadata
