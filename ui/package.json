@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --port 3000 --host 0.0.0.0",
     "check": "tsc --noEmit",
     "build": "npm run check && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --port 3000 --host 0.0.0.0"
   },
   "dependencies": {
     "lucide-react": "1.61.0",

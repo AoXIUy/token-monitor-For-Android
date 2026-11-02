@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, Cpu, HardDrive, Laptop } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Check, Copy, Cpu, HardDrive, Laptop } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import { MonitorStats } from '../types/monitor';
 import { formatShortTime } from '../utils/formatters';
@@ -10,7 +10,20 @@ interface DevicesViewProps {
 }
 
 export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice }) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const devices = stats.devices || [];
+
+  const handleCopyId = (deviceId: string) => {
+    try {
+      navigator.clipboard?.writeText(deviceId);
+    } catch {
+      // Clipboard may be restricted in some WebViews
+    }
+    setCopiedId(deviceId);
+    window.setTimeout(() => {
+      setCopiedId((prev) => (prev === deviceId ? null : prev));
+    }, 1500);
+  };
 
   if (!devices.length) {
     return (
@@ -39,18 +52,19 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
 
       {devices.map((device) => {
         const p = MonitorModel.select(stats, device.deviceId, 'today').period;
+        const monthPeriod = MonitorModel.select(stats, device.deviceId, 'month').period;
         const metaParts = [
           device.osName || device.platform,
           device.osVersion,
           device.agentVersion ? `Agent v${device.agentVersion}` : '',
         ].filter(Boolean);
+        const isCopied = copiedId === device.deviceId;
 
         return (
           <section
             key={device.deviceId}
-            className="glass-panel rounded-3xl p-4.5 transition-all duration-150 hover:border-white/15"
+            className="glass-panel rounded-3xl p-5 transition-all duration-150 hover:border-white/15"
           >
-
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 shrink-0">
@@ -64,9 +78,26 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
                   <h3 className="text-sm font-semibold text-slate-100 truncate">
                     {device.hostname || device.deviceId}
                   </h3>
-                  <p className="text-[11px] font-mono-tabular text-slate-400 truncate mt-0.5">
-                    {device.deviceId}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[11px] font-mono-tabular text-slate-400 truncate">
+                      {device.deviceId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyId(device.deviceId)}
+                      aria-label={`复制设备 ID ${device.deviceId}`}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-sky-300 transition-colors shrink-0"
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-300">已复制</span>
+                        </>
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -80,9 +111,7 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
             </div>
 
             {metaParts.length > 0 && (
-              <p className="text-xs text-slate-300/80 mt-2.5">
-                {metaParts.join(' · ')}
-              </p>
+              <p className="text-xs text-slate-300/80 mt-2.5">{metaParts.join(' · ')}</p>
             )}
 
             <div className="glass-inset rounded-2xl p-3.5 my-3 grid grid-cols-2 gap-3">
@@ -100,10 +129,15 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono-tabular py-1">
-              <span>采集 {formatShortTime(device.updatedAt)}</span>
-              <span>·</span>
-              <span>接收 {formatShortTime(device.receivedAt)}</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono-tabular py-1 flex-wrap gap-2">
+              <span>
+                采集 {formatShortTime(device.updatedAt)} · 接收 {formatShortTime(device.receivedAt)}
+              </span>
+              {monthPeriod && (
+                <span className="text-slate-300">
+                  本月 {MonitorModel.compact(monthPeriod.totalTokens)}
+                </span>
+              )}
             </div>
 
             <button

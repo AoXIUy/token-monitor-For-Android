@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, Clock, Download, LayoutGrid, Laptop, MessageSquare, RefreshCw, Server, Settings, Sparkles, X } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ChevronDown,
+  Clock,
+  Download,
+  LayoutGrid,
+  Laptop,
+  MessageSquare,
+  RefreshCw,
+  Server,
+  Settings,
+  X,
+} from 'lucide-react';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
 import { DevicesView } from './components/DevicesView';
 import { LimitsView } from './components/LimitsView';
@@ -9,7 +22,14 @@ import { SessionsView } from './components/SessionsView';
 import { SettingsView } from './components/SettingsView';
 import { useNativeMonitor } from './hooks/useNativeMonitor';
 import { MonitorModel } from './model/monitorModel';
-import type { BreakdownKind, PageId, PeriodId, QuotaTabId, ConnectionStatus } from './types/monitor';
+import { receiveNativeMessage } from './nativeState';
+import type {
+  BreakdownKind,
+  PageId,
+  PeriodId,
+  QuotaTabId,
+  ConnectionStatus,
+} from './types/monitor';
 import { formatShortTime, PAGE_LABELS } from './utils/formatters';
 
 type Monitor = ReturnType<typeof useNativeMonitor>;
@@ -19,10 +39,27 @@ export default function App() {
   return <Dashboard key={monitor.state.connectionEpoch} {...monitor} />;
 }
 
-function Dashboard({ state, update }: Monitor) {
-  const { page, period, device, stats, subscriptions, subscriptionError, connection, allowHttp,
-    status, message, fetchedAt, foreground, statusHealthy, detailKey, notifications,
-    monitorPending, connectPending, formError } = state;
+function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor) {
+  const {
+    page,
+    period,
+    device,
+    stats,
+    subscriptions,
+    subscriptionError,
+    connection,
+    allowHttp,
+    status,
+    message,
+    fetchedAt,
+    foreground,
+    statusHealthy,
+    detailKey,
+    notifications,
+    monitorPending,
+    connectPending,
+    formError,
+  } = state;
   const [breakdownKind, setBreakdownKind] = useState<BreakdownKind>('clients');
   const [quotaTab, setQuotaTab] = useState<QuotaTabId>('limits');
   const [search, setSearch] = useState('');
@@ -30,73 +67,223 @@ function Dashboard({ state, update }: Monitor) {
   const [openSessions, setOpenSessions] = useState<Set<string>>(() => new Set());
   const [deadlineTick, setDeadlineTick] = useState(0);
   const [revealAppUpdate, setRevealAppUpdate] = useState(false);
+
   useEffect(() => {
     if (!revealAppUpdate || page !== 'settings') return;
     document.getElementById('app-update')?.scrollIntoView({ block: 'start' });
     setRevealAppUpdate(false);
   }, [page, revealAppUpdate]);
+
   const nowTick = Date.now();
   const selected = MonitorModel.select(stats, device, period, nowTick);
 
   const setPage = (next: PageId) => {
-    update(previous => ({ ...previous, page: next }));
+    update((previous) => ({ ...previous, page: next }));
     setOpenSessions(new Set());
     setSessionLimit(40);
-    if (next === 'limits' && quotaTab === 'subscriptions') window.HubNative?.subscriptions?.();
+    if (next === 'limits' && quotaTab === 'subscriptions') {
+      window.HubNative?.subscriptions?.();
+    }
     window.scrollTo(0, 0);
   };
-  const setPeriod = (next: PeriodId) => update(previous => ({ ...previous, period: next }));
-  const setDevice = (next: string) => update(previous => ({ ...previous, device: next }));
+  const setPeriod = (next: PeriodId) => update((previous) => ({ ...previous, period: next }));
+  const setDevice = (next: string) => update((previous) => ({ ...previous, device: next }));
   const openSession = (key: string) => {
-    update(previous => ({ ...previous, page: 'sessionDetail', detailKey: key }));
+    update((previous) => ({ ...previous, page: 'sessionDetail', detailKey: key }));
     setOpenSessions(new Set());
     window.scrollTo(0, 0);
   };
 
   useEffect(() => {
-    const visibility = () => setDeadlineTick(previous => previous + 1);
+    const visibility = () => setDeadlineTick((previous) => previous + 1);
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
 
   useEffect(() => {
-    if (!stats || !foreground || document.hidden || !['sessions', 'sessionDetail'].includes(page)) return;
+    if (!stats || !foreground || document.hidden || !['sessions', 'sessionDetail'].includes(page))
+      return;
     const now = Date.now();
-    const detail = page === 'sessionDetail' ? MonitorModel.sessionDetail(stats, detailKey, { deviceId: device, period, now }) : null;
-    const rows = page === 'sessionDetail' ? (detail ? [detail.row] : []) : MonitorModel.sessions(selected.period, search);
+    const detail =
+      page === 'sessionDetail'
+        ? MonitorModel.sessionDetail(stats, detailKey, { deviceId: device, period, now })
+        : null;
+    const rows =
+      page === 'sessionDetail'
+        ? detail
+          ? [detail.row]
+          : []
+        : MonitorModel.sessions(selected.period, search);
     let nearest = Infinity;
     for (const row of rows) {
-      const reading = MonitorModel.sessionStatus(row, { now, stats, deviceId: device, period: detail?.period || period,
-        connected: statusHealthy, foreground, fetchedAt });
+      const reading = MonitorModel.sessionStatus(row, {
+        now,
+        stats,
+        deviceId: device,
+        period: detail?.period || period,
+        connected: statusHealthy,
+        foreground,
+        fetchedAt,
+      });
       if (reading.nextChangeAt > now) nearest = Math.min(nearest, reading.nextChangeAt);
     }
     if (!Number.isFinite(nearest)) return;
-    const timer = setTimeout(() => setDeadlineTick(previous => previous + 1), Math.max(1, nearest - now));
+    const timer = setTimeout(
+      () => setDeadlineTick((previous) => previous + 1),
+      Math.max(1, nearest - now)
+    );
     return () => clearTimeout(timer);
-  }, [stats, foreground, page, detailKey, device, period, selected.period, search, statusHealthy, fetchedAt, deadlineTick]);
+  }, [
+    stats,
+    foreground,
+    page,
+    detailKey,
+    device,
+    period,
+    selected.period,
+    search,
+    statusHealthy,
+    fetchedAt,
+    deadlineTick,
+  ]);
 
-  const handleRefresh = () => window.HubNative?.refresh?.();
-  const handleConnect = (url: string, secret: string, allowHttpChecked: boolean) => {
-    if (!window.HubNative?.connect) {
-      update(previous => ({ ...previous, formError: '请在安卓 App 中连接 Hub；此页面为离线界面预览。' }));
+  const handleRefresh = () => {
+    if (window.HubNative?.refresh) {
+      window.HubNative.refresh();
       return;
     }
-    update(previous => ({ ...previous, connectPending: true, formError: '' }));
+    if (isBrowserPreview) {
+      update((previous) => receiveNativeMessage(previous, { type: 'status', state: 'loading' }));
+      window.setTimeout(() => {
+        const now = Date.now();
+        update((previous) => {
+          let next = receiveNativeMessage(previous, { type: 'status', state: 'online' });
+          if (previous.stats) {
+            next = receiveNativeMessage(next, {
+              type: 'stats',
+              data: previous.stats,
+              fetchedAt: now,
+            });
+          }
+          return next;
+        });
+      }, 220);
+    }
+  };
+
+  const handleConnect = (url: string, secret: string, allowHttpChecked: boolean) => {
+    if (!window.HubNative?.connect) {
+      loadBrowserDemo(url, allowHttpChecked);
+      return;
+    }
+    update((previous) => ({ ...previous, connectPending: true, formError: '' }));
     window.HubNative.connect(url, secret, allowHttpChecked);
   };
-  const handleDisconnect = () => window.HubNative?.disconnect?.();
-  const handleToggleMonitor = (enabled: boolean) => {
-    if (!window.HubNative?.monitor) return;
-    update(previous => ({ ...previous, monitorPending: true }));
-    window.HubNative.monitor(enabled);
+
+  const handleDisconnect = () => {
+    if (window.HubNative?.disconnect) {
+      window.HubNative.disconnect();
+      return;
+    }
+    update((previous) => receiveNativeMessage(previous, { type: 'connection', url: '' }));
   };
-  const handleTestNotification = () => window.HubNative?.testNotification?.();
-  const handleOpenNotificationSettings = () => window.HubNative?.notificationSettings?.();
-  const handleToggleSessionAccordion = (encodedKey: string) => setOpenSessions(previous => {
-    const next = new Set(previous);
-    if (next.has(encodedKey)) next.delete(encodedKey); else next.add(encodedKey);
-    return next;
-  });
+
+  const handleToggleMonitor = (enabled: boolean) => {
+    if (window.HubNative?.monitor) {
+      update((previous) => ({ ...previous, monitorPending: true }));
+      window.HubNative.monitor(enabled);
+      return;
+    }
+    if (isBrowserPreview) {
+      update((previous) =>
+        receiveNativeMessage(previous, {
+          type: 'notifications',
+          enabled,
+          permission: true,
+          message: enabled ? '后台完成提醒运行中 · 实时监听 3 台设备' : '完成提醒未开启',
+          lastReadAt: Date.now(),
+        })
+      );
+    }
+  };
+
+  const handleTestNotification = () => {
+    if (window.HubNative?.testNotification) {
+      window.HubNative.testNotification();
+      return;
+    }
+    if (isBrowserPreview) {
+      update((previous) =>
+        receiveNativeMessage(previous, {
+          type: 'notifications',
+          enabled: previous.notifications.enabled,
+          permission: true,
+          message: '测试通知已发送 · 会话提醒通道正常',
+          lastReadAt: Date.now(),
+        })
+      );
+    }
+  };
+
+  const handleOpenNotificationSettings = () => {
+    if (window.HubNative?.notificationSettings) {
+      window.HubNative.notificationSettings();
+      return;
+    }
+    if (isBrowserPreview) {
+      update((previous) =>
+        receiveNativeMessage(previous, {
+          type: 'notifications',
+          enabled: previous.notifications.enabled,
+          permission: true,
+          message: '系统通知权限已就绪 (Web 预览模式)',
+          lastReadAt: Date.now(),
+        })
+      );
+    }
+  };
+
+  const handleSimulateUpdateCheck = () => {
+    update((previous) =>
+      receiveNativeMessage(previous, {
+        type: 'appUpdate',
+        ...previous.appUpdate,
+        checking: true,
+      })
+    );
+    window.setTimeout(() => {
+      update((previous) =>
+        receiveNativeMessage(previous, {
+          type: 'appUpdate',
+          ...previous.appUpdate,
+          checking: false,
+          checkedAt: Date.now(),
+          currentVersion: previous.appUpdate.currentVersion || '1.0.8',
+          latestVersion: '1.0.8',
+          available: false,
+        })
+      );
+    }, 300);
+  };
+
+  const handleSimulateAutoUpdateToggle = (enabled: boolean) => {
+    update((previous) =>
+      receiveNativeMessage(previous, {
+        type: 'appUpdate',
+        ...previous.appUpdate,
+        automatic: enabled,
+      })
+    );
+  };
+
+  const handleToggleSessionAccordion = (encodedKey: string) =>
+    setOpenSessions((previous) => {
+      const next = new Set(previous);
+      if (next.has(encodedKey)) next.delete(encodedKey);
+      else next.add(encodedKey);
+      return next;
+    });
+
   const showFilters =
     page !== 'settings' &&
     page !== 'devices' &&
@@ -133,22 +320,20 @@ function Dashboard({ state, update }: Monitor) {
 
   return (
     <div className="min-h-screen bg-[#090C10] text-slate-100 relative overflow-x-hidden">
-
       <div
         aria-hidden="true"
         className="fixed inset-x-0 top-0 h-80 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-15%,rgba(56,189,248,0.16),transparent)] z-0"
       />
 
       <div className="max-w-[440px] mx-auto min-h-screen flex flex-col relative z-10">
-
-        <header className="sticky top-0 z-30 h-14 px-4 flex items-center justify-between gap-4 bg-[#090C10]/80 backdrop-blur-2xl border-b border-white/[0.07]">
+        <header className="sticky top-0 z-30 h-14 px-4 flex items-center justify-between gap-4 bg-[#090C10]/82 backdrop-blur-2xl border-b border-white/[0.08]">
           <button
             type="button"
             onClick={() => setPage('overview')}
             className="flex items-center gap-2.5 text-left focus:outline-none min-h-[44px] shrink-0"
           >
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/20 to-emerald-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shadow-[0_0_16px_rgba(56,189,248,0.18)]">
-              <Sparkles className="w-4 h-4" />
+              <Activity className="w-4 h-4" />
             </div>
             <span className="text-sm font-bold tracking-tight text-white whitespace-nowrap">
               Token Monitor
@@ -160,7 +345,7 @@ function Dashboard({ state, update }: Monitor) {
             type="button"
             onClick={() => setPage('settings')}
             aria-label="连接设置"
-            className="min-h-[36px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/20 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+            className="min-h-[40px] px-3.5 py-1.5 rounded-full glass-pill-bar hover:border-white/20 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
           >
             <i id="status-dot" className={`w-2 h-2 rounded-full ${statusDotColor}`} />
             <span id="status-label">{statusLabel}</span>
@@ -168,14 +353,13 @@ function Dashboard({ state, update }: Monitor) {
         </header>
 
         <main className="flex-1 px-4 pt-4 pb-24">
-
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <p
                 id="eyebrow"
-                className="text-[10px] font-semibold tracking-widest text-sky-400 uppercase mb-0.5"
+                className="text-[11px] font-medium tracking-wide text-sky-400 mb-0.5"
               >
-                {page === 'settings' ? 'Connected To Your Workflow' : 'Your AI, At A Glance'}
+                {page === 'settings' ? '多设备同步与安全凭据' : 'AI 遥测与额度监控'}
               </p>
               <h1 id="page-title" className="text-2xl font-bold tracking-tight text-white">
                 {PAGE_LABELS[page]}
@@ -189,10 +373,12 @@ function Dashboard({ state, update }: Monitor) {
                 disabled={status === 'loading'}
                 onClick={handleRefresh}
                 aria-label="刷新数据"
-                className="w-10 h-10 rounded-full glass-pill-bar hover:border-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
+                className="w-11 h-11 rounded-full glass-pill-bar hover:border-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
               >
                 <RefreshCw
-                  className={`w-4 h-4 ${status === 'loading' ? 'animate-spin text-sky-400' : ''}`}
+                  className={`w-4 h-4 ${
+                    status === 'loading' ? 'animate-spin text-sky-400' : ''
+                  }`}
                 />
               </button>
             )}
@@ -210,17 +396,42 @@ function Dashboard({ state, update }: Monitor) {
             </div>
           )}
 
-          {state.appUpdate.available && state.dismissedUpdateVersion !== state.appUpdate.latestVersion && (
-            <div id="app-update-banner" role="status" className="mb-3.5 rounded-2xl border border-sky-400/30 bg-sky-400/10 p-3 flex flex-wrap items-center gap-2 text-xs text-sky-200">
-              <Download className="w-4 h-4 shrink-0" />
-              <span className="flex-1 min-w-0">发现新版本 {state.appUpdate.latestVersion}</span>
-              <button type="button" onClick={() => { setPage('settings'); setRevealAppUpdate(true); }} className="min-h-[36px] px-2 font-semibold">查看更新</button>
-              <button type="button" aria-label="稍后更新" className="min-w-[36px] min-h-[36px] flex items-center justify-center"
-                onClick={() => update(previous => ({ ...previous, dismissedUpdateVersion: previous.appUpdate.latestVersion }))}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          {state.appUpdate.available &&
+            state.dismissedUpdateVersion !== state.appUpdate.latestVersion && (
+              <div
+                id="app-update-banner"
+                role="status"
+                className="mb-3.5 rounded-2xl border border-sky-400/30 bg-sky-400/10 p-3 flex flex-wrap items-center gap-2 text-xs text-sky-200"
+              >
+                <Download className="w-4 h-4 shrink-0" />
+                <span className="flex-1 min-w-0">
+                  发现新版本 {state.appUpdate.latestVersion}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPage('settings');
+                    setRevealAppUpdate(true);
+                  }}
+                  className="min-h-[40px] px-2.5 font-semibold text-sky-200 hover:text-white transition-colors"
+                >
+                  查看更新
+                </button>
+                <button
+                  type="button"
+                  aria-label="稍后更新"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-sky-300 hover:text-white transition-colors"
+                  onClick={() =>
+                    update((previous) => ({
+                      ...previous,
+                      dismissedUpdateVersion: previous.appUpdate.latestVersion,
+                    }))
+                  }
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
           {showFilters && (
             <div id="filters" className="mb-3.5 space-y-2.5">
@@ -248,7 +459,7 @@ function Dashboard({ state, update }: Monitor) {
                           setPeriod(pId);
                           setOpenSessions(new Set());
                         }}
-                        className={`flex-1 min-h-[38px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
+                        className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
                           active
                             ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
                             : 'text-slate-400 hover:text-slate-200'
@@ -273,7 +484,7 @@ function Dashboard({ state, update }: Monitor) {
                         setDevice(e.target.value);
                         setOpenSessions(new Set());
                       }}
-                      className="appearance-none min-h-[36px] pl-3 pr-7 py-1 rounded-full glass-pill-bar text-xs font-medium text-slate-200 max-w-[min(190px,50vw)] truncate focus:outline-none focus:border-sky-400/60 cursor-pointer"
+                      className="appearance-none min-h-[40px] pl-3.5 pr-8 py-1.5 rounded-full glass-pill-bar text-xs font-medium text-slate-200 max-w-[min(200px,52vw)] truncate focus:outline-none focus:border-sky-400/60 cursor-pointer"
                     >
                       <option value="" className="bg-slate-900 text-slate-100">
                         全部设备
@@ -302,7 +513,13 @@ function Dashboard({ state, update }: Monitor) {
                   title={fetchedAt ? formatShortTime(fetchedAt) : undefined}
                   className="text-[11px] font-mono-tabular text-slate-400 shrink-0"
                 >
-                  {fetchedAt ? `${new Date(fetchedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 更新` : '等待数据'}
+                  {fetchedAt
+                    ? `${new Date(fetchedAt).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })} 更新`
+                    : '等待数据'}
                 </span>
               </div>
             </div>
@@ -329,7 +546,7 @@ function Dashboard({ state, update }: Monitor) {
                         window.HubNative?.subscriptions?.();
                       }
                     }}
-                    className={`flex-1 min-h-[38px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
+                    className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
                         : 'text-slate-400 hover:text-slate-200'
@@ -343,14 +560,16 @@ function Dashboard({ state, update }: Monitor) {
           )}
 
           {page === 'sessions' && (
-            <div id="session-tools"><CompletionSettingsCard
-              notifications={notifications}
-              monitorPending={monitorPending}
-              connected={Boolean(connection)}
-              onToggleMonitor={handleToggleMonitor}
-              onTestNotification={handleTestNotification}
-              onOpenSystemSettings={handleOpenNotificationSettings}
-            /></div>
+            <div id="session-tools">
+              <CompletionSettingsCard
+                notifications={notifications}
+                monitorPending={monitorPending}
+                connected={Boolean(connection)}
+                onToggleMonitor={handleToggleMonitor}
+                onTestNotification={handleTestNotification}
+                onOpenSystemSettings={handleOpenNotificationSettings}
+              />
+            </div>
           )}
 
           {page === 'settings' ? (
@@ -362,16 +581,22 @@ function Dashboard({ state, update }: Monitor) {
               formError={formError}
               notifications={notifications}
               monitorPending={monitorPending}
+              isBrowserPreview={isBrowserPreview}
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
+              onLoadDemo={() => loadBrowserDemo()}
               onToggleMonitor={handleToggleMonitor}
               onTestNotification={handleTestNotification}
               onOpenSystemSettings={handleOpenNotificationSettings}
+              onSimulateUpdateCheck={isBrowserPreview ? handleSimulateUpdateCheck : undefined}
+              onSimulateAutoUpdateToggle={
+                isBrowserPreview ? handleSimulateAutoUpdateToggle : undefined
+              }
             />
           ) : !stats ? (
             <div id="content" className="glass-panel rounded-3xl p-8 text-center my-4 space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 mx-auto">
-                <Sparkles className="w-6 h-6" />
+                <Activity className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-base font-semibold text-slate-100 mb-1">
@@ -380,7 +605,7 @@ function Dashboard({ state, update }: Monitor) {
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {connection
                     ? '连接成功后，用量、设备和额度将在这里显示。'
-                    : '打开下方「连接」，输入电脑端的 Hub 地址和 secret，'}
+                    : '打开下方「连接」，输入电脑端的 Hub 地址和 secret。'}
                 </p>
               </div>
               {!connection && (
@@ -392,7 +617,15 @@ function Dashboard({ state, update }: Monitor) {
                   >
                     前往配置 Hub 连接
                   </button>
-
+                  {isBrowserPreview && (
+                    <button
+                      type="button"
+                      onClick={() => loadBrowserDemo()}
+                      className="w-full min-h-[44px] rounded-2xl glass-inset hover:border-sky-400/30 text-sky-300 font-semibold text-xs transition-colors"
+                    >
+                      加载演示数据 (Web 预览)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -473,7 +706,7 @@ function Dashboard({ state, update }: Monitor) {
 
         <nav
           aria-label="主导航"
-          className="bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] z-40 bg-[#090C10]/85 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5"
+          className="bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] z-40 bg-[#090C10]/88 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5"
         >
           <div className="grid grid-cols-5 gap-1">
             {(
@@ -496,7 +729,7 @@ function Dashboard({ state, update }: Monitor) {
                   onClick={() => setPage(tabId)}
                   className={`min-h-[48px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-150 ${
                     isActive
-                      ? 'text-sky-300 bg-sky-400/10'
+                      ? 'text-sky-300 bg-sky-400/12'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >

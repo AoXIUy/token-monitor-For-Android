@@ -8,11 +8,14 @@ keystore.properties
 signing/
 *.jks
 *.keystore
+*.keystore.base64
 *.p12
 *.pem
 *signing-backup*
 *.apk
 *.aab
+.build-outputs/
+.aistudio/
 .idea/
 *.iml
 .env

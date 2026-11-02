@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
+  Activity,
   ArrowUpRight,
   Check,
   HelpCircle,
   Link2,
-  Sparkles,
+  Play,
 } from 'lucide-react';
 import { NotificationState, AppUpdateState } from '../types/monitor';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
@@ -18,11 +19,15 @@ interface SettingsViewProps {
   formError: string;
   notifications: NotificationState;
   monitorPending: boolean;
+  isBrowserPreview?: boolean;
   onConnect: (url: string, secret: string, allowHttp: boolean) => void;
   onDisconnect: () => void;
+  onLoadDemo?: () => void;
   onToggleMonitor: (enabled: boolean) => void;
   onTestNotification: () => void;
   onOpenSystemSettings: () => void;
+  onSimulateUpdateCheck?: () => void;
+  onSimulateAutoUpdateToggle?: (enabled: boolean) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -33,11 +38,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   formError,
   notifications,
   monitorPending,
+  isBrowserPreview,
   onConnect,
   onDisconnect,
+  onLoadDemo,
   onToggleMonitor,
   onTestNotification,
   onOpenSystemSettings,
+  onSimulateUpdateCheck,
+  onSimulateAutoUpdateToggle,
 }) => {
   const [url, setUrl] = useState(connectionUrl);
   const [secret, setSecret] = useState('');
@@ -51,10 +60,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div id="settings" className="space-y-4">
-
       <div className="text-center py-4 px-2">
         <div className="w-14 h-14 rounded-2xl mx-auto mb-3.5 glass-hero flex items-center justify-center text-sky-300 shadow-[0_0_28px_rgba(56,189,248,0.25)]">
-          <Sparkles className="w-7 h-7" />
+          <Activity className="w-7 h-7" />
         </div>
         <h2 className="text-xl font-bold text-white tracking-tight">
           你的所有设备，一处查看。
@@ -65,6 +73,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           手机仅查看数据，不参与采集。
         </p>
       </div>
+
+      {isBrowserPreview && onLoadDemo && (
+        <section className="glass-panel rounded-3xl p-4 border-sky-400/25 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-sky-300">Web 交互预览模式</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+              当前在浏览器中运行，可加载完整多设备与子代理演示数据。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onLoadDemo}
+            className="min-h-[40px] px-3.5 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-xs font-semibold text-sky-200 flex items-center gap-1.5 shrink-0 transition-colors"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>加载演示数据</span>
+          </button>
+        </section>
+      )}
 
       <form
         id="connection-form"
@@ -107,7 +134,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
         </label>
 
-        <label className="flex items-start gap-3 cursor-pointer py-1">
+        <label className="flex items-start gap-3 cursor-pointer py-1 min-h-[44px]">
           <input
             id="allow-http"
             type="checkbox"
@@ -158,25 +185,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             id="disconnect"
             type="button"
             onClick={onDisconnect}
-            className="w-full min-h-[40px] text-xs font-medium text-rose-300/90 hover:text-rose-200 transition-colors text-center pt-1"
+            className="w-full min-h-[44px] text-xs font-medium text-rose-300/90 hover:text-rose-200 transition-colors text-center pt-1"
           >
             断开连接并清除凭据
           </button>
         )}
       </form>
 
-      <div id="settings-notifications"><CompletionSettingsCard
-        notifications={notifications}
-        monitorPending={monitorPending}
-        connected={Boolean(connectionUrl)}
-        onToggleMonitor={onToggleMonitor}
-        onTestNotification={onTestNotification}
-        onOpenSystemSettings={onOpenSystemSettings}
-      /></div>
+      <div id="settings-notifications">
+        <CompletionSettingsCard
+          notifications={notifications}
+          monitorPending={monitorPending}
+          connected={Boolean(connectionUrl)}
+          onToggleMonitor={onToggleMonitor}
+          onTestNotification={onTestNotification}
+          onOpenSystemSettings={onOpenSystemSettings}
+        />
+      </div>
 
-      <AppUpdateCard state={appUpdate} />
+      <AppUpdateCard
+        state={appUpdate}
+        onSimulateCheck={onSimulateUpdateCheck}
+        onSimulateAutoToggle={onSimulateAutoUpdateToggle}
+      />
 
-      <section className="glass-panel rounded-3xl p-4.5 space-y-2">
+      <section className="glass-panel rounded-3xl p-5 space-y-2">
         <div className="flex items-center gap-2 text-sky-300">
           <HelpCircle className="w-4 h-4" />
           <h3 className="text-sm font-semibold text-slate-100">如何找到 Hub？</h3>
@@ -190,7 +223,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       <p className="text-[11px] text-slate-400/80 text-center leading-relaxed pt-2 pb-2">
-        Token Monitor for Android{appUpdate.currentVersion ? ` · ${appUpdate.currentVersion}` : ''}
+        Token Monitor for Android
+        {appUpdate.currentVersion ? ` · ${appUpdate.currentVersion}` : ''}
         <br />
         凭据加密保存在本机 · 后台提醒按开关运行
       </p>

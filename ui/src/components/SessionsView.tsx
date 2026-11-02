@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Check, ChevronRight, Copy, MessageSquare, Search, X } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import {
   DeviceData,
@@ -31,6 +31,8 @@ interface SessionsViewProps {
   fetchedAt: number;
   now: number;
 }
+
+type StatusFilterId = 'all' | 'running' | 'waiting' | 'ended';
 
 export function renderStatusText(status: SessionStatusResult) {
   const inferred = status.source === 'inferred';
@@ -83,6 +85,21 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   fetchedAt,
   now,
 }) => {
+  const [statusFilter, setStatusFilter] = useState<StatusFilterId>('all');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (text: string, keyId: string) => {
+    try {
+      navigator.clipboard?.writeText(text);
+    } catch {
+      // Clipboard may be unavailable in restricted WebView
+    }
+    setCopiedKey(keyId);
+    window.setTimeout(() => {
+      setCopiedKey((prev) => (prev === keyId ? null : prev));
+    }, 1500);
+  };
+
   if (period === 'allTime') {
     return (
       <div className="glass-panel rounded-3xl p-8 text-center my-4">
@@ -97,19 +114,39 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     );
   }
 
-  const rows = MonitorModel.sessions(selected.period, search);
+  const allRows = MonitorModel.sessions(selected.period, search);
   const omitted = (selected.device || stats).sessionDetailsOmitted?.[period];
 
-  const statusOptions = { now, stats, deviceId, period, connected: statusHealthy, foreground, fetchedAt };
-  const statuses = rows.map(row => MonitorModel.sessionStatus(row, statusOptions));
+  const statusOptions = {
+    now,
+    stats,
+    deviceId,
+    period,
+    connected: statusHealthy,
+    foreground,
+    fetchedAt,
+  };
+  const allStatuses = allRows.map((row) => MonitorModel.sessionStatus(row, statusOptions));
 
-  const activeCount = statuses.filter((s) => s.state === 'running').length;
-  const waitingCount = statuses.filter((s) => s.state === 'waiting').length;
+  const activeCount = allStatuses.filter((s) => s.state === 'running').length;
+  const waitingCount = allStatuses.filter((s) => s.state === 'waiting').length;
+  const endedCount = allStatuses.filter(
+    (s) => s.state !== 'running' && s.state !== 'waiting'
+  ).length;
+
+  const filteredIndices = allRows
+    .map((_, idx) => idx)
+    .filter((idx) => {
+      if (statusFilter === 'all') return true;
+      const st = allStatuses[idx].state;
+      if (statusFilter === 'running') return st === 'running';
+      if (statusFilter === 'waiting') return st === 'waiting';
+      return st !== 'running' && st !== 'waiting';
+    });
 
   return (
     <div className="space-y-3.5">
-
-      <div id="session-search">
+      <div id="session-search" className="space-y-2.5">
         <label className="block">
           <span className="sr-only">搜索会话</span>
           <div className="relative flex items-center">
@@ -121,7 +158,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="搜索工具、项目、模型或会话 ID…"
               autoComplete="off"
-              className="w-full min-h-[44px] pl-10 pr-9 py-2.5 rounded-2xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/60 transition-colors"
+              className="w-full min-h-[44px] pl-10 pr-11 py-2.5 rounded-2xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/60 transition-colors"
             />
             {search && (
               <button
@@ -129,13 +166,48 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                 id="clear-search"
                 onClick={() => onSearchChange('')}
                 aria-label="清除搜索"
-                className="w-8 h-8 flex items-center justify-center absolute right-1.5 text-slate-400 hover:text-slate-200"
+                className="w-10 h-10 flex items-center justify-center absolute right-1 text-slate-400 hover:text-slate-200 rounded-xl transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
         </label>
+
+        {allRows.length > 0 && (
+          <div
+            className="glass-inset p-1 rounded-2xl grid grid-cols-4 gap-1"
+            role="group"
+            aria-label="按会话状态筛选"
+          >
+            {(
+              [
+                ['all', '全部', allRows.length],
+                ['running', '活跃', activeCount],
+                ['waiting', '等待', waitingCount],
+                ['ended', '已结束', endedCount],
+              ] as Array<[StatusFilterId, string, number]>
+            ).map(([fId, fLabel, count]) => {
+              const active = statusFilter === fId;
+              return (
+                <button
+                  key={fId}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setStatusFilter(fId)}
+                  className={`min-h-[36px] px-2 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition-all duration-150 whitespace-nowrap shrink-0 ${
+                    active
+                      ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>{fLabel}</span>
+                  <span className="font-mono-tabular text-[10px] opacity-80">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {omitted ? (
@@ -144,32 +216,39 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
+      {filteredIndices.length === 0 ? (
         <div className="glass-panel rounded-3xl p-8 text-center my-4">
           <MessageSquare className="w-8 h-8 text-sky-400/70 mx-auto mb-3" />
           <p className="text-base font-semibold text-slate-100 mb-1.5">暂无匹配会话</p>
           <p className="text-xs text-slate-400 leading-relaxed">
-            {search
+            {statusFilter !== 'all'
+              ? '当前状态筛选下没有会话，可切换至「全部」查看。'
+              : search
               ? '试试其他工具、项目或模型名称。'
               : '采集设备可能尚未提供会话明细。'}
           </p>
+          {statusFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className="mt-3 min-h-[40px] px-4 rounded-xl bg-sky-500/15 border border-sky-400/25 text-xs font-semibold text-sky-300 hover:bg-sky-500/25 transition-colors"
+            >
+              显示全部会话 ({allRows.length})
+            </button>
+          )}
         </div>
       ) : (
         <>
-
           <div className="flex items-center justify-between flex-wrap gap-2 px-1 text-xs">
-            <div className="flex items-center gap-2.5 font-mono-tabular">
+            <div className="flex items-center gap-2 font-mono-tabular">
               <span className="text-slate-300">
-                <strong className="text-white">{rows.length}</strong> 条{search ? '匹配' : ''}会话
+                <strong className="text-white">{filteredIndices.length}</strong> 条
+                {search || statusFilter !== 'all' ? '匹配' : ''}会话
               </span>
               <span className="text-slate-600">·</span>
-              <span className="text-emerald-300 font-medium">
-                活跃 {activeCount}
-              </span>
+              <span className="text-emerald-300 font-medium">活跃 {activeCount}</span>
               <span className="text-slate-600">·</span>
-              <span className="text-amber-300 font-medium">
-                等待 {waitingCount}
-              </span>
+              <span className="text-amber-300 font-medium">等待 {waitingCount}</span>
             </div>
             <span className="text-[11px] text-slate-400">
               前台实时跟踪 · 以采集端上报为准
@@ -177,12 +256,19 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
           </div>
 
           <div className="space-y-2.5">
-            {rows.slice(0, sessionLimit).map((row, index) => {
+            {filteredIndices.slice(0, sessionLimit).map((rowIndex) => {
+              const row = allRows[rowIndex];
+              const status = allStatuses[rowIndex];
               const encodedKey = encodeURIComponent(row.key);
               const isOpen = openKeys.has(encodedKey);
-              const status = statuses[index];
               const tone = clientTone(row.client);
               const modelNames = Object.keys(row.models || {}).join(', ') || '模型未知';
+              const isCopied = copiedKey === row.key;
+
+              const inTok = MonitorModel.count(row.inputTokens);
+              const outTok = MonitorModel.count(row.outputTokens);
+              const cacheTok = MonitorModel.count(row.cacheReadTokens);
+              const partSum = inTok + outTok + cacheTok;
 
               return (
                 <section
@@ -196,7 +282,6 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     aria-expanded={isOpen}
                     className="session-toggle w-full text-left p-4"
                   >
-
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <span className={`text-xs font-semibold ${tone.text}`}>
@@ -210,7 +295,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
                       <div className="flex items-baseline gap-1.5 shrink-0 font-mono-tabular">
                         <span className="text-xs font-bold text-slate-100">
-                          {MonitorModel.numeric(row.totalTokens) === null ? '—' : MonitorModel.compact(row.totalTokens)}
+                          {MonitorModel.numeric(row.totalTokens) === null
+                            ? '—'
+                            : MonitorModel.compact(row.totalTokens)}
                         </span>
                         <span className="text-[11px] text-slate-400">
                           {MonitorModel.money(row.costUsd)}
@@ -229,7 +316,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         <span className="truncate">{modelNames}</span>
                       </div>
                       {row.subagentCount ? (
-                        <span data-subagent-count={row.subagentCount} className="shrink-0 text-sky-300">
+                        <span
+                          data-subagent-count={row.subagentCount}
+                          className="shrink-0 text-sky-300 font-medium"
+                        >
                           {row.subagentCount} 个子代理
                         </span>
                       ) : null}
@@ -242,7 +332,43 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   </button>
 
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-2 border-t border-white/8">
+                    <div className="px-4 pb-4 pt-2.5 border-t border-white/8">
+                      {partSum > 0 && (
+                        <div className="mb-3 space-y-1.5">
+                          <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden flex">
+                            {inTok > 0 && (
+                              <div
+                                style={{ width: `${(inTok / partSum) * 100}%` }}
+                                className="h-full bg-sky-400"
+                              />
+                            )}
+                            {outTok > 0 && (
+                              <div
+                                style={{ width: `${(outTok / partSum) * 100}%` }}
+                                className="h-full bg-violet-400"
+                              />
+                            )}
+                            {cacheTok > 0 && (
+                              <div
+                                style={{ width: `${(cacheTok / partSum) * 100}%` }}
+                                className="h-full bg-emerald-400"
+                              />
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono-tabular">
+                            <span className="text-sky-300">
+                              输入 {MonitorModel.compact(inTok)}
+                            </span>
+                            <span className="text-violet-300">
+                              输出 {MonitorModel.compact(outTok)}
+                            </span>
+                            <span className="text-emerald-300">
+                              缓存 {MonitorModel.compact(cacheTok)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <dl className="grid grid-cols-2 gap-3 text-xs">
                         <div>
                           <dt className="text-[10px] text-slate-400">当前状态</dt>
@@ -259,15 +385,34 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-[10px] text-slate-400">会话 ID</dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-0.5 truncate">
-                            {row.sessionId || row.key}
-                          </dd>
-                        </div>
-                        <div>
                           <dt className="text-[10px] text-slate-400">项目</dt>
                           <dd className="font-mono-tabular text-slate-200 mt-0.5 truncate">
                             {row.projectLabel || '—'}
+                          </dd>
+                        </div>
+                        <div className="col-span-2">
+                          <dt className="text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>会话 ID</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(row.sessionId || row.key, row.key)}
+                              className="inline-flex items-center gap-1 text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-emerald-300">已复制</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>复制 ID</span>
+                                </>
+                              )}
+                            </button>
+                          </dt>
+                          <dd className="font-mono-tabular text-slate-200 mt-0.5 truncate">
+                            {row.sessionId || row.key}
                           </dd>
                         </div>
                         <div>
@@ -316,28 +461,39 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                             主会话与子代理 · {row.groupRows.length} 条记录
                           </p>
                           <ul className="space-y-2">
-                            {row.groupRows.map(member => (
+                            {row.groupRows.map((member) => (
                               <li key={member.key}>
                                 <button
                                   type="button"
                                   data-session-member={encodeURIComponent(member.key)}
                                   onClick={() => onOpenSessionDetail(member.key)}
-                                  className="w-full min-h-[44px] glass-inset rounded-xl p-3 text-left space-y-1.5"
+                                  className="w-full min-h-[44px] glass-inset hover:border-white/15 rounded-xl p-3 text-left space-y-1.5 transition-colors"
                                 >
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <span className="text-[10px] font-semibold text-sky-300">
-                                      {member.groupRole === 'main' ? '主会话' : '子代理'} · {providerName(member.client)}
+                                      {member.groupRole === 'main' ? '主会话' : '子代理'} ·{' '}
+                                      {providerName(member.client)}
                                     </span>
-                                    {renderStatusText(MonitorModel.sessionStatus(member, statusOptions))}
+                                    {renderStatusText(
+                                      MonitorModel.sessionStatus(member, statusOptions)
+                                    )}
                                   </div>
                                   <div className="text-xs text-slate-100 break-words">
-                                    {member.title || member.projectLabel || member.sessionId || member.key}
+                                    {member.title ||
+                                      member.projectLabel ||
+                                      member.sessionId ||
+                                      member.key}
                                   </div>
                                   <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-mono-tabular">
-                                    <span className="min-w-0 truncate">{member.sessionId || member.key}</span>
+                                    <span className="min-w-0 truncate">
+                                      {member.sessionId || member.key}
+                                    </span>
                                     <span className="shrink-0">
-                                      {MonitorModel.numeric(member.totalTokens) === null ? '—' : MonitorModel.compact(member.totalTokens)}
-                                      {' · '}{MonitorModel.money(member.costUsd)}
+                                      {MonitorModel.numeric(member.totalTokens) === null
+                                        ? '—'
+                                        : MonitorModel.compact(member.totalTokens)}
+                                      {' · '}
+                                      {MonitorModel.money(member.costUsd)}
                                     </span>
                                     <ChevronRight className="w-3.5 h-3.5 shrink-0 text-sky-300" />
                                   </div>
@@ -364,13 +520,13 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             })}
           </div>
 
-          {rows.length > sessionLimit && (
+          {filteredIndices.length > sessionLimit && (
             <button
               type="button"
               onClick={onLoadMore}
               className="w-full min-h-[46px] rounded-2xl glass-panel text-xs font-semibold text-sky-300 hover:text-sky-200 transition-colors"
             >
-              再显示 40 条（剩余 {rows.length - sessionLimit}）
+              再显示 40 条（剩余 {filteredIndices.length - sessionLimit}）
             </button>
           )}
         </>

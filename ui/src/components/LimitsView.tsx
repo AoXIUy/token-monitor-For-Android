@@ -71,7 +71,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               const isExpanded = Boolean(openTopUps[key]);
 
               return (
-                <section key={key} className="glass-panel rounded-3xl p-4.5">
+                <section key={key} className="glass-panel rounded-3xl p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-slate-100 truncate">
@@ -136,7 +136,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         onClick={() =>
                           setOpenTopUps((prev) => ({ ...prev, [key]: !prev[key] }))
                         }
-                        className="w-full min-h-[36px] flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                        aria-expanded={isExpanded}
+                        className="w-full min-h-[40px] flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition-colors"
                       >
                         <span>充值记录（{row.topUps.length} 笔）</span>
                         <ChevronDown
@@ -151,7 +152,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           {row.topUps.map((topup, tIdx) => (
                             <div
                               key={`${topup.date}-${tIdx}`}
-                              className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] font-mono-tabular"
+                              className="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] font-mono-tabular"
                             >
                               <span className="text-slate-300">{topup.date}</span>
                               <span className="text-emerald-300 font-semibold">
@@ -227,7 +228,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           <section
             key={account.key}
             data-limit-account={account.key}
-            className="glass-panel rounded-3xl p-4.5"
+            className="glass-panel rounded-3xl p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -273,7 +274,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   return (
                     <div key={`${win.kind || 'win'}-${wIdx}`} className="space-y-1.5">
                       <div className="flex items-baseline justify-between gap-2 text-xs">
-                        <span className="text-slate-200 font-medium min-w-0 break-words">{q.label}</span>
+                        <span className="text-slate-200 font-medium min-w-0 break-words">
+                          {q.label}
+                        </span>
                         <span
                           className={`font-semibold font-mono-tabular shrink-0 ${
                             isWarn ? 'text-amber-300' : 'text-sky-300'
@@ -304,10 +307,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
                       {win.resetsAt ? (
                         <div className="text-[11px] text-slate-400 font-mono-tabular">
-                          {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'} {formatShortTime(win.resetsAt)}
+                          {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
+                          {formatShortTime(win.resetsAt)}
                         </div>
-                      ) : win.resetDescription && (
-                        <p className="text-[11px] text-slate-400 break-words">{win.resetDescription}</p>
+                      ) : (
+                        win.resetDescription && (
+                          <p className="text-[11px] text-slate-400 break-words">
+                            {win.resetDescription}
+                          </p>
+                        )
                       )}
                     </div>
                   );

@@ -8,8 +8,16 @@
     "node": ">=22.15.0"
   },
   "scripts": {
+    "postinstall": "npm ci --prefix ui",
+    "predev": "test -f ui/node_modules/.package-lock.json || npm ci --prefix ui",
+    "dev": "npm run dev --prefix ui",
+    "prebuild": "test -f ui/node_modules/.package-lock.json || npm ci --prefix ui",
+    "build": "npm run build --prefix ui",
+    "prelint": "test -f ui/node_modules/.package-lock.json || npm ci --prefix ui",
+    "lint": "npm run check --prefix ui",
     "test": "node --test \"tests/**/*.test.js\"",
     "test:java": "node scripts/check-java.js",
+    "prebuild:ui": "test -f ui/node_modules/.package-lock.json || npm ci --prefix ui",
     "build:ui": "npm run build --prefix ui",
     "verify": "npm test && npm run build:ui && npm run test:java"
   }

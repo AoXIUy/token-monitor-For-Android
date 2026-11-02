@@ -63,7 +63,16 @@ tasks.register('syncDisplayAssets', Sync) {
     into layout.buildDirectory.dir('generated/assets/shared')
 }
 
+tasks.register('installUi', Exec) {
+    def ui = rootProject.file('ui')
+    workingDir ui
+    onlyIf { !new File(ui, 'node_modules/.package-lock.json').exists() }
+    commandLine System.getProperty('os.name').toLowerCase().contains('windows')
+            ? ['cmd', '/c', 'npm', 'ci'] : ['npm', 'ci']
+}
+
 tasks.register('buildUi', Exec) {
+    dependsOn 'installUi'
     def ui = rootProject.file('ui')
     workingDir ui
     inputs.files(fileTree(ui) {

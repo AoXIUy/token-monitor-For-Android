@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   Clock,
+  Copy,
   Cpu,
   GitBranch,
   Layers,
@@ -45,6 +47,20 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   onBack,
   onSelectSession,
 }) => {
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+
+  const handleCopy = (value: string, label: string) => {
+    try {
+      navigator.clipboard?.writeText(value);
+    } catch {
+      // Clipboard may be restricted in WebView
+    }
+    setCopiedLabel(label);
+    window.setTimeout(() => {
+      setCopiedLabel((prev) => (prev === label ? null : prev));
+    }, 1500);
+  };
+
   const data = MonitorModel.sessionDetail(stats, detailKey, {
     deviceId,
     period,
@@ -91,14 +107,76 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   });
   const tone = clientTone(row.client);
 
-  const renderField = (label: string, value: React.ReactNode) => (
-    <div>
-      <dt className="text-[11px] text-slate-400">{label}</dt>
-      <dd className="text-xs font-medium text-slate-100 font-mono-tabular mt-0.5 break-all">
-        {value}
-      </dd>
-    </div>
-  );
+  const renderField = (
+    label: string,
+    value: React.ReactNode,
+    options?: { fullWidth?: boolean; copyValue?: string }
+  ) => {
+    const isCopied = copiedLabel === label;
+    return (
+      <div className={options?.fullWidth ? 'col-span-2' : ''}>
+        <dt className="text-[11px] text-slate-400 flex items-center justify-between gap-2">
+          <span>{label}</span>
+          {options?.copyValue && (
+            <button
+              type="button"
+              onClick={() => handleCopy(options.copyValue!, label)}
+              aria-label={`复制 ${label}`}
+              className="inline-flex items-center gap-1 text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
+            >
+              {isCopied ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span className="text-emerald-300">已复制</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>复制</span>
+                </>
+              )}
+            </button>
+          )}
+        </dt>
+        <dd className="text-xs font-medium text-slate-100 font-mono-tabular mt-0.5 break-all">
+          {value}
+        </dd>
+      </div>
+    );
+  };
+
+  const tokenParts = [
+    {
+      id: 'input',
+      label: '输入',
+      tokens: MonitorModel.count(row.inputTokens),
+      barClass: 'bg-sky-400',
+      dotClass: 'bg-sky-400',
+    },
+    {
+      id: 'output',
+      label: '输出',
+      tokens: MonitorModel.count(row.outputTokens),
+      barClass: 'bg-violet-400',
+      dotClass: 'bg-violet-400',
+    },
+    {
+      id: 'cacheRead',
+      label: '缓存读取',
+      tokens: MonitorModel.count(row.cacheReadTokens),
+      barClass: 'bg-emerald-400',
+      dotClass: 'bg-emerald-400',
+    },
+    {
+      id: 'cacheWrite',
+      label: '缓存写入',
+      tokens: MonitorModel.count(row.cacheWriteTokens),
+      barClass: 'bg-amber-400',
+      dotClass: 'bg-amber-400',
+    },
+  ].filter((part) => part.tokens > 0);
+
+  const tokenPartsSum = tokenParts.reduce((acc, item) => acc + item.tokens, 0);
 
   return (
     <div className="space-y-3.5">
@@ -146,7 +224,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         ) : null}
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3.5">
           <Clock className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">活动与身份</h3>
@@ -155,28 +233,79 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           {renderField('当前状态', status.label)}
           {renderField('状态依据', status.detail)}
           {renderField('状态观测', formatFullTime(status.observedAt))}
-          {renderField('开始时间', formatFullTime(row.startedAt))}
-          {renderField('最近使用', formatFullTime(row.lastUsedAt))}
           {renderField(
             '本轮结束',
             row.turnEnded === true ? '已确认结束' : row.turnEnded === false ? '进行中' : '未声明'
           )}
-          {renderField('会话 ID', row.sessionId || row.key)}
-          {renderField('完整键值', row.key)}
+          {renderField('开始时间', formatFullTime(row.startedAt))}
+          {renderField('最近使用', formatFullTime(row.lastUsedAt))}
           {renderField('项目', row.projectLabel || '—')}
           {renderField('消息数', formatExact(row.messageCount))}
-          {row.nativeSessionId ? renderField('原生会话 ID', row.nativeSessionId) : null}
-          {row.t3ThreadId ? renderField('T3 会话 ID', row.t3ThreadId) : null}
+          {renderField('会话 ID', row.sessionId || row.key, {
+            fullWidth: true,
+            copyValue: row.sessionId || row.key,
+          })}
+          {renderField('完整键值', row.key, {
+            fullWidth: true,
+            copyValue: row.key,
+          })}
+          {row.nativeSessionId
+            ? renderField('原生会话 ID', row.nativeSessionId, {
+                fullWidth: true,
+                copyValue: row.nativeSessionId,
+              })
+            : null}
+          {row.t3ThreadId
+            ? renderField('T3 会话 ID', row.t3ThreadId, {
+                fullWidth: true,
+                copyValue: row.t3ThreadId,
+              })
+            : null}
           {row.sessionKind ? renderField('会话类型', row.sessionKind) : null}
         </dl>
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3.5">
           <Layers className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">Token 组成与性能</h3>
         </div>
-        <dl className="grid grid-cols-2 gap-3.5 pt-3 border-t border-white/8">
+
+        {tokenPartsSum > 0 && (
+          <div className="pt-3 mb-3.5 border-t border-white/8 space-y-2">
+            <div
+              className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden flex"
+              role="img"
+              aria-label="Token 组成比例条"
+            >
+              {tokenParts.map((part) => (
+                <div
+                  key={part.id}
+                  style={{ width: `${Math.max(2, (part.tokens / tokenPartsSum) * 100)}%` }}
+                  className={`h-full ${part.barClass}`}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono-tabular text-slate-300">
+              {tokenParts.map((part) => {
+                const pct = ((part.tokens / tokenPartsSum) * 100).toFixed(1);
+                return (
+                  <span key={part.id} className="inline-flex items-center gap-1.5">
+                    <i className={`w-2 h-2 rounded-full ${part.dotClass}`} aria-hidden="true" />
+                    <span>{part.label}</span>
+                    <span className="text-slate-400">{pct}%</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <dl
+          className={`grid grid-cols-2 gap-3.5 ${
+            tokenPartsSum > 0 ? 'pt-2 border-t border-white/6' : 'pt-3 border-t border-white/8'
+          }`}
+        >
           {renderField('输入 Tokens', formatExact(row.inputTokens))}
           {renderField('输出 Tokens', formatExact(row.outputTokens))}
           {renderField('缓存读取', formatExact(row.cacheReadTokens))}
@@ -196,7 +325,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </p>
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3.5">
           <Zap className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">性能与上下文</h3>
@@ -272,7 +401,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </p>
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Cpu className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">模型与提供方</h3>
@@ -310,7 +439,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </div>
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Laptop className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">来源设备</h3>
@@ -350,7 +479,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </div>
       </section>
 
-      <section className="glass-panel rounded-3xl p-4.5">
+      <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <GitBranch className="w-4 h-4 text-sky-400" />
           <h3 className="text-sm font-semibold text-slate-100">父子会话关系</h3>
@@ -360,7 +489,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             <button
               type="button"
               onClick={() => onSelectSession(data.parentKey)}
-              className="w-full min-h-[42px] px-3 py-2 rounded-2xl bg-sky-500/10 hover:bg-sky-500/15 border border-sky-400/20 flex items-center justify-between text-xs font-medium text-sky-300 transition-colors text-left"
+              className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-sky-500/10 hover:bg-sky-500/15 border border-sky-400/20 flex items-center justify-between text-xs font-medium text-sky-300 transition-colors text-left"
             >
               <span className="truncate">父会话 {row.parentSessionId}</span>
               <ArrowRight className="w-4 h-4 shrink-0" />
@@ -375,7 +504,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
                 key={child.key}
                 type="button"
                 onClick={() => onSelectSession(child.key)}
-                className="w-full min-h-[42px] px-3 py-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 flex items-center justify-between text-xs font-medium text-sky-300 transition-colors text-left"
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 flex items-center justify-between text-xs font-medium text-sky-300 transition-colors text-left"
               >
                 <span className="truncate">子会话：{child.label}</span>
                 <ArrowRight className="w-4 h-4 shrink-0" />

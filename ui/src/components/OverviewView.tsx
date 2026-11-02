@@ -55,17 +55,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     ? Math.max(1, ...trend.map((row) => MonitorModel.count(row.tokens)))
     : 1;
   const trendTotalTokens = trend.reduce((sum, row) => sum + MonitorModel.count(row.tokens), 0);
-  const activeTrendDay = trend.find(row => row.date === selectedDate) || trend[trend.length - 1] || null;
+  const activeTrendDay =
+    trend.find((row) => row.date === selectedDate) || trend[trend.length - 1] || null;
+  const activeDayShare =
+    activeTrendDay && trendTotalTokens > 0
+      ? ((MonitorModel.count(activeTrendDay.tokens) / trendTotalTokens) * 100).toFixed(1)
+      : null;
 
   return (
     <div className="space-y-3.5">
-
       <section className="glass-hero rounded-3xl p-5 relative overflow-hidden">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-sky-200/80 tracking-wide">
+          <p className="text-xs font-medium text-sky-200/90 tracking-wide">
             {PERIOD_LABELS[period]} Token 用量
           </p>
-          <span className="text-[11px] font-mono-tabular text-sky-300/90">
+          <span className="text-[11px] font-mono-tabular text-sky-300/95">
             {deviceId
               ? selected.device?.hostname || selected.device?.deviceId
               : `${activeDevicesCount} / ${devices.length} 台近期上报`}
@@ -81,10 +85,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
         {!deviceId && <HistoryChart trend={trend} />}
 
-        <div className="pt-2.5 mt-1 border-t border-white/10 flex items-center justify-between gap-2 text-xs text-slate-300/90 font-mono-tabular">
+        <div className="pt-3 mt-1.5 border-t border-white/10 flex items-center justify-between gap-2 text-xs text-slate-300/95 font-mono-tabular">
           <span>精确累计: {Number(totalTokensCount).toLocaleString('en-US')}</span>
           {components && (
-            <span className="text-emerald-300/95">
+            <span className="text-emerald-300">
               输出 {MonitorModel.compact(components.output)}
             </span>
           )}
@@ -122,7 +126,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <p className="text-[11px] text-slate-400/90 leading-snug mt-1 font-mono-tabular">
             {components
-              ? `${MonitorModel.compact(components.cached)} 缓存 / ${MonitorModel.compact(components.output)} 输出`
+              ? `${MonitorModel.compact(components.cached)} 缓存 / ${MonitorModel.compact(
+                  components.output
+                )} 输出`
               : '采集端未提供完整组件读数'}
           </p>
         </section>
@@ -141,9 +147,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
 
           {trend.length > 0 ? (
-            <section className="trend-card glass-panel rounded-3xl p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="trend-selection text-xs text-slate-300 font-mono-tabular" aria-live="polite">
+            <section className="trend-card glass-panel rounded-3xl p-5">
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <div
+                  className="trend-selection text-xs text-slate-300 font-mono-tabular"
+                  aria-live="polite"
+                >
                   {activeTrendDay ? (
                     <span>
                       <strong className="text-white">{activeTrendDay.date}</strong>
@@ -157,6 +166,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           <span className="text-emerald-300">
                             {MonitorModel.money(activeTrendDay.cost)}
                           </span>
+                        </>
+                      )}
+                      {activeDayShare && (
+                        <>
+                          <span className="mx-1.5 text-slate-500">·</span>
+                          <span className="text-slate-400">{activeDayShare}%</span>
                         </>
                       )}
                     </span>
@@ -175,7 +190,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 aria-label="每日 Token 用量，轻触柱体查看单日详情"
               >
                 {trend.map((row) => {
-                  const pct = Math.max(4, (MonitorModel.count(row.tokens) / maxTrendTokens) * 100);
+                  const pct = Math.max(
+                    5,
+                    (MonitorModel.count(row.tokens) / maxTrendTokens) * 100
+                  );
                   const isSelected = activeTrendDay?.date === row.date;
                   return (
                     <button
@@ -192,7 +210,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         style={{ height: `${pct}%` }}
                         className={`trend-bar w-full rounded-t-md transition-all duration-150 ${
                           isSelected
-                            ? 'bg-gradient-to-t from-sky-500/80 to-cyan-300 shadow-[0_0_12px_rgba(56,189,248,0.45)]'
+                            ? 'bg-gradient-to-t from-sky-500/85 to-cyan-300 shadow-[0_0_12px_rgba(56,189,248,0.45)]'
                             : 'bg-gradient-to-t from-sky-500/25 to-sky-400/55 group-hover:from-sky-400/50 group-hover:to-cyan-300/80'
                         }`}
                       />
@@ -213,7 +231,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   onClick={() => setShowDailyList((prev) => !prev)}
                   data-daily-toggle="true"
                   aria-expanded={showDailyList}
-                  className="w-full min-h-[36px] flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                  className="w-full min-h-[40px] flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition-colors"
                 >
                   <span>查看每日数值明细 ({trend.length} 天)</span>
                   <ChevronDown
@@ -223,26 +241,38 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   />
                 </button>
                 {showDailyList && (
-                  <div data-daily-values="true" className="mt-2 space-y-1.5 pt-1 max-h-60 overflow-y-auto pr-1">
+                  <div
+                    data-daily-values="true"
+                    className="mt-2 space-y-1.5 pt-1 max-h-60 overflow-y-auto pr-1"
+                  >
                     {trend
                       .slice()
                       .reverse()
-                      .map((row) => (
-                        <div
-                          key={row.date}
-                          className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] font-mono-tabular"
-                        >
-                          <span className="text-slate-300">{row.date}</span>
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-slate-100 font-semibold">
-                              {MonitorModel.compact(row.tokens)}
-                            </span>
-                            <span className="text-slate-400 w-16 text-right">
-                              {MonitorModel.money(row.cost)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                      .map((row) => {
+                        const isSelected = activeTrendDay?.date === row.date;
+                        return (
+                          <button
+                            key={row.date}
+                            type="button"
+                            onClick={() => setSelectedDate(row.date)}
+                            className={`w-full flex items-center justify-between text-xs py-2 px-3 rounded-xl border font-mono-tabular transition-colors ${
+                              isSelected
+                                ? 'bg-sky-500/12 border-sky-400/30 text-white'
+                                : 'bg-white/[0.02] border-white/[0.04] text-slate-300 hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            <span>{row.date}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-100 font-semibold">
+                                {MonitorModel.compact(row.tokens)}
+                              </span>
+                              <span className="text-slate-400 w-16 text-right">
+                                {MonitorModel.money(row.cost)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -265,8 +295,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <span className="text-[11px] font-mono-tabular text-slate-400">TOKENS · COST</span>
         </div>
 
-        <section className="glass-panel rounded-3xl p-4">
-
+        <section className="glass-panel rounded-3xl p-5">
           <div className="glass-inset p-1 rounded-2xl flex gap-1 mb-4">
             {(
               [
@@ -283,7 +312,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   type="button"
                   onClick={() => onBreakdownChange(kind)}
                   aria-pressed={active}
-                  className={`flex-1 min-h-[38px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
+                  className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
                     active
                       ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
                       : 'text-slate-400 hover:text-slate-200'
@@ -297,8 +326,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
           {visibleRows.length > 0 ? (
             <div className="space-y-3.5">
-              {visibleRows.map((row) => {
-                const pct = totalTokensCount > 0 ? Math.min(100, (row.tokens / totalTokensCount) * 100) : 0;
+              {visibleRows.map((row, idx) => {
+                const pct =
+                  totalTokensCount > 0 ? Math.min(100, (row.tokens / totalTokensCount) * 100) : 0;
                 const displayLabel =
                   breakdownKind === 'clients' ? providerName(row.label) : row.label;
                 const tone =
@@ -308,6 +338,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   <div key={row.id} className="space-y-1.5">
                     <div className="flex items-baseline justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0">
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
                         <span className="font-medium text-slate-100 truncate">
                           {displayLabel}
                         </span>

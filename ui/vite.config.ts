@@ -15,6 +15,11 @@ const sharedScripts = [
 export default defineConfig({
   base: './',
   publicDir: false,
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    allowedHosts: true,
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -28,7 +33,8 @@ export default defineConfig({
             : new URL(`../app/src/main/assets/${src}`, import.meta.url),
         ]));
         server.middlewares.use(async (request, response, next) => {
-          const file = files.get(request.url || '');
+          const cleanPath = (request.url || '').split('?')[0];
+          const file = files.get(cleanPath);
           if (!file || request.method !== 'GET') return next();
           try {
             response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
@@ -42,7 +48,7 @@ export default defineConfig({
           // Vite's local refresh preamble and socket are development-only.
           html: context.server ? html
             .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
-            .replace("connect-src 'none'", "connect-src 'self' ws://127.0.0.1:* ws://localhost:*") : html,
+            .replace("connect-src 'none'", "connect-src 'self' ws: wss: http: https:") : html,
           tags: sharedScripts.map(src => ({ tag: 'script', attrs: { src }, injectTo: 'head' as const })),
         }),
       },
