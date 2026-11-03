@@ -59,12 +59,14 @@ test('Android details preserve missing metrics, zero costs and absent records', 
   assert.equal(M.sessionDetail(stats, 'constructor'), null);
 });
 
-test('Android detail prompt cache uses the shared estimate lease and never mutates a snapshot', () => {
+test('Android detail ignores legacy Codex cache estimates while retaining the Claude lease without mutation', () => {
   const { stats, row } = fixture();
   const now = Date.parse('2026-10-25T10:00:00Z');
   row.promptCache = { observedAt: new Date(now - 1000).toISOString(), ttlSeconds: 300 };
+  stats.periods.month.sessions['claude:cache'] = { ...row, client: 'claude', sessionId: 'cache' };
   const before = JSON.stringify(stats);
-  assert.equal(M.sessionDetail(stats, 'codex:child', { now }).promptCache.minutes, 5);
-  assert.equal(M.sessionDetail(stats, 'codex:child', { now: now + 300000 }).promptCache, null);
+  assert.equal(M.sessionDetail(stats, 'codex:child', { now }).promptCache, null);
+  assert.equal(M.sessionDetail(stats, 'claude:cache', { now }).promptCache.minutes, 5);
+  assert.equal(M.sessionDetail(stats, 'claude:cache', { now: now + 300000 }).promptCache, null);
   assert.equal(JSON.stringify(stats), before);
 });

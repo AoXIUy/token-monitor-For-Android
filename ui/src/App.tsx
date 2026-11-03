@@ -63,6 +63,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
   const [breakdownKind, setBreakdownKind] = useState<BreakdownKind>('clients');
   const [quotaTab, setQuotaTab] = useState<QuotaTabId>('limits');
   const [search, setSearch] = useState('');
+  const [sessionTool, setSessionTool] = useState('');
   const [sessionLimit, setSessionLimit] = useState(40);
   const [openSessions, setOpenSessions] = useState<Set<string>>(() => new Set());
   const [deadlineTick, setDeadlineTick] = useState(0);
@@ -86,8 +87,16 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
     }
     window.scrollTo(0, 0);
   };
-  const setPeriod = (next: PeriodId) => update((previous) => ({ ...previous, period: next }));
-  const setDevice = (next: string) => update((previous) => ({ ...previous, device: next }));
+  const setPeriod = (next: PeriodId) => {
+    update((previous) => ({ ...previous, period: next }));
+    setSessionTool('');
+    setSessionLimit(40);
+  };
+  const setDevice = (next: string) => {
+    update((previous) => ({ ...previous, device: next }));
+    setSessionTool('');
+    setSessionLimit(40);
+  };
   const openSession = (key: string) => {
     update((previous) => ({ ...previous, page: 'sessionDetail', detailKey: key }));
     setOpenSessions(new Set());
@@ -672,6 +681,11 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
                   search={search}
                   onSearchChange={(val) => {
                     setSearch(val);
+                    setSessionLimit(40);
+                  }}
+                  tool={sessionTool}
+                  onToolChange={(tool) => {
+                    setSessionTool(tool);
                     setSessionLimit(40);
                   }}
                   sessionLimit={sessionLimit}

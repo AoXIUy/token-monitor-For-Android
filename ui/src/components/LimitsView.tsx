@@ -235,7 +235,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${tone.dot}`} />
                   <h3 className="text-sm font-semibold text-slate-100 truncate">
-                    {providerName(provider.provider)}
+                    {account.productLabel || providerName(provider.provider)}
                   </h3>
                 </div>
                 {subMeta.length > 0 && (
@@ -305,17 +305,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         <p className="text-[11px] text-slate-400 font-mono-tabular">{q.detail}</p>
                       )}
 
-                      {win.resetsAt ? (
+                      {win.resetsAt && (
                         <div className="text-[11px] text-slate-400 font-mono-tabular">
                           {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
                           {formatShortTime(win.resetsAt)}
                         </div>
-                      ) : (
-                        win.resetDescription && (
-                          <p className="text-[11px] text-slate-400 break-words">
-                            {win.resetDescription}
-                          </p>
-                        )
+                      )}
+                      {(q.description ?? win.resetDescription) && (
+                        <p className="text-[11px] text-slate-400 break-words">{q.description ?? win.resetDescription}</p>
                       )}
                     </div>
                   );

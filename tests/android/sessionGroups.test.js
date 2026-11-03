@@ -115,7 +115,7 @@ test('Android grouped metrics preserve unknown values and free costs', () => {
 test('packaged browser globals group sessions without a Node loader', () => {
   const browser = vm.createContext({ window: {} });
   for (const filename of ['src/shared/compactTokens.js', 'src/shared/limits/balanceDisplay.js',
-    'src/shared/sessionActivityProviders.js', 'src/shared/sessionLive.js', 'src/shared/sessionGroups.js',
+    'src/shared/deviceKind.js', 'src/shared/sessionActivityProviders.js', 'src/shared/sessionLive.js', 'src/shared/sessionGroups.js',
     'app/src/main/assets/model.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../..', filename), 'utf8'), browser, { filename });
   }

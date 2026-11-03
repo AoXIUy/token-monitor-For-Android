@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, Check, ChevronRight, Copy, MessageSquare, Search, X } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import {
@@ -9,6 +9,7 @@ import {
   SessionStatusResult,
 } from '../types/monitor';
 import { clientTone, formatShortTime, providerName } from '../utils/formatters';
+import { DeviceIcon } from './DeviceIcon';
 
 interface SessionsViewProps {
   stats: MonitorStats;
@@ -21,6 +22,8 @@ interface SessionsViewProps {
   deviceId: string;
   search: string;
   onSearchChange: (val: string) => void;
+  tool: string;
+  onToolChange: (tool: string) => void;
   sessionLimit: number;
   onLoadMore: () => void;
   openKeys: Set<string>;
@@ -75,6 +78,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   deviceId,
   search,
   onSearchChange,
+  tool,
+  onToolChange,
   sessionLimit,
   onLoadMore,
   openKeys,
@@ -100,6 +105,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     }, 1500);
   };
 
+  const selection = MonitorModel.filterSessionTools(MonitorModel.sessions(selected.period, search), tool);
+  useEffect(() => {
+    if (tool && selection.tool !== tool) onToolChange('');
+  }, [tool, selection.tool, onToolChange]);
+
   if (period === 'allTime') {
     return (
       <div className="glass-panel rounded-3xl p-8 text-center my-4">
@@ -114,7 +124,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     );
   }
 
-  const allRows = MonitorModel.sessions(selected.period, search);
+  const allRows = selection.rows;
   const omitted = (selected.device || stats).sessionDetailsOmitted?.[period];
 
   const statusOptions = {
@@ -210,6 +220,25 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
         )}
       </div>
 
+      {selection.tools.length > 1 && (
+        <div role="group" aria-label="按工具筛选会话" className="flex gap-2 overflow-x-auto pb-1">
+          {['', ...selection.tools].map(client => (
+            <button
+              key={client}
+              type="button"
+              data-session-tool={client}
+              aria-pressed={selection.tool === client}
+              onClick={() => onToolChange(selection.tool === client ? '' : client)}
+              className={`min-h-[44px] shrink-0 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                selection.tool === client ? 'bg-sky-400/15 border-sky-400/40 text-sky-200' : 'glass-inset text-slate-300'
+              }`}
+            >
+              {client ? providerName(client) : '全部工具'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {omitted ? (
         <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/25 rounded-2xl p-3 leading-relaxed">
           {omitted} 条会话明细未上传；总览的 Token 和费用仍包含完整汇总。
@@ -269,6 +298,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const outTok = MonitorModel.count(row.outputTokens);
               const cacheTok = MonitorModel.count(row.cacheReadTokens);
               const partSum = inTok + outTok + cacheTok;
+              const effort = MonitorModel.sessionReasoningEffort(row);
+              const sources = MonitorModel.sessionDevices(row, stats, period, deviceId);
 
               return (
                 <section
@@ -309,11 +340,22 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       {row.title || row.projectLabel || row.sessionId || row.key}
                     </div>
 
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-slate-400">
+                      {sources.length ? sources.map(source => (
+                        <span key={source.deviceId} data-session-device={source.deviceId}
+                          className="inline-flex items-center gap-1 min-w-0 max-w-full">
+                          <DeviceIcon kind={source.deviceKind} className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{source.hostname}{source.hostname !== source.deviceId ? ` · ${source.deviceId}` : ''}</span>
+                        </span>
+                      )) : <span>来源设备未知</span>}
+                    </div>
+
                     <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1 font-mono-tabular">
                         <span className="shrink-0">{formatShortTime(row.lastUsedAt)}</span>
                         <span className="text-slate-600">·</span>
                         <span className="truncate">{modelNames}</span>
+                        {effort && <span data-reasoning-effort={effort} className="shrink-0 text-sky-300">推理 {effort}</span>}
                       </div>
                       {row.subagentCount ? (
                         <span

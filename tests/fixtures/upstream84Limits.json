@@ -1,0 +1,77 @@
+{
+  "muse": {
+    "provider": "muse",
+    "source": "web",
+    "status": "ok",
+    "windows": [
+      {
+        "kind": "weekly",
+        "label": "Weekly",
+        "used": null,
+        "limit": null,
+        "remaining": null,
+        "usedPercent": 3,
+        "remainingPercent": 97,
+        "resetsAt": "2026-09-28T22:33:58.000Z",
+        "windowMinutes": 10080,
+        "resetDescription": "2.8B tokens left",
+        "detail": "",
+        "currency": null,
+        "showMeter": true
+      },
+      {
+        "kind": "billing",
+        "metric": "credits",
+        "label": "Additional balance",
+        "used": null,
+        "limit": null,
+        "remaining": 60,
+        "usedPercent": null,
+        "remainingPercent": null,
+        "resetsAt": null,
+        "windowMinutes": null,
+        "resetDescription": "1.5B tokens left",
+        "detail": "",
+        "currency": "USD",
+        "showMeter": false
+      }
+    ]
+  },
+  "manus": {
+    "provider": "manus",
+    "status": "ok",
+    "windows": [
+      {
+        "kind": "daily",
+        "label": "Daily",
+        "used": 120,
+        "limit": 300,
+        "remaining": 180,
+        "usedPercent": 40,
+        "remainingPercent": 60,
+        "resetsAt": "2026-05-02T16:00:00.000Z",
+        "windowMinutes": 1440,
+        "resetDescription": "",
+        "detail": "",
+        "currency": null,
+        "showMeter": true
+      },
+      {
+        "kind": "billing",
+        "metric": "credits",
+        "label": "Credits",
+        "used": null,
+        "limit": null,
+        "remaining": 1180,
+        "usedPercent": null,
+        "remainingPercent": null,
+        "resetsAt": null,
+        "windowMinutes": null,
+        "resetDescription": "",
+        "detail": "",
+        "currency": "CREDITS",
+        "showMeter": false
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 import type {
-  BreakdownKind, DailyHistoryRow, DeviceData, LimitProvider, MonitorStats,
-  PeriodData, PeriodId, QuotaWindow, SessionRow, SessionStatusResult, SubscriptionRow,
+  BreakdownKind, DailyHistoryRow, DeviceData, LimitProvider, ModelTokenComponents, MonitorStats,
+  PeriodData, PeriodId, QuotaWindow, SessionDevice, SessionRow, SessionStatusResult, SubscriptionRow,
 } from '../types/monitor';
 
 export interface Selection {
@@ -9,7 +9,7 @@ export interface Selection {
   device: DeviceData | null;
   expired: boolean;
 }
-interface BreakdownRow { id: string; label: string; tokens: number; cost: number | null }
+interface BreakdownRow { id: string; label: string; tokens: number; cost: number | null; components?: ModelTokenComponents }
 interface SessionOptions {
   now?: number;
   stats?: MonitorStats;
@@ -22,7 +22,7 @@ interface SessionOptions {
 interface SessionDetail {
   row: SessionRow;
   period: PeriodId;
-  owners: Array<{ deviceId: string; hostname: string; stale: boolean; platform: string; updatedAt?: string; receivedAt?: string; session: Omit<SessionRow, 'key'> }>;
+  owners: Array<SessionDevice & { updatedAt?: string; receivedAt?: string; session: Omit<SessionRow, 'key'> }>;
   children: Array<{ key: string; label: string }>;
   parentKey: string;
   models: BreakdownRow[];
@@ -39,12 +39,16 @@ export interface MonitorModelApi {
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
   breakdown(period: PeriodData | null, kind: BreakdownKind): BreakdownRow[];
   sessions(period: PeriodData | null, search?: string): SessionRow[];
+  filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
+  deviceKind(value?: string): string;
+  sessionDevices(row: SessionRow, stats: MonitorStats, period: PeriodId, deviceId?: string): SessionDevice[];
   sessionDetail(stats: MonitorStats, key: string, options?: SessionOptions): SessionDetail | null;
   sessionStatus(row: SessionRow, options: SessionOptions): SessionStatusResult;
+  sessionReasoningEffort(row: SessionRow): string | null;
   daily(stats: MonitorStats): DailyHistoryRow[];
   components(period: PeriodData): { cached: number; output: number; cachePercent: string } | null;
-  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string };
-  quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string };
+  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string };
+  quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
   subscriptionAmount(row: SubscriptionRow): number | null;
 }
 

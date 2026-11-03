@@ -258,6 +258,11 @@ public final class StartupTest {
         assertTrue("Shared session grouping must be packaged and allowlisted", groups.getData().read() >= 0);
         assertNotEquals(403, groups.getStatusCode());
         groups.getData().close();
+        WebResourceResponse kinds = client.shouldInterceptRequest(null,
+                request(LocalContentClient.ORIGIN + "/assets/shared/deviceKind.js"));
+        assertTrue("Shared device kinds must be packaged and allowlisted", kinds.getData().read() >= 0);
+        assertNotEquals(403, kinds.getStatusCode());
+        kinds.getData().close();
         for (String url : new String[] {
                 "https://example.com/", "data:text/html;base64,PGh0bWw+", "file:///etc/hosts",
                 "http://appassets.androidplatform.net/assets/index.html",
@@ -306,6 +311,84 @@ public final class StartupTest {
         stats.getJSONObject("limits").put("providers", new org.json.JSONArray().put(providers.getJSONObject(1)));
         publishStats(stats);
         awaitScript("document.querySelectorAll('[data-limit-account]').length === 1 && !document.getElementById('content').innerText.includes('Team One')");
+    }
+
+    @Test public void upstream84ShowsMuseProductsCreditsAndSessionMetadata() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
+        org.json.JSONObject row = stats.getJSONObject("periods").getJSONObject("today")
+                .getJSONObject("sessions").getJSONObject("codex:test");
+        row.put("reasoningEffort", "high").put("models", new org.json.JSONObject().put("gpt-5", 1234))
+                .put("promptCache", new org.json.JSONObject().put("observedAt", java.time.Instant.now().toString()).put("ttlSeconds", 1800))
+                .put("modelTokenComponents", new org.json.JSONObject().put("gpt-5", new org.json.JSONObject()
+                        .put("totalTokens", 80).put("inputTokens", 20).put("outputTokens", 20)
+                        .put("cacheReadTokens", 30).put("cacheWriteTokens", 10)));
+        String tomorrow = java.time.Instant.now().plusSeconds(86400).toString();
+        org.json.JSONArray providers = new org.json.JSONArray("["
+                + "{\"provider\":\"muse\",\"source\":\"cli\",\"sourceDeviceId\":\"test-pc\",\"status\":\"ok\",\"windows\":[{\"kind\":\"session\",\"usedPercent\":25}]},"
+                + "{\"provider\":\"muse\",\"source\":\"web\",\"sourceDeviceId\":\"test-pc\",\"status\":\"ok\",\"windows\":["
+                + "{\"kind\":\"weekly\",\"usedPercent\":3,\"resetsAt\":\"" + tomorrow + "\",\"resetDescription\":\"2.8B tokens left\"},"
+                + "{\"kind\":\"billing\",\"metric\":\"credits\",\"remaining\":60,\"currency\":\"USD\",\"showMeter\":false,\"resetDescription\":\"1.5B tokens left\"}]},"
+                + "{\"provider\":\"manus\",\"status\":\"ok\",\"windows\":[{\"kind\":\"billing\",\"metric\":\"credits\",\"remaining\":1180,\"currency\":\"CREDITS\",\"showMeter\":false}]}]");
+        stats.put("limits", new org.json.JSONObject().put("providers", providers));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 3");
+        assertEquals("true", evaluate("new Set(Array.from(document.querySelectorAll('[data-limit-account]'), row => row.dataset.limitAccount)).size === 3"));
+        assertEquals("true", evaluate("document.body.innerText.includes('Muse Code') && document.body.innerText.includes('Muse (Meta)') && document.body.innerText.includes('Manus')"));
+        assertEquals("true", evaluate("document.body.innerText.includes('2.8B tokens left') && document.body.innerText.includes('剩余 1.5B Tokens') && document.body.innerText.includes('1180.00 积分') && !document.body.innerText.includes('$60.00')"));
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelector('[data-reasoning-effort=\"high\"]')");
+        evaluate("document.querySelector('.session-toggle').click()");
+        awaitScript("document.querySelector('[data-session-detail]')");
+        evaluate("document.querySelector('[data-session-detail]').click()");
+        awaitScript("document.getElementById('page-title').textContent === '会话详情'");
+        assertEquals("true", evaluate("document.body.innerText.includes('推理强度') && document.body.innerText.includes('high') && !document.body.innerText.includes('预计租约还剩')"));
+        assertEquals("true", evaluate("document.querySelector('[data-model-components=\"gpt-5\"]').innerText.includes('80 / 1,234 Tokens') && document.body.innerText.includes('其余 Tokens 的组成未知')"));
+    }
+
+    @Test public void upstream85FiltersToolsAndShowsEverySourceDevice() throws Exception {
+        awaitConnectionPage();
+        String now = java.time.Instant.now().toString();
+        org.json.JSONObject main = new org.json.JSONObject().put("client", "codex").put("sessionId", "main")
+                .put("title", "Remote work").put("totalTokens", 100).put("costUsd", 1).put("lastUsedAt", now);
+        org.json.JSONObject child = new org.json.JSONObject().put("client", "claude").put("sessionId", "child")
+                .put("parentClient", "codex").put("parentSessionId", "main").put("title", "Delegated task")
+                .put("totalTokens", 50).put("costUsd", 0.5).put("lastUsedAt", now);
+        org.json.JSONObject other = new org.json.JSONObject().put("client", "senpi").put("sessionId", "other")
+                .put("totalTokens", 25).put("lastUsedAt", now);
+        org.json.JSONObject sessions = new org.json.JSONObject().put("codex:main", main)
+                .put("claude:child", child).put("senpi:other", other);
+        org.json.JSONObject periods = new org.json.JSONObject().put("today", new org.json.JSONObject()
+                .put("totalTokens", 175).put("sessions", sessions));
+        org.json.JSONArray devices = new org.json.JSONArray()
+                .put(new org.json.JSONObject().put("deviceId", "laptop").put("hostname", "Work").put("deviceKind", "laptop")
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("sessions", new org.json.JSONObject().put("codex:main", main)))))
+                .put(new org.json.JSONObject().put("deviceId", "server").put("hostname", "Work").put("deviceKind", "server")
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("sessions", new org.json.JSONObject().put("claude:child", child).put("senpi:other", other)))));
+        org.json.JSONObject stats = new org.json.JSONObject().put("periods", periods).put("devices", devices);
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 2 && document.querySelector('[data-session-tool=\"claude\"]')");
+        evaluate("document.querySelector('[data-session-tool=\"claude\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 1 && document.querySelector('[data-session-tool=\"claude\"]').getAttribute('aria-pressed') === 'true'");
+        assertEquals("true", evaluate("document.querySelector('.session').textContent.includes('150') && document.querySelectorAll('[data-session-device]').length === 2"));
+        assertEquals("true", evaluate("document.querySelector('[data-session-device=\"laptop\"] [data-device-kind=\"laptop\"]') && Boolean(document.querySelector('[data-session-device=\"server\"] [data-device-kind=\"server\"]'))"));
+        evaluate("document.querySelector('.session-toggle').click()");
+        awaitScript("document.querySelectorAll('[data-session-member]').length === 2");
+        evaluate("document.querySelector('[data-session-member=\"claude%3Achild\"]').click()");
+        awaitScript("document.getElementById('page-title').textContent === '会话详情' && document.querySelector('[data-device-kind=\"server\"]')");
+        assertEquals("true", evaluate("window.handleBackNavigation()"));
+        awaitScript("document.querySelector('[data-session-tool=\"claude\"]').getAttribute('aria-pressed') === 'true'");
+        sessions.remove("claude:child");
+        publishStats(stats);
+        awaitScript("!document.querySelector('[data-session-tool=\"claude\"]') && document.querySelector('[data-session-tool=\"\"]').getAttribute('aria-pressed') === 'true'");
+        evaluate("document.querySelector('[data-page=\"devices\"]').click()");
+        awaitScript("document.querySelector('[data-device-kind=\"laptop\"]') && document.querySelector('[data-device-kind=\"server\"]')");
     }
 
     private void publishStats(org.json.JSONObject stats) throws Exception {

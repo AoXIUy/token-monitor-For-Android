@@ -42,6 +42,7 @@ export interface SessionRow {
   cacheReadTokens?: number | null;
   cacheWriteTokens?: number | null;
   reasoningTokens?: number | null;
+  reasoningEffort?: string | null;
   unclassifiedTokens?: number | null;
   unpricedTokens?: number | null;
   timedOutputTokens?: number | null;
@@ -53,8 +54,17 @@ export interface SessionRow {
   promptCacheExpiresAt?: string;
   models?: Record<string, number>;
   modelCosts?: Record<string, number>;
+  modelTokenComponents?: Record<string, ModelTokenComponents>;
   providers?: Record<string, number>;
   liveActivity?: LiveActivity;
+}
+
+export interface ModelTokenComponents {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
 
 export interface PeriodData {
@@ -98,6 +108,7 @@ export interface LimitProvider {
   profileName?: string;
   workspaceKind?: string;
   sourceDeviceId?: string;
+  source?: string;
   accountName?: string;
   accountEmail?: string;
   planLabel?: string;
@@ -117,6 +128,7 @@ export interface DeviceData {
   deviceId: string;
   hostname?: string;
   platform?: string;
+  deviceKind?: string;
   osName?: string;
   osVersion?: string;
   agentVersion?: string;
@@ -129,6 +141,14 @@ export interface DeviceData {
     providers?: LimitProvider[];
   };
   sessionDetailsOmitted?: Partial<Record<PeriodId, number>>;
+}
+
+export interface SessionDevice {
+  deviceId: string;
+  hostname: string;
+  platform: string;
+  deviceKind: string;
+  stale: boolean;
 }
 
 export interface DailyHistoryRow {

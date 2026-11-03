@@ -27,6 +27,8 @@ export const PROVIDER_LABELS: Record<string, string> = {
   openrouter: 'OpenRouter',
   muse: 'Muse Code',
   ollama: 'Ollama',
+  manus: 'Manus',
+  senpi: 'Senpi',
 };
 
 export function providerName(id?: string): string {

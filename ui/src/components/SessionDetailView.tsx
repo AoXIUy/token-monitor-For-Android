@@ -21,6 +21,7 @@ import {
   providerName,
 } from '../utils/formatters';
 import { renderStatusText } from './SessionsView';
+import { DeviceIcon } from './DeviceIcon';
 
 interface SessionDetailViewProps {
   stats: MonitorStats;
@@ -241,6 +242,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           {renderField('最近使用', formatFullTime(row.lastUsedAt))}
           {renderField('项目', row.projectLabel || '—')}
           {renderField('消息数', formatExact(row.messageCount))}
+          {MonitorModel.sessionReasoningEffort(row) ? renderField('推理强度', MonitorModel.sessionReasoningEffort(row)) : null}
           {renderField('会话 ID', row.sessionId || row.key, {
             fullWidth: true,
             copyValue: row.sessionId || row.key,
@@ -409,19 +411,26 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         <div className="pt-2.5 border-t border-white/8 space-y-2">
           {data.models.length > 0 ? (
             data.models.map((model) => (
-              <div
-                key={model.id}
-                className="flex items-baseline justify-between gap-2 text-xs font-mono-tabular"
-              >
-                <span className="text-slate-200 truncate">{model.label}</span>
-                <div className="flex items-baseline gap-2 shrink-0">
-                  <span className="font-semibold text-slate-100">
-                    {MonitorModel.compact(model.tokens)}
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    {MonitorModel.money(model.cost)}
-                  </span>
+              <div key={model.id} className="space-y-1.5 text-xs font-mono-tabular">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-slate-200 truncate">{model.label}</span>
+                  <div className="flex items-baseline gap-2 shrink-0">
+                    <span className="font-semibold text-slate-100">
+                      {MonitorModel.compact(model.tokens)}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {MonitorModel.money(model.cost)}
+                    </span>
+                  </div>
                 </div>
+                {model.components && (
+                  <div data-model-components={model.id} className="glass-inset rounded-xl p-2.5 text-[11px] text-slate-400 space-y-1">
+                    <p>已观测组成：{formatExact(model.components.totalTokens)} / {formatExact(model.tokens)} Tokens</p>
+                    <p>输入 {formatExact(model.components.inputTokens)} · 输出 {formatExact(model.components.outputTokens)}</p>
+                    <p>缓存读取 {formatExact(model.components.cacheReadTokens)} · 缓存写入 {formatExact(model.components.cacheWriteTokens)}</p>
+                    {model.components.totalTokens < model.tokens && <p>其余 Tokens 的组成未知</p>}
+                  </div>
+                )}
               </div>
             ))
           ) : (
@@ -449,7 +458,8 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             data.owners.map((owner) => (
               <div key={owner.deviceId} className="py-2.5 first:pt-0 last:pb-0">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-semibold text-slate-100">
+                  <span className="font-semibold text-slate-100 inline-flex items-center gap-1.5 min-w-0 break-all">
+                    <DeviceIcon kind={owner.deviceKind} className="w-4 h-4 shrink-0" />
                     {owner.hostname}{' '}
                     <span className="text-slate-400 font-normal">{owner.platform}</span>
                   </span>

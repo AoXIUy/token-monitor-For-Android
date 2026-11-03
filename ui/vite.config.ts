@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 const sharedScripts = [
   'shared/compactTokens.js',
   'shared/limits/balanceDisplay.js',
+  'shared/deviceKind.js',
   'shared/sessionActivityProviders.js',
   'shared/sessionLive.js',
   'shared/sessionGroups.js',

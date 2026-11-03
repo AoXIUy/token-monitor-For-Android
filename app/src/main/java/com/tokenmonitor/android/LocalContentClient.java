@@ -19,6 +19,7 @@ final class LocalContentClient extends WebViewClient {
     private static final Set<String> PATHS = new HashSet<>(Arrays.asList(
             "/assets/index.html", "/assets/app.css", "/assets/app.js", "/assets/model.js",
             "/assets/shared/compactTokens.js", "/assets/shared/limits/balanceDisplay.js",
+            "/assets/shared/deviceKind.js",
             "/assets/shared/sessionActivityProviders.js", "/assets/shared/sessionLive.js",
             "/assets/shared/sessionGroups.js"));
     private final WebViewAssetLoader loader;

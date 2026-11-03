@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.0.9](https://img.shields.io/badge/version-1.0.9-38BDF8)
+![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -20,9 +20,9 @@
 | --- | --- |
 | 用量总览 | 查看全部设备或单设备的今日、本月、累计 Token、费用、缓存及输出统计 |
 | 历史趋势 | 展示 Hub 提供的每日记录，支持每日 / 区间累计和单日数值查看 |
-| 会话与状态 | 搜索会话，查看运行、等待、已结束等状态及来源；子代理按明确关系分组 |
-| 会话详情 | 查看 Token 组成、费用、模型、来源设备、上下文快照和父子会话关系 |
-| 额度与余额 | 查看 Hub 同步的账户额度、余额及共享订阅；账户仍在电脑端管理 |
+| 会话与状态 | 搜索并按工具筛选，查看状态及所有来源设备；子代理保留完整分组和用量 |
+| 会话详情 | 查看 Token 和模型组成、推理强度、费用、来源设备、上下文快照和父子会话关系 |
+| 额度与余额 | 区分 Muse 网页 / CLI 额度及 Manus 积分，查看账户余额和共享订阅；账户仍在电脑端管理 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
 | 软件更新 | 在前台自动检查 GitHub 正式 Release，支持手动检查、更新说明与 APK 下载 |
@@ -40,6 +40,10 @@
 ![原生桌面微件预览，包含正常、断网和未连接状态；演示数据，非真机截图](docs/screenshots/widget-preview.png)
 
 展示图及截图均使用演示数据；实际内容取决于 Hub 和采集端提供的字段。
+
+1.1.0 同步主线 v0.84/v0.85 的 Android 适配：工具筛选在搜索结果内生效，匹配组内任一工具时保留整个会话家族；来源标签列出当前周期内实际持有记录的所有设备。设备硬件图标使用 Hub 上报信息，旧 Hub 保留通用图标。模型组成明确显示已观测覆盖范围，其余组成保持未知；提示缓存估计仅用于 Claude。
+
+[1.1.0 工具筛选与来源设备预览](docs/screenshots/sessions-1.1.0.jpg)：生产 React 包与演示原生桥接的浏览器截图，不代表真机验收。
 
 ## 安装与连接
 
@@ -95,7 +99,7 @@ sh ./gradlew assembleDebug assembleDebugAndroidTest lint
 sh ./gradlew connectedDebugAndroidTest  # 需要专用模拟器或测试设备
 ```
 
-浏览器预览不会自动伪造 Hub 连接，也不能替代 Android 原生 WebView、Keystore、通知和微件验收。仪器测试会清空测试设备中本 App 的连接配置。GitHub CI 配置见 [android.yml](.github/workflows/android.yml)。[Release 工作流](.github/workflows/release.yml) 在推送版本标签或手动触发后，先复用完整 CI，通过后正式签名并发布；配置与后续版本发布步骤见 [Actions 发布指南](docs/RELEASING.md)。
+浏览器预览使用演示数据和模拟交互，不能替代 Android 原生 WebView、Keystore、通知和微件验收。仪器测试会清空测试设备中本 App 的连接配置。GitHub CI 配置见 [android.yml](.github/workflows/android.yml)。[Release 工作流](.github/workflows/release.yml) 在推送版本标签或手动触发后，先复用完整 CI，通过后正式签名并发布；配置与后续版本发布步骤见 [Actions 发布指南](docs/RELEASING.md)。
 
 工程以 Java 原生层处理网络、加密存储、通知和微件，React + TypeScript 在本地 WebView 中展示界面；运行时不依赖 CDN 或远程字体。源码与边界约定见 [开发指南](docs/DEVELOPMENT.md)。
 

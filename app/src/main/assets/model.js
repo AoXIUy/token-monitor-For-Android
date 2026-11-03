@@ -5,11 +5,12 @@
   const api = factory(
     node ? require('../../../../src/shared/limits/balanceDisplay') : root.TokenMonitorLimitBalanceDisplay,
     node ? require('../../../../src/shared/sessionLive') : root.TokenMonitorSessionLive,
-    node ? require('../../../../src/shared/sessionGroups') : root.TokenMonitorSessionGroups
+    node ? require('../../../../src/shared/sessionGroups') : root.TokenMonitorSessionGroups,
+    node ? require('../../../../src/shared/deviceKind') : root.TokenMonitorDeviceKind
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.MonitorModel = api;
-})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups) {
+})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
   function numeric(value) {
     return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -97,6 +98,22 @@
   function compareSessions(a, b) {
     return (Date.parse(b.lastUsedAt || '') || 0) - (Date.parse(a.lastUsedAt || '') || 0) || a.key.localeCompare(b.key);
   }
+  function filterSessionTools(rows, selectedTool = '') {
+    const clients = row => (row.groupRows || [row]).map(member => member.client).filter(Boolean);
+    const tools = [...new Set(rows.flatMap(clients))].sort();
+    const tool = tools.length > 1 && tools.includes(selectedTool) ? selectedTool : '';
+    return { tools, tool, rows: tool ? rows.filter(row => clients(row).includes(tool)) : rows };
+  }
+  function deviceKind(value) { return deviceKinds.normalizeDeviceKind(value); }
+  function sessionDevices(row, stats, period, deviceId = '') {
+    const keys = (row.groupRows || [row]).map(member => member.key);
+    // Provenance is display-only. A shared accounting key may have several
+    // owners, and a family may span devices; retain all of them without summing.
+    return (stats?.devices || []).filter(device => (!deviceId || device.deviceId === deviceId)
+      && keys.some(key => Object.prototype.hasOwnProperty.call(device.periods?.[period]?.sessions || {}, key)))
+      .map(device => ({ deviceId: device.deviceId, hostname: device.hostname || device.deviceId,
+        platform: device.osName || device.platform || '', deviceKind: deviceKind(device.deviceKind), stale: device.stale === true }));
+  }
   function sessionDetail(stats, key, options = {}) {
     const device = options.deviceId ? (stats?.devices || []).find((row) => row.deviceId === options.deviceId) : null;
     if (options.deviceId && !device) return null;
@@ -109,7 +126,7 @@
       const owners = (stats.devices || []).filter((source) => (!device || source.deviceId === device.deviceId)
         && Object.prototype.hasOwnProperty.call(source.periods?.[period]?.sessions || {}, key))
         .map((source) => ({ deviceId: source.deviceId, hostname: source.hostname || source.deviceId,
-          stale: source.stale === true, platform: source.osName || source.platform || '',
+          stale: source.stale === true, platform: source.osName || source.platform || '', deviceKind: deviceKind(source.deviceKind),
           updatedAt: source.updatedAt, receivedAt: source.receivedAt, session: source.periods[period].sessions[key] }));
       const parentKey = row.parentSessionId ? `${row.parentClient || row.client}:${row.parentSessionId}` : '';
       const children = Object.entries(rows).filter(([, child]) => child.parentSessionId === row.sessionId
@@ -119,7 +136,9 @@
       const timedOutput = numeric(row.timedOutputTokens);
       return {
         row, period, owners, children, parentKey,
-        models: breakdown({ models: row.models, modelCosts: row.modelCosts }, 'models'),
+        models: breakdown({ models: row.models, modelCosts: row.modelCosts }, 'models').map(model => (
+          row.modelTokenComponents?.[model.id] ? { ...model, components: row.modelTokenComponents[model.id] } : model
+        )),
         providers: Object.entries(row.providers || {}).map(([label, tokens]) => ({ label, tokens: count(tokens) })),
         context: sessionLive.sessionContextWindow(row),
         promptCache: sessionLive.sessionPromptCacheForRow(row, options.now ?? Date.now()),
@@ -183,28 +202,38 @@
     };
   }
   function limitAccount(provider, stats, deviceId = '') {
+    const museSource = provider.provider === 'muse' ? provider.source === 'web' ? 'web' : 'cli' : '';
     const sourceId = deviceId || provider.sourceDeviceId || '';
     const device = (stats?.devices || []).find((row) => row.deviceId === sourceId);
     const sourceLabel = sourceId
       ? device?.hostname && device.hostname !== sourceId ? `${device.hostname} · ${sourceId}` : sourceId
       : provider.provider === 'muse' ? '来源设备未知' : '';
-    // An organization can share an email with another Claude account. Muse
-    // has no portable account identity and must retain its device scope.
+    // Claude organizations can share an email. Muse CLI is device-scoped;
+    // its independent web reading keeps one identity across winning devices.
     const key = JSON.stringify([
       provider.provider, provider.accountKey || provider.accountEmail || provider.accountName || '',
       provider.profileName || '', provider.workspaceKind || '',
-      provider.provider === 'muse' || !provider.accountKey ? sourceId : '',
+      museSource === 'cli' || (!provider.accountKey && museSource !== 'web') ? sourceId : '',
+      museSource,
     ]);
-    return { key, sourceLabel };
+    return { key, sourceLabel, ...(museSource ? { productLabel: museSource === 'web' ? 'Muse (Meta)' : 'Muse Code' } : {}) };
+  }
+  function sessionReasoningEffort(row) {
+    return sessionLive.isSessionReasoningEffortClient(row?.client) ? sessionLive.normalizeReasoningEffort(row.reasoningEffort) : null;
   }
   function quota(provider, window) {
     if (balance.isCreditsWindow(window)) {
+      if (provider.provider === 'muse' && provider.source === 'web' && window.resetDescription?.endsWith(' tokens left')) {
+        return { label: '额外 Tokens', value: `${window.resetDescription.slice(0, -' tokens left'.length)} Tokens`,
+          percent: null, remaining: true, description: '' };
+      }
       const currency = balance.creditsCurrency(provider, window);
       const limit = numeric(window.limit);
       const used = numeric(window.used);
+      const amount = balance.creditsAmount(provider, window);
       return {
         label: window.label || '账户余额',
-        value: money(balance.creditsAmount(provider, window), currency),
+        value: amount !== null && currency === 'CREDITS' ? `${money(amount, currency)} 积分` : money(amount, currency),
         percent: window.showMeter === false ? null : balance.creditsMeterPercent(provider, window),
         remaining: true,
         ...(limit > 0 ? { detail: `${used === null ? '' : `已用 ${money(used, currency)} / `}总额 ${money(limit, currency)}` } : {}),
@@ -238,5 +267,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, sessionDetail, sessionStatus, limitAccount, quota, daily, components, subscriptionAmount };
+  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, quota, daily, components, subscriptionAmount };
 });

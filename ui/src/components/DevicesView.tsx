@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowRight, Check, Copy, Cpu, HardDrive, Laptop } from 'lucide-react';
+import { ArrowRight, Check, Copy, HardDrive } from 'lucide-react';
+import { DeviceIcon } from './DeviceIcon';
 import { MonitorModel } from '../model/monitorModel';
 import { MonitorStats } from '../types/monitor';
 import { formatShortTime } from '../utils/formatters';
@@ -68,11 +69,7 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 shrink-0">
-                  {device.osName?.toLowerCase().includes('linux') ? (
-                    <Cpu className="w-5 h-5" />
-                  ) : (
-                    <Laptop className="w-5 h-5" />
-                  )}
+                  <DeviceIcon kind={device.deviceKind} className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-slate-100 truncate">
