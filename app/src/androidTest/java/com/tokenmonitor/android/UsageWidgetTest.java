@@ -114,7 +114,7 @@ public final class UsageWidgetTest {
     @Test public void multiPeriodAndQuotaProjectionDropsSensitiveFieldsAndInflatesAllVarieties() throws Exception {
         JSONObject source = stats();
         JSONObject today = source.getJSONObject("periods").getJSONObject("today");
-        today.put("inputTokens", 380_000).put("outputTokens", 119_840)
+        today.put("inputTokens", 380_000).put("outputTokens", 120_000)
                 .put("clients", new JSONObject()
                         .put("claude", 1_900_000)
                         .put("codex", 840_000)

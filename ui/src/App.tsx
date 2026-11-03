@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -76,10 +76,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
   }, [page, revealAppUpdate]);
 
   const nowTick = Date.now();
-  const selected = useMemo(
-    () => MonitorModel.select(stats, device, period, nowTick),
-    [stats, device, period, fetchedAt, deadlineTick]
-  );
+  const selected = MonitorModel.select(stats, device, period, nowTick);
 
   const setPage = (next: PageId) => {
     update((previous) => ({ ...previous, page: next }));
