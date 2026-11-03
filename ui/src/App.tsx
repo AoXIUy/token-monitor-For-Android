@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -76,7 +76,10 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
   }, [page, revealAppUpdate]);
 
   const nowTick = Date.now();
-  const selected = MonitorModel.select(stats, device, period, nowTick);
+  const selected = useMemo(
+    () => MonitorModel.select(stats, device, period, nowTick),
+    [stats, device, period, fetchedAt, deadlineTick]
+  );
 
   const setPage = (next: PageId) => {
     update((previous) => ({ ...previous, page: next }));
@@ -335,13 +338,13 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
       />
 
       <div className="max-w-[440px] mx-auto min-h-screen flex flex-col relative z-10">
-        <header className="sticky top-0 z-30 h-14 px-4 flex items-center justify-between gap-4 bg-[#090C10]/82 backdrop-blur-2xl border-b border-white/[0.08]">
+        <header className="sticky top-0 z-30 h-14 px-4 flex items-center justify-between gap-4 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
           <button
             type="button"
             onClick={() => setPage('overview')}
-            className="flex items-center gap-2.5 text-left focus:outline-none min-h-[44px] shrink-0"
+            className="flex items-center gap-2.5 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] shrink-0 group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/20 to-emerald-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shadow-[0_0_16px_rgba(56,189,248,0.18)]">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.22)] group-hover:border-sky-400/50 transition-colors">
               <Activity className="w-4 h-4" />
             </div>
             <span className="text-sm font-bold tracking-tight text-white whitespace-nowrap">
@@ -354,7 +357,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
             type="button"
             onClick={() => setPage('settings')}
             aria-label="连接设置"
-            className="min-h-[40px] px-3.5 py-1.5 rounded-full glass-pill-bar hover:border-white/20 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+            className="min-h-[40px] px-3.5 py-1.5 rounded-full glass-pill-bar hover:border-white/25 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
           >
             <i id="status-dot" className={`w-2 h-2 rounded-full ${statusDotColor}`} />
             <span id="status-label">{statusLabel}</span>
@@ -493,7 +496,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
                         setDevice(e.target.value);
                         setOpenSessions(new Set());
                       }}
-                      className="appearance-none min-h-[40px] pl-3.5 pr-8 py-1.5 rounded-full glass-pill-bar text-xs font-medium text-slate-200 max-w-[min(200px,52vw)] truncate focus:outline-none focus:border-sky-400/60 cursor-pointer"
+                      className="appearance-none min-h-[40px] pl-3.5 pr-8 py-1.5 rounded-full glass-pill-bar hover:border-white/20 text-xs font-medium text-slate-200 max-w-[min(210px,54vw)] truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 focus:border-sky-400/60 cursor-pointer transition-colors"
                     >
                       <option value="" className="bg-slate-900 text-slate-100">
                         全部设备
@@ -584,6 +587,8 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
           {page === 'settings' ? (
             <SettingsView
               appUpdate={state.appUpdate}
+              stats={stats}
+              fetchedAt={fetchedAt}
               connectionUrl={connection}
               allowHttpInitial={allowHttp}
               connectPending={connectPending}
@@ -690,6 +695,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
                   }}
                   sessionLimit={sessionLimit}
                   onLoadMore={() => setSessionLimit((prev) => prev + 40)}
+                  onResetLimit={() => setSessionLimit(40)}
                   openKeys={openSessions}
                   onToggleOpen={handleToggleSessionAccordion}
                   onOpenSessionDetail={openSession}

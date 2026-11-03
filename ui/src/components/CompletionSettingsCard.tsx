@@ -58,11 +58,11 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
             checked={notifications.enabled}
             disabled={!connected || monitorPending}
             onChange={(e) => onToggleMonitor(e.target.checked)}
-            className="sr-only"
+            className="sr-only peer"
           />
           <span
             aria-hidden="true"
-            className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block ${
+            className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#090C10] ${
               notifications.enabled
                 ? 'bg-gradient-to-r from-sky-400 to-emerald-400'
                 : 'bg-white/15'

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronRight, Copy, MessageSquare, Search, X } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import {
@@ -8,7 +8,7 @@ import {
   PeriodId,
   SessionStatusResult,
 } from '../types/monitor';
-import { clientTone, formatShortTime, providerName } from '../utils/formatters';
+import { clientTone, copyTextToClipboard, formatShortTime, providerName } from '../utils/formatters';
 import { DeviceIcon } from './DeviceIcon';
 
 interface SessionsViewProps {
@@ -26,6 +26,7 @@ interface SessionsViewProps {
   onToolChange: (tool: string) => void;
   sessionLimit: number;
   onLoadMore: () => void;
+  onResetLimit?: () => void;
   openKeys: Set<string>;
   onToggleOpen: (key: string) => void;
   onOpenSessionDetail: (key: string) => void;
@@ -82,6 +83,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   onToolChange,
   sessionLimit,
   onLoadMore,
+  onResetLimit,
   openKeys,
   onToggleOpen,
   onOpenSessionDetail,
@@ -92,23 +94,60 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>('all');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimer = useRef<number | null>(null);
 
-  const handleCopy = (text: string, keyId: string) => {
-    try {
-      navigator.clipboard?.writeText(text);
-    } catch {
-      // Clipboard may be unavailable in restricted WebView
-    }
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    setStatusFilter('all');
+  }, [period, deviceId]);
+
+  const handleCopy = async (text: string, keyId: string) => {
+    const ok = await copyTextToClipboard(text);
+    if (!ok) return;
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
     setCopiedKey(keyId);
-    window.setTimeout(() => {
+    copyTimer.current = window.setTimeout(() => {
       setCopiedKey((prev) => (prev === keyId ? null : prev));
+      copyTimer.current = null;
     }, 1500);
   };
 
-  const selection = MonitorModel.filterSessionTools(MonitorModel.sessions(selected.period, search), tool);
+  const searchedRows = useMemo(
+    () => MonitorModel.sessions(selected.period, search),
+    [selected.period, search]
+  );
+  const selection = useMemo(
+    () => MonitorModel.filterSessionTools(searchedRows, tool),
+    [searchedRows, tool]
+  );
   useEffect(() => {
     if (tool && selection.tool !== tool) onToolChange('');
   }, [tool, selection.tool, onToolChange]);
+
+  const allRows = selection.rows;
+  const omitted = (selected.device || stats).sessionDetailsOmitted?.[period];
+
+  const statusOptions = useMemo(
+    () => ({
+      now,
+      stats,
+      deviceId,
+      period,
+      connected: statusHealthy,
+      foreground,
+      fetchedAt,
+    }),
+    [now, stats, deviceId, period, statusHealthy, foreground, fetchedAt]
+  );
+  const allStatuses = useMemo(
+    () => allRows.map((row) => MonitorModel.sessionStatus(row, statusOptions)),
+    [allRows, statusOptions]
+  );
 
   if (period === 'allTime') {
     return (
@@ -123,20 +162,6 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       </div>
     );
   }
-
-  const allRows = selection.rows;
-  const omitted = (selected.device || stats).sessionDetailsOmitted?.[period];
-
-  const statusOptions = {
-    now,
-    stats,
-    deviceId,
-    period,
-    connected: statusHealthy,
-    foreground,
-    fetchedAt,
-  };
-  const allStatuses = allRows.map((row) => MonitorModel.sessionStatus(row, statusOptions));
 
   const activeCount = allStatuses.filter((s) => s.state === 'running').length;
   const waitingCount = allStatuses.filter((s) => s.state === 'waiting').length;
@@ -204,7 +229,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   key={fId}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setStatusFilter(fId)}
+                  onClick={() => {
+                    setStatusFilter(fId);
+                    onResetLimit?.();
+                  }}
                   className={`min-h-[36px] px-2 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition-all duration-150 whitespace-nowrap shrink-0 ${
                     active
                       ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
@@ -297,7 +325,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const inTok = MonitorModel.count(row.inputTokens);
               const outTok = MonitorModel.count(row.outputTokens);
               const cacheTok = MonitorModel.count(row.cacheReadTokens);
-              const partSum = inTok + outTok + cacheTok;
+              const cacheWriteTok = MonitorModel.count(row.cacheWriteTokens);
+              const partSum = inTok + outTok + cacheTok + cacheWriteTok;
               const effort = MonitorModel.sessionReasoningEffort(row);
               const sources = MonitorModel.sessionDevices(row, stats, period, deviceId);
 
@@ -377,7 +406,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     <div className="px-4 pb-4 pt-2.5 border-t border-white/8">
                       {partSum > 0 && (
                         <div className="mb-3 space-y-1.5">
-                          <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden flex">
+                          <div
+                            className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden flex"
+                            aria-hidden="true"
+                          >
                             {inTok > 0 && (
                               <div
                                 style={{ width: `${(inTok / partSum) * 100}%` }}
@@ -396,8 +428,14 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                                 className="h-full bg-emerald-400"
                               />
                             )}
+                            {cacheWriteTok > 0 && (
+                              <div
+                                style={{ width: `${(cacheWriteTok / partSum) * 100}%` }}
+                                className="h-full bg-amber-400"
+                              />
+                            )}
                           </div>
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono-tabular">
+                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] text-slate-400 font-mono-tabular">
                             <span className="text-sky-300">
                               输入 {MonitorModel.compact(inTok)}
                             </span>
@@ -405,8 +443,13 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                               输出 {MonitorModel.compact(outTok)}
                             </span>
                             <span className="text-emerald-300">
-                              缓存 {MonitorModel.compact(cacheTok)}
+                              缓存读取 {MonitorModel.compact(cacheTok)}
                             </span>
+                            {cacheWriteTok > 0 && (
+                              <span className="text-amber-300">
+                                缓存写入 {MonitorModel.compact(cacheWriteTok)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -438,7 +481,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                             <button
                               type="button"
                               onClick={() => handleCopy(row.sessionId || row.key, row.key)}
-                              className="inline-flex items-center gap-1 text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
+                              className="inline-flex items-center gap-1 min-h-[26px] px-2 py-0.5 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
                             >
                               {isCopied ? (
                                 <>
@@ -453,7 +496,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                               )}
                             </button>
                           </dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-0.5 truncate">
+                          <dd className="font-mono-tabular text-slate-200 mt-0.5 break-all">
                             {row.sessionId || row.key}
                           </dd>
                         </div>

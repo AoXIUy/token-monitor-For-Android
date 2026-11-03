@@ -3,16 +3,21 @@ import {
   Activity,
   ArrowUpRight,
   Check,
+  Eye,
+  EyeOff,
   HelpCircle,
   Link2,
   Play,
 } from 'lucide-react';
-import { NotificationState, AppUpdateState } from '../types/monitor';
+import { NotificationState, AppUpdateState, MonitorStats } from '../types/monitor';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
 import { AppUpdateCard } from './AppUpdateCard';
+import { WidgetGalleryCard } from './WidgetGalleryCard';
 
 interface SettingsViewProps {
   appUpdate: AppUpdateState;
+  stats?: MonitorStats | null;
+  fetchedAt?: number;
   connectionUrl: string;
   allowHttpInitial: boolean;
   connectPending: boolean;
@@ -32,6 +37,8 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   appUpdate,
+  stats,
+  fetchedAt,
   connectionUrl,
   allowHttpInitial,
   connectPending,
@@ -50,12 +57,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [url, setUrl] = useState(connectionUrl);
   const [secret, setSecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
   const [allowHttp, setAllowHttp] = useState(allowHttpInitial);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onConnect(url.trim(), secret, allowHttp);
-    setSecret('');
   };
 
   return (
@@ -119,20 +126,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
         </label>
 
-        <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-slate-200 block">Shared secret</span>
-          <input
-            id="hub-secret"
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder="输入 Hub 中配置的 secret"
-            required
-            autoComplete="new-password"
-            spellCheck={false}
-            className="w-full min-h-[46px] px-3.5 py-2.5 rounded-2xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
-          />
-        </label>
+        <div className="space-y-1.5">
+          <label htmlFor="hub-secret" className="text-xs font-medium text-slate-200 block">
+            Shared secret
+          </label>
+          <div className="relative flex items-center">
+            <input
+              id="hub-secret"
+              type={showSecret ? 'text' : 'password'}
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              placeholder="输入 Hub 中配置的 secret"
+              required
+              autoComplete="new-password"
+              spellCheck={false}
+              className="w-full min-h-[46px] pl-3.5 pr-11 py-2.5 rounded-2xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret((prev) => !prev)}
+              aria-label={showSecret ? '隐藏 secret' : '显示 secret'}
+              aria-pressed={showSecret}
+              className="w-10 h-10 flex items-center justify-center absolute right-1 text-slate-400 hover:text-slate-200 rounded-xl transition-colors"
+            >
+              {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
 
         <label className="flex items-start gap-3 cursor-pointer py-1 min-h-[44px]">
           <input
@@ -140,11 +160,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             type="checkbox"
             checked={allowHttp}
             onChange={(e) => setAllowHttp(e.target.checked)}
-            className="sr-only"
+            className="sr-only peer"
           />
           <span
             aria-hidden="true"
-            className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+            className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#090C10] ${
               allowHttp
                 ? 'bg-sky-400 border-sky-400 text-slate-950'
                 : 'glass-inset border-white/20 text-transparent'
@@ -202,6 +222,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onOpenSystemSettings={onOpenSystemSettings}
         />
       </div>
+
+      <WidgetGalleryCard
+        stats={stats ?? null}
+        connected={Boolean(connectionUrl)}
+        fetchedAt={fetchedAt ?? 0}
+      />
 
       <AppUpdateCard
         state={appUpdate}

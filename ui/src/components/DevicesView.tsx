@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Copy, HardDrive } from 'lucide-react';
 import { DeviceIcon } from './DeviceIcon';
 import { MonitorModel } from '../model/monitorModel';
 import { MonitorStats } from '../types/monitor';
-import { formatShortTime } from '../utils/formatters';
+import { copyTextToClipboard, formatShortTime } from '../utils/formatters';
 
 interface DevicesViewProps {
   stats: MonitorStats;
@@ -12,17 +12,23 @@ interface DevicesViewProps {
 
 export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimer = useRef<number | null>(null);
   const devices = stats.devices || [];
 
-  const handleCopyId = (deviceId: string) => {
-    try {
-      navigator.clipboard?.writeText(deviceId);
-    } catch {
-      // Clipboard may be restricted in some WebViews
-    }
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  const handleCopyId = async (deviceId: string) => {
+    const ok = await copyTextToClipboard(deviceId);
+    if (!ok) return;
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
     setCopiedId(deviceId);
-    window.setTimeout(() => {
+    copyTimer.current = window.setTimeout(() => {
       setCopiedId((prev) => (prev === deviceId ? null : prev));
+      copyTimer.current = null;
     }, 1500);
   };
 
@@ -64,11 +70,11 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
         return (
           <section
             key={device.deviceId}
-            className="glass-panel rounded-3xl p-5 transition-all duration-150 hover:border-white/15"
+            className="glass-panel-interactive rounded-3xl p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 shrink-0 shadow-[0_0_16px_rgba(56,189,248,0.12)]">
                   <DeviceIcon kind={device.deviceKind} className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
@@ -83,7 +89,7 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
                       type="button"
                       onClick={() => handleCopyId(device.deviceId)}
                       aria-label={`复制设备 ID ${device.deviceId}`}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-sky-300 transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 min-h-[26px] px-2 py-0.5 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-[10px] text-slate-300 hover:text-sky-200 transition-colors shrink-0"
                     >
                       {isCopied ? (
                         <>
@@ -91,7 +97,10 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
                           <span className="text-emerald-300">已复制</span>
                         </>
                       ) : (
-                        <Copy className="w-3 h-3" />
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>复制</span>
+                        </>
                       )}
                     </button>
                   </div>
@@ -99,11 +108,19 @@ export const DevicesView: React.FC<DevicesViewProps> = ({ stats, onSelectDevice 
               </div>
 
               <span
-                className={`text-[11px] font-medium shrink-0 ${
-                  device.stale ? 'text-amber-300' : 'text-emerald-300'
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium shrink-0 border ${
+                  device.stale
+                    ? 'bg-amber-500/10 border-amber-400/25 text-amber-300'
+                    : 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
                 }`}
               >
-                {device.stale ? '上报过期' : '近期上报'}
+                <i
+                  aria-hidden="true"
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    device.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                />
+                <span>{device.stale ? '上报过期' : '近期上报'}</span>
               </span>
             </div>
 

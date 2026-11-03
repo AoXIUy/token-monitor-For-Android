@@ -110,4 +110,93 @@ public final class UsageWidgetTest {
             assertTrue(card.findViewById(R.id.widget_updated).getBottom() <= card.getHeight() - card.getPaddingBottom());
         });
     }
+
+    @Test public void multiPeriodAndQuotaProjectionDropsSensitiveFieldsAndInflatesAllVarieties() throws Exception {
+        JSONObject source = stats();
+        JSONObject today = source.getJSONObject("periods").getJSONObject("today");
+        today.put("inputTokens", 380_000).put("outputTokens", 119_840)
+                .put("clients", new JSONObject()
+                        .put("claude", 1_900_000)
+                        .put("codex", 840_000)
+                        .put("secret-corp-tool", 100_000));
+        source.getJSONObject("periods")
+                .put("month", new JSONObject().put("totalTokens", 48_200_000).put("costUsd", 164.20).put("unpricedTokens", 0))
+                .put("allTime", new JSONObject().put("totalTokens", 215_000_000).put("costUsd", 912.50));
+        source.put("devices", new JSONArray()
+                .put(new JSONObject().put("deviceId", "dev-secret-99").put("hostname", "secret-macbook").put("stale", false))
+                .put(new JSONObject().put("deviceId", "dev-2").put("hostname", "workstation").put("stale", true)));
+        source.put("historyPreview", new JSONObject().put("daily", new JSONArray()
+                .put(new JSONObject().put("date", "2026-11-01").put("tokens", 1_600_000))
+                .put(new JSONObject().put("date", "2026-11-02").put("tokens", 3_400_000))
+                .put(new JSONObject().put("date", "2026-11-03").put("tokens", 2_000_000))));
+        source.put("limits", new JSONObject().put("providers", new JSONArray()
+                .put(new JSONObject().put("provider", "claude").put("status", "ok").put("stale", false)
+                        .put("accountEmail", "private@example.com").put("accountName", "Private Team")
+                        .put("windows", new JSONArray().put(new JSONObject()
+                                .put("kind", "session").put("usedPercent", 88.0).put("resetLabel", "secret-reset-note"))))
+                .put(new JSONObject().put("provider", "codex").put("status", "ok").put("stale", false)
+                        .put("windows", new JSONArray().put(new JSONObject()
+                                .put("kind", "weekly").put("remainingPercent", 38.0))))));
+
+        JSONObject summary = UsageWidgetSnapshot.project(source, 5000, 4900);
+        String raw = summary.toString();
+        assertFalse(raw.contains("secret-macbook"));
+        assertFalse(raw.contains("dev-secret-99"));
+        assertFalse(raw.contains("private@example.com"));
+        assertFalse(raw.contains("Private Team"));
+        assertFalse(raw.contains("secret-reset-note"));
+        assertFalse(raw.contains("secret-corp-tool"));
+
+        assertEquals("48.2M", summary.getString("monthTokens"));
+        assertEquals("$164.20", summary.getString("monthCost"));
+        assertEquals("215M", summary.getString("allTimeTokens"));
+        assertEquals("$912.50", summary.getString("allTimeCost"));
+        assertEquals("380K", summary.getString("inputTokens"));
+        assertEquals("120K", summary.getString("outputTokens"));
+        assertEquals("7M", summary.getString("sevenDayTokens"));
+        assertEquals("3.4M", summary.getString("peakDayTokens"));
+        assertEquals(2, summary.getInt("quotaAccounts"));
+        assertEquals(2, summary.getInt("quotaHealthy"));
+        assertEquals(1, summary.getInt("quotaAlerts"));
+        assertEquals("Claude · 会话", summary.getJSONArray("quotas").getJSONObject(0).getString("label"));
+        assertTrue(summary.getJSONArray("quotas").getJSONObject(0).getBoolean("warn"));
+
+        ConnectionStore store = new ConnectionStore(context);
+        store.save(new ConnectionSpec("https://widget.example.com", "test-secret", false));
+        assertTrue(UsageWidgetStore.publish(context, store.binding(), source, System.currentTimeMillis(), 10));
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            float density = context.getResources().getDisplayMetrics().density;
+            Object[][] cases = new Object[][] {
+                    {WidgetLayoutPolicy.Kind.COMPACT, 115, 60, R.id.widget_tokens, "2.8M"},
+                    {WidgetLayoutPolicy.Kind.COMPACT, 150, 130, R.id.widget_month_tokens, "48.2M"},
+                    {WidgetLayoutPolicy.Kind.TODAY, 150, 130, R.id.widget_tokens, "2.8M"},
+                    {WidgetLayoutPolicy.Kind.TODAY, 280, 260, R.id.widget_tools_summary, "Claude 1.9M"},
+                    {WidgetLayoutPolicy.Kind.PERIODS, 260, 160, R.id.widget_all_tokens, "215M"},
+                    {WidgetLayoutPolicy.Kind.PERIODS, 280, 250, R.id.widget_seven_day_tokens, "7M"},
+                    {WidgetLayoutPolicy.Kind.QUOTA, 150, 130, R.id.widget_quota_headline, "1 项需关注"},
+                    {WidgetLayoutPolicy.Kind.QUOTA, 260, 175, R.id.widget_quota_1_label, "Claude · 会话"},
+                    {WidgetLayoutPolicy.Kind.QUOTA, 280, 250, R.id.widget_quota_1_label, "Claude · 会话"}
+            };
+            for (Object[] c : cases) {
+                WidgetLayoutPolicy.Kind kind = (WidgetLayoutPolicy.Kind) c[0];
+                int w = (Integer) c[1];
+                int h = (Integer) c[2];
+                int viewId = (Integer) c[3];
+                String expected = (String) c[4];
+                View card = UsageWidgetProvider.views(context, kind, w, h).apply(context, new FrameLayout(context));
+                card.measure(View.MeasureSpec.makeMeasureSpec(Math.round(w * density), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(Math.round(h * density), View.MeasureSpec.EXACTLY));
+                card.layout(0, 0, card.getMeasuredWidth(), card.getMeasuredHeight());
+                TextView target = card.findViewById(viewId);
+                assertNotNull("Expected view in " + kind + " " + w + "x" + h, target);
+                assertTrue("Unexpected text in " + kind + ": " + target.getText(), target.getText().toString().contains(expected));
+                TextView footer = card.findViewById(R.id.widget_updated);
+                if (footer != null) {
+                    assertTrue("Footer clipped in " + kind + " " + w + "x" + h,
+                            footer.getBottom() <= card.getHeight() - card.getPaddingBottom());
+                }
+            }
+        });
+    }
 }

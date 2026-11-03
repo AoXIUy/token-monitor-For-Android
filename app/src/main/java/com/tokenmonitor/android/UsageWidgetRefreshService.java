@@ -21,7 +21,7 @@ public final class UsageWidgetRefreshService extends JobService {
     private int generation;
 
     static void schedule(Context context) {
-        if (UsageWidgetProvider.ids(context).length == 0 || new ConnectionStore(context).binding().isEmpty()) return;
+        if (!UsageWidgetProvider.hasAnyWidgets(context) || new ConnectionStore(context).binding().isEmpty()) return;
         JobScheduler scheduler = context.getSystemService(JobScheduler.class);
         // Coalesce taps/system updates rather than cancelling an in-flight read.
         if (scheduler.getPendingJob(JOB_ID) != null) return;
@@ -33,7 +33,7 @@ public final class UsageWidgetRefreshService extends JobService {
 
     @Override public boolean onStartJob(JobParameters params) {
         String binding = new ConnectionStore(this).binding();
-        if (binding.isEmpty() || UsageWidgetProvider.ids(this).length == 0) return false;
+        if (binding.isEmpty() || !UsageWidgetProvider.hasAnyWidgets(this)) return false;
         int epoch = ++generation;
         long startedAt = System.currentTimeMillis();
         HubClient request = new HubClient();

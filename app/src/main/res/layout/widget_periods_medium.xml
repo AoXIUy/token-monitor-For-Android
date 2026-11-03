@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_card"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="11dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="26dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:includeFontPadding="false"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_brand_periods"
+            android:textColor="#BAE6FD"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <LinearLayout
+            android:id="@+id/widget_refresh"
+            android:layout_width="60dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_button"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:contentDescription="@string/widget_refresh_description">
+            <ImageView
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:src="@drawable/widget_refresh"
+                android:importantForAccessibility="no" />
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/widget_refresh"
+                android:textColor="#7DD3FC"
+                android:textSize="11sp"
+                android:importantForAccessibility="no" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="7dp"
+        android:layout_marginBottom="5dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_inset_box"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="7dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/widget_period"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_today_short"
+                android:textColor="#BAE6FD"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+            <TextView
+                android:id="@+id/widget_tokens"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#F8FAFC"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="13sp"
+                android:autoSizeMaxTextSize="19sp" />
+            <TextView
+                android:id="@+id/widget_cost"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#6EE7B7"
+                android:textSize="11sp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_inset_box"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="7dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_month_short"
+                android:textColor="#94A3B8"
+                android:textSize="10sp"
+                android:maxLines="1" />
+            <TextView
+                android:id="@+id/widget_month_tokens"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#7DD3FC"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="13sp"
+                android:autoSizeMaxTextSize="19sp" />
+            <TextView
+                android:id="@+id/widget_month_cost"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#CBD5E1"
+                android:textSize="11sp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_inset_box"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="7dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_all_short"
+                android:textColor="#94A3B8"
+                android:textSize="10sp"
+                android:maxLines="1" />
+            <TextView
+                android:id="@+id/widget_all_tokens"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#C4B5FD"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="13sp"
+                android:autoSizeMaxTextSize="19sp" />
+            <TextView
+                android:id="@+id/widget_all_cost"
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/widget_placeholder"
+                android:textColor="#CBD5E1"
+                android:textSize="11sp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_updated"
+        android:includeFontPadding="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_connect"
+        android:textColor="#94A3B8"
+        android:textSize="10sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+</LinearLayout>

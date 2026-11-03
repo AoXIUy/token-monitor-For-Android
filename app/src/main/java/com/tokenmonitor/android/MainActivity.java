@@ -274,7 +274,7 @@ public final class MainActivity extends Activity {
                     if (epoch != generation || !foreground) return;
                     busy = false;
                     failures = 0;
-                    if (UsageWidgetProvider.ids(MainActivity.this).length > 0) {
+                    if (UsageWidgetProvider.hasAnyWidgets(MainActivity.this)) {
                         UsageWidgetStore.publish(MainActivity.this, widgetBinding, stats, System.currentTimeMillis(), startedAt);
                     }
                     try {
@@ -300,7 +300,7 @@ public final class MainActivity extends Activity {
                     if (epoch != generation || !foreground) return;
                     busy = false;
                     failures = Math.min(failures + 1, 4);
-                    if (UsageWidgetProvider.ids(MainActivity.this).length > 0) {
+                    if (UsageWidgetProvider.hasAnyWidgets(MainActivity.this)) {
                         UsageWidgetStore.failed(MainActivity.this, widgetBinding, startedAt, error instanceof HubClient.HubError
                                 && (((HubClient.HubError) error).status == 401 || ((HubClient.HubError) error).status == 403));
                     }

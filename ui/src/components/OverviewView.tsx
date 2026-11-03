@@ -50,6 +50,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const rows = MonitorModel.breakdown(p, breakdownKind);
   const visibleRows = rows.slice(0, 30);
   const totalTokensCount = MonitorModel.count(p.totalTokens);
+  const inputTokensCount = MonitorModel.count(p.inputTokens);
+  const outputTokensCount = MonitorModel.count(p.outputTokens);
+  const cacheReadTokensCount = MonitorModel.count(p.cacheReadTokens);
+  const cacheWriteTokensCount = MonitorModel.count(p.cacheWriteTokens);
+  const heroPartsSum =
+    inputTokensCount + outputTokensCount + cacheReadTokensCount + cacheWriteTokensCount;
 
   const maxTrendTokens = trend.length
     ? Math.max(1, ...trend.map((row) => MonitorModel.count(row.tokens)))
@@ -69,19 +75,93 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <p className="text-xs font-medium text-sky-200/90 tracking-wide">
             {PERIOD_LABELS[period]} Token 用量
           </p>
-          <span className="text-[11px] font-mono-tabular text-sky-300/95">
-            {deviceId
-              ? selected.device?.hostname || selected.device?.deviceId
-              : `${activeDevicesCount} / ${devices.length} 台近期上报`}
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/25 border border-white/10 text-[11px] font-mono-tabular text-sky-300/95">
+            <i
+              aria-hidden="true"
+              className={`w-1.5 h-1.5 rounded-full ${
+                deviceId
+                  ? selected.device?.stale
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400'
+                  : activeDevicesCount > 0
+                  ? 'bg-emerald-400'
+                  : 'bg-slate-400'
+              }`}
+            />
+            <span>
+              {deviceId
+                ? selected.device?.hostname || selected.device?.deviceId
+                : `${activeDevicesCount} / ${devices.length} 台近期上报`}
+            </span>
           </span>
         </div>
 
-        <div className="my-3 flex items-baseline gap-2.5">
-          <div className="token-total text-[44px] sm:text-5xl font-extrabold tracking-tight text-white font-mono-tabular leading-none">
+        <div className="my-3 flex items-baseline gap-2.5 flex-wrap">
+          <div className="token-total text-[44px] sm:text-5xl font-extrabold tracking-tight text-white font-mono-tabular leading-none break-all">
             {MonitorModel.compact(p.totalTokens)}
           </div>
           <span className="text-xs font-medium text-slate-300/80 font-mono-tabular">tokens</span>
         </div>
+
+        {components && heroPartsSum > 0 && (
+          <div className="mb-3 space-y-1.5">
+            <div
+              className="h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden flex"
+              aria-hidden="true"
+            >
+              {inputTokensCount > 0 && (
+                <div
+                  style={{ width: `${(inputTokensCount / heroPartsSum) * 100}%` }}
+                  className="h-full bg-sky-400"
+                />
+              )}
+              {outputTokensCount > 0 && (
+                <div
+                  style={{ width: `${(outputTokensCount / heroPartsSum) * 100}%` }}
+                  className="h-full bg-violet-400"
+                />
+              )}
+              {cacheReadTokensCount > 0 && (
+                <div
+                  style={{ width: `${(cacheReadTokensCount / heroPartsSum) * 100}%` }}
+                  className="h-full bg-emerald-400"
+                />
+              )}
+              {cacheWriteTokensCount > 0 && (
+                <div
+                  style={{ width: `${(cacheWriteTokensCount / heroPartsSum) * 100}%` }}
+                  className="h-full bg-amber-400"
+                />
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono-tabular text-slate-300/90">
+              {inputTokensCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <i className="w-1.5 h-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+                  <span>输入 {MonitorModel.compact(inputTokensCount)}</span>
+                </span>
+              )}
+              {outputTokensCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <i className="w-1.5 h-1.5 rounded-full bg-violet-400" aria-hidden="true" />
+                  <span>输出 {MonitorModel.compact(outputTokensCount)}</span>
+                </span>
+              )}
+              {cacheReadTokensCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <i className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                  <span>缓存读取 {MonitorModel.compact(cacheReadTokensCount)}</span>
+                </span>
+              )}
+              {cacheWriteTokensCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <i className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                  <span>缓存写入 {MonitorModel.compact(cacheWriteTokensCount)}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {!deviceId && <HistoryChart trend={trend} />}
 
@@ -204,7 +284,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       aria-pressed={isSelected}
                       aria-label={`${row.date} · ${MonitorModel.compact(row.tokens)} tokens · ${MonitorModel.money(row.cost)}`}
                       title={`${row.date} · ${MonitorModel.compact(row.tokens)}`}
-                      className="trend-col flex-1 h-full flex flex-col justify-end items-center group focus:outline-none min-h-0"
+                      className="trend-col flex-1 h-full flex flex-col justify-end items-center group rounded-t-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-0"
                     >
                       <div
                         style={{ height: `${pct}%` }}
@@ -341,6 +421,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0">
                           {String(idx + 1).padStart(2, '0')}
                         </span>
+                        {breakdownKind === 'clients' && (
+                          <i
+                            className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`}
+                            aria-hidden="true"
+                          />
+                        )}
                         <span className="font-medium text-slate-100 truncate">
                           {displayLabel}
                         </span>
@@ -358,7 +444,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden"
+                      aria-hidden="true"
+                    >
                       <div
                         style={{ width: `${Math.max(1.5, pct)}%` }}
                         className={`h-full rounded-full bg-gradient-to-r ${tone.bar} transition-all duration-300`}

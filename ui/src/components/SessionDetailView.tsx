@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,6 +15,7 @@ import { MonitorModel } from '../model/monitorModel';
 import { MonitorStats, PeriodId } from '../types/monitor';
 import {
   clientTone,
+  copyTextToClipboard,
   formatExact,
   formatFullTime,
   PERIOD_LABELS,
@@ -49,16 +50,22 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   onSelectSession,
 }) => {
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const copyTimer = useRef<number | null>(null);
 
-  const handleCopy = (value: string, label: string) => {
-    try {
-      navigator.clipboard?.writeText(value);
-    } catch {
-      // Clipboard may be restricted in WebView
-    }
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  const handleCopy = async (value: string, label: string) => {
+    const ok = await copyTextToClipboard(value);
+    if (!ok) return;
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
     setCopiedLabel(label);
-    window.setTimeout(() => {
+    copyTimer.current = window.setTimeout(() => {
       setCopiedLabel((prev) => (prev === label ? null : prev));
+      copyTimer.current = null;
     }, 1500);
   };
 
@@ -123,7 +130,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
               type="button"
               onClick={() => handleCopy(options.copyValue!, label)}
               aria-label={`复制 ${label}`}
-              className="inline-flex items-center gap-1 text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
+              className="inline-flex items-center gap-1 min-h-[26px] px-2 py-0.5 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-[10px] text-sky-300 hover:text-sky-200 transition-colors"
             >
               {isCopied ? (
                 <>

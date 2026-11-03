@@ -82,7 +82,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         {row.binding?.accountEmail || row.binding?.profileName || '未绑定账户'}
                       </p>
                     </div>
-                    <span className="text-xs font-medium text-emerald-300 shrink-0">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/25 text-[11px] font-medium text-emerald-300 shrink-0">
                       {row.kind === 'subscription' ? '周期订阅' : '预存充值'}
                     </span>
                   </div>
@@ -256,11 +256,19 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               </div>
 
               <span
-                className={`text-xs font-medium shrink-0 ${
-                  isHealthy ? 'text-emerald-300' : 'text-amber-300'
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium shrink-0 border ${
+                  isHealthy
+                    ? 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
+                    : 'bg-amber-500/10 border-amber-400/25 text-amber-300'
                 }`}
               >
-                {statusText}
+                <i
+                  aria-hidden="true"
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isHealthy ? 'bg-emerald-400' : 'bg-amber-400'
+                  }`}
+                />
+                <span>{statusText}</span>
               </span>
             </div>
 
@@ -287,7 +295,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       </div>
 
                       {q.percent !== null && (
-                        <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                        <div
+                          className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden"
+                          aria-hidden="true"
+                        >
                           <div
                             style={{
                               width: `${Math.max(1.5, Math.min(100, q.percent))}%`,
