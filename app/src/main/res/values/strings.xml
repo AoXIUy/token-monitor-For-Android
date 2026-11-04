@@ -27,7 +27,9 @@
     <string name="widget_devices">近期上报设备</string>
     <string name="widget_devices_short">近期设备</string>
     <string name="widget_seven_day">近 7 日总量</string>
-    <string name="widget_peak_day">单日峰值</string>
+    <string name="widget_seven_day_partial">7日小计</string>
+    <string name="widget_seven_day_description">近7日有%1$d天读数，缺失日期不补零：%2$s</string>
+    <string name="widget_peak_day">14日峰值</string>
     <string name="widget_top_tools_label">主要工具</string>
     <string name="widget_quota_empty">暂无可量化的配额窗口读数</string>
     <string name="widget_refresh">刷新</string>

@@ -4,6 +4,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const stateModule = import('../../ui/src/nativeState.js');
 
+test('update prompts and verified download progress survive Hub changes without accepting file paths', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = receiveNativeMessage(createInitialState(), { type: 'appUpdate', available: true, latestVersion: '2.0.0', promptToken: 'offer-1' });
+  state = receiveNativeMessage(state, { type: 'appUpdateDownload', phase: 'downloading', version: '2.0.0', downloaded: 50, total: 100,
+    message: 'Downloading', url: 'https://evil.test/app.apk', path: '/private/secret' });
+  assert.equal(state.appUpdate.download.downloaded, 50);
+  state = { ...state, dismissedUpdatePrompt: 'offer-1' };
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.test' });
+  assert.equal(state.dismissedUpdatePrompt, 'offer-1');
+  assert.equal(state.appUpdate.download.phase, 'downloading');
+  state = receiveNativeMessage(state, { type: 'appUpdate', available: true, latestVersion: '2.0.0', promptToken: 'offer-2' });
+  assert.equal(state.appUpdate.download.downloaded, 50);
+  assert.notEqual(state.appUpdate.promptToken, state.dismissedUpdatePrompt);
+  state = receiveNativeMessage(state, { type: 'appUpdateDownload', phase: 'installing', total: 100, downloaded: 100 });
+  assert.equal(state.dismissedUpdatePrompt, 'offer-2');
+  assert.equal(JSON.stringify(state).includes('evil.test'), false);
+  assert.equal(JSON.stringify(state).includes('/private/secret'), false);
+});
+
+test('malformed download events cannot claim unbounded progress or invent an install state', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const initial = createInitialState();
+  assert.equal(receiveNativeMessage(initial, { type: 'appUpdateDownload', phase: 'trusted-without-verification' }), initial);
+  const state = receiveNativeMessage(initial, { type: 'appUpdateDownload', phase: 'downloading', total: 100, downloaded: 999 });
+  assert.equal(state.appUpdate.download.downloaded, 100);
+  for (const bad of [NaN, Infinity, -1, '100']) {
+    const malformed = receiveNativeMessage(initial, { type: 'appUpdateDownload', phase: 'downloading', total: bad, downloaded: bad });
+    assert.equal(malformed.appUpdate.download.total, 0);
+    assert.equal(malformed.appUpdate.download.downloaded, 0);
+  }
+});
+
 test('app update information and dismissed notices survive Hub switches without accepting URLs or secrets', async () => {
   const { createInitialState, receiveNativeMessage } = await stateModule;
   let state = receiveNativeMessage(createInitialState(), { type: 'appUpdate', currentVersion: '1.0.8', latestVersion: '1.10.0',

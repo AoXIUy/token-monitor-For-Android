@@ -29,6 +29,8 @@ public final class MainActivity extends Activity {
     private ConnectionSpec spec;
     private HubClient client;
     private AppUpdates updates;
+    private AppUpdateDownloads downloads;
+    private boolean awaitingInstallPermission;
     private boolean foreground;
     private boolean ready;
     private boolean busy;
@@ -44,6 +46,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (savedInstanceState != null) pendingNotificationAction = savedInstanceState.getString("notificationAction");
+        if (savedInstanceState != null) awaitingInstallPermission = savedInstanceState.getBoolean("installPermission");
         store = new ConnectionStore(this);
         SessionNotifications.channels(this);
         try { spec = store.load(); }
@@ -63,6 +66,8 @@ public final class MainActivity extends Activity {
         web.setWebViewClient(new LocalContentClient(this));
         web.addJavascriptInterface(new Bridge(), "HubNative");
         updates = new AppUpdates(this, this::emit);
+        if (savedInstanceState != null) updates.restore(savedInstanceState);
+        downloads = new AppUpdateDownloads(this, AppUpdates.installedVersion(this), this::emit, this::installUpdate);
         // Resize the WebView itself: its padding does not protect fixed CSS controls.
         FrameLayout viewport = new FrameLayout(this);
         viewport.setBackgroundColor(Color.rgb(9, 12, 16));
@@ -200,6 +205,8 @@ public final class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         if (pendingNotificationAction != null) outState.putString("notificationAction", pendingNotificationAction);
+        outState.putBoolean("installPermission", awaitingInstallPermission);
+        if (updates != null) updates.save(outState);
         super.onSaveInstanceState(outState);
     }
 
@@ -316,6 +323,7 @@ public final class MainActivity extends Activity {
             main.post(() -> {
                 ready = true; foregroundChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
                 if (foreground) updates.resume(); else updates.send();
+                downloads.send();
             });
         }
         @JavascriptInterface public void connect(String address, String secret, boolean allowHttp) {
@@ -341,14 +349,12 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void subscriptions() { main.post(() -> MainActivity.this.refresh(true)); }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
+        @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }
         @JavascriptInterface public void downloadUpdate() {
-            main.post(() -> {
-                String url = updates.downloadUrl();
-                if (url == null || !foreground) return;
-                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)); }
-                catch (android.content.ActivityNotFoundException error) { updates.downloadFailed(); }
-            });
+            main.post(() -> { if (foreground) downloads.start(updates.candidate()); });
         }
+        @JavascriptInterface public void installUpdate() { main.post(() -> { if (foreground) downloads.requestInstall(); }); }
+        @JavascriptInterface public void cancelUpdateDownload() { main.post(() -> downloads.cancel()); }
         @JavascriptInterface public void monitor(boolean enabled) {
             main.post(() -> {
                 if (enabled) notificationAction("enable");
@@ -386,6 +392,14 @@ public final class MainActivity extends Activity {
         notificationState();
         refresh(false);
         if (ready && updates != null) updates.resume();
+        if (downloads != null) {
+            downloads.resume();
+            if (awaitingInstallPermission) {
+                awaitingInstallPermission = false;
+                if (getPackageManager().canRequestPackageInstalls()) downloads.requestInstall();
+                else downloads.permissionDenied();
+            }
+        }
     }
     @Override protected void onStop() {
         foreground = false;
@@ -399,7 +413,32 @@ public final class MainActivity extends Activity {
         cancel();
         network.shutdownNow();
         if (updates != null) updates.close();
+        if (downloads != null) downloads.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }
         super.onDestroy();
+    }
+
+    private void installUpdate(java.io.File file) {
+        if (!foreground || isDestroyed()) return;
+        try {
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                downloads.permissionRequired();
+                awaitingInstallPermission = true;
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:" + getPackageName())));
+                return;
+            }
+            startActivity(updateInstallIntent(this, file));
+            downloads.installerOpened();
+            updates.dismissPrompt();
+        } catch (Exception problem) { awaitingInstallPermission = false; downloads.installerFailed(); }
+    }
+
+    static Intent updateInstallIntent(android.content.Context context, java.io.File file) {
+        android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(context, context.getPackageName() + ".updates", file);
+        Intent intent = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(android.content.ClipData.newRawUri("Token Monitor update", uri));
+        return intent;
     }
 }

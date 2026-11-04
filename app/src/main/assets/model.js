@@ -104,6 +104,15 @@
     const tool = tools.length > 1 && tools.includes(selectedTool) ? selectedTool : '';
     return { tools, tool, rows: tool ? rows.filter(row => clients(row).includes(tool)) : rows };
   }
+  function filterSessionStatuses(statuses, filter = 'all') {
+    const counts = { running: 0, waiting: 0, ended: 0 };
+    const indices = [];
+    statuses.forEach((status, index) => {
+      if (Object.prototype.hasOwnProperty.call(counts, status.state)) counts[status.state]++;
+      if (filter === 'all' || status.state === filter) indices.push(index);
+    });
+    return { counts, indices };
+  }
   function deviceKind(value) { return deviceKinds.normalizeDeviceKind(value); }
   function sessionDevices(row, stats, period, deviceId = '') {
     const keys = (row.groupRows || [row]).map(member => member.key);
@@ -118,8 +127,10 @@
     const device = options.deviceId ? (stats?.devices || []).find((row) => row.deviceId === options.deviceId) : null;
     if (options.deviceId && !device) return null;
     const periods = (device || stats)?.periods;
+    const now = options.now ?? Date.now();
     const preferred = options.period === 'today' ? ['today', 'month'] : ['month', 'today'];
     for (const period of preferred) {
+      if (device && expired(device, period, now)) continue;
       const rows = periods?.[period]?.sessions;
       if (!rows || !Object.prototype.hasOwnProperty.call(rows, key)) continue;
       const row = { ...rows[key], key };
@@ -141,7 +152,7 @@
         )),
         providers: Object.entries(row.providers || {}).map(([label, tokens]) => ({ label, tokens: count(tokens) })),
         context: sessionLive.sessionContextWindow(row),
-        promptCache: sessionLive.sessionPromptCacheForRow(row, options.now ?? Date.now()),
+        promptCache: sessionLive.sessionPromptCacheForRow(row, now),
         tokensPerSecond: duration > 0 && timedOutput !== null ? timedOutput / duration * 1000 : null,
       };
     }
@@ -256,6 +267,30 @@
     return (stats?.historyPreview?.daily || []).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
       .slice().sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
   }
+  function widgetHistory(stats, fetchedAt) {
+    const empty = { recentDays: 0, sevenDayDays: 0, sevenDayTokens: null, peakDayTokens: null };
+    if (!Number.isFinite(fetchedAt) || fetchedAt <= 0) return empty;
+    const date = new Date(fetchedAt);
+    if (!Number.isFinite(date.getTime())) return empty;
+    // Hub day keys are local calendar dates. Use the phone's snapshot date,
+    // and UTC arithmetic only to subtract calendar days without DST drift.
+    const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const end = Date.parse(`${today}T00:00:00Z`);
+    const days = new Map();
+    for (const row of stats?.historyPreview?.daily || []) {
+      if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.date)) continue;
+      const at = Date.parse(`${row.date}T00:00:00Z`);
+      if (!Number.isFinite(at) || new Date(at).toISOString().slice(0, 10) !== row.date
+        || at < end - 13 * 86400000 || at > end
+        || typeof row.tokens !== 'number' || !Number.isFinite(row.tokens) || row.tokens < 0) continue;
+      days.set(row.date, Math.max(days.get(row.date) ?? 0, row.tokens));
+    }
+    const recent = [...days.entries()];
+    const week = recent.filter(([key]) => Date.parse(`${key}T00:00:00Z`) >= end - 6 * 86400000);
+    return { recentDays: recent.length, sevenDayDays: week.length,
+      sevenDayTokens: week.length ? week.reduce((sum, [, tokens]) => sum + tokens, 0) : null,
+      peakDayTokens: recent.length ? Math.max(...recent.map(([, tokens]) => tokens)) : null };
+  }
   function components(period) {
     if (period?.capabilities?.tokenComponents !== true) return null;
     const total = count(period.totalTokens);
@@ -267,5 +302,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, quota, daily, components, subscriptionAmount };
+  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, quota, daily, widgetHistory, components, subscriptionAmount };
 });

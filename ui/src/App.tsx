@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
+import { AppUpdateDialog } from './components/AppUpdateDialog';
 import { DevicesView } from './components/DevicesView';
 import { LimitsView } from './components/LimitsView';
 import { OverviewView } from './components/OverviewView';
@@ -36,7 +37,17 @@ type Monitor = ReturnType<typeof useNativeMonitor>;
 
 export default function App() {
   const monitor = useNativeMonitor();
-  return <Dashboard key={monitor.state.connectionEpoch} {...monitor} />;
+  const { state, update } = monitor;
+  const showUpdate = state.foreground && state.appUpdate.available && Boolean(state.appUpdate.promptToken)
+    && state.dismissedUpdatePrompt !== state.appUpdate.promptToken && state.appUpdate.download.phase !== 'installing';
+  return <>
+    <Dashboard key={state.connectionEpoch} {...monitor} />
+    <AppUpdateDialog state={state.appUpdate} open={showUpdate}
+      onDismiss={() => {
+        update(previous => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
+        window.HubNative?.dismissAppUpdatePrompt?.();
+      }} />
+  </>;
 }
 
 function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor) {

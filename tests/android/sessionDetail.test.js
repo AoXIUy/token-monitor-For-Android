@@ -48,6 +48,26 @@ test('Android notification detail lookup falls back between month and today and 
   assert.equal(M.sessionDetail(stats, 'codex:child', { deviceId: 'removed' }), null);
 });
 
+test('Android device details skip expired periods before falling back and disappear at the month boundary', () => {
+  const { stats } = fixture();
+  const boundary = Date.parse('2026-11-04T00:00:00Z');
+  const device = stats.devices[0];
+  device.updatedAt = new Date(boundary - 1).toISOString();
+  device.periods.today = { sessions: { 'codex:child': { ...stats.periods.month.sessions['codex:child'], totalTokens: 10 } } };
+  device.periodWindows = { today: { endsAt: new Date(boundary).toISOString() },
+    month: { endsAt: '2026-12-01T00:00:00Z' } };
+  const options = { deviceId: 'pc', period: 'today', now: boundary - 1 };
+  assert.equal(M.sessionDetail(stats, 'codex:child', options).period, 'today');
+  assert.equal(M.select(stats, 'pc', 'today', boundary).period, null);
+  const detail = M.sessionDetail(stats, 'codex:child', { ...options, now: boundary });
+  assert.equal(detail.period, 'month');
+  assert.equal(detail.row.totalTokens, 500);
+  assert.equal(M.sessionDetail(stats, 'codex:child', { ...options, now: Date.parse('2026-12-01T00:00:00Z') }), null);
+  delete device.periodWindows;
+  assert.equal(M.sessionDetail(stats, 'codex:child', { ...options, now: boundary }).period, 'month');
+  assert.equal(M.sessionDetail(stats, 'codex:child', { ...options, now: Date.parse('2026-12-01T00:00:00Z') }), null);
+});
+
 test('Android details preserve missing metrics, zero costs and absent records', () => {
   const stats = { devices: [], periods: { today: { sessions: { 'codex:empty': { client: 'codex', sessionId: 'empty', models: { free: 1 }, modelCosts: { free: 0 } } } } } };
   const data = M.sessionDetail(stats, 'codex:empty');

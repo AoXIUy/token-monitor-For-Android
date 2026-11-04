@@ -630,6 +630,8 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       publishedAt: nowIso,
       size: 0,
       error: '',
+      promptToken: '',
+      download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' },
     },
   };
 }

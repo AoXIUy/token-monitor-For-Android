@@ -57,7 +57,7 @@ const KIND_META: Array<{
     id: 'periods',
     title: '多周期总览',
     badge: '2×2 ~ 4×3',
-    desc: '同屏并排对比今日、本月与累计用量及账单；展开查看近 7 日总量与单日峰值。',
+    desc: '对比今日、本月与累计用量；展开查看近 7 日用量和 14 日峰值，缺失日期时显示小计。',
     sizes: [
       { id: '2x2', label: '2×2 紧凑' },
       { id: '4x2', label: '4×2 三周期' },
@@ -130,12 +130,9 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
         : '—';
     const allCost = hasData && allTime ? MonitorModel.money(allTime.costUsd) : '—';
 
-    const daily = stats ? MonitorModel.daily(stats) : [];
-    const recent7 = daily.slice(-7);
-    const sevenSum = recent7.reduce((sum, r) => sum + MonitorModel.count(r.tokens), 0);
-    const peak = daily.reduce((max, r) => Math.max(max, MonitorModel.count(r.tokens)), 0);
-    const sevenDayStr = hasData && recent7.length > 0 ? MonitorModel.compact(sevenSum) : '—';
-    const peakDayStr = hasData && daily.length > 0 ? MonitorModel.compact(peak) : '—';
+    const history = MonitorModel.widgetHistory(stats, fetchedAt);
+    const sevenDayStr = hasData && history.sevenDayTokens !== null ? MonitorModel.compact(history.sevenDayTokens) : '—';
+    const peakDayStr = hasData && history.peakDayTokens !== null ? MonitorModel.compact(history.peakDayTokens) : '—';
 
     const clientRows = hasData && today ? MonitorModel.breakdown(today, 'clients').slice(0, 3) : [];
     const topToolsStr =
@@ -208,6 +205,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
       allTokens,
       allCost,
       sevenDayStr,
+      sevenDayDays: history.sevenDayDays,
       peakDayStr,
       topToolsStr,
       totalAccounts: providers.length,
@@ -465,11 +463,11 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
               <>
                 <div className="grid grid-cols-4 gap-1.5 pt-0.5 font-mono-tabular text-[11px]">
                   <div>
-                    <div className="text-[9px] text-slate-400">近 7 日总量</div>
-                    <div className="text-slate-100 font-semibold mt-0.5">{preview.sevenDayStr}</div>
+                    <div className="text-[9px] text-slate-400">{preview.sevenDayDays > 0 && preview.sevenDayDays < 7 ? '7日小计' : '近 7 日总量'}</div>
+                    <div className="text-slate-100 font-semibold mt-0.5" aria-label={`近7日有${preview.sevenDayDays}天读数，缺失日期不补零：${preview.sevenDayStr}`}>{preview.sevenDayStr}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] text-slate-400">单日峰值</div>
+                    <div className="text-[9px] text-slate-400">14日峰值</div>
                     <div className="text-sky-300 font-semibold mt-0.5">{preview.peakDayStr}</div>
                   </div>
                   <div>

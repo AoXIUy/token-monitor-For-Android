@@ -9,8 +9,9 @@ function isConnectionStatus(value) {
 export function createInitialState() {
   return {
     appUpdate: { currentVersion: '', latestVersion: '', automatic: true, checking: false, available: false,
-      checkedAt: 0, name: '', notes: '', publishedAt: '', size: 0, error: '' },
-    dismissedUpdateVersion: '',
+      checkedAt: 0, name: '', notes: '', publishedAt: '', size: 0, error: '', promptToken: '',
+      download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' } },
+    dismissedUpdateVersion: '', dismissedUpdatePrompt: '',
     page: 'overview', period: 'today', device: '', stats: null, subscriptions: null,
     subscriptionError: '', connection: '', allowHttp: false, status: 'disconnected',
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
@@ -38,13 +39,31 @@ export function receiveNativeMessage(state, message) {
         checkedAt: typeof message.checkedAt === 'number' && Number.isFinite(message.checkedAt) && message.checkedAt > 0 ? message.checkedAt : 0,
         size: typeof message.size === 'number' && Number.isFinite(message.size) && message.size > 0 ? message.size : 0,
         name: text('name', 160), notes: text('notes', 12000), publishedAt: text('publishedAt', 40), error: text('error', 300),
+        promptToken: text('promptToken', 80), download: state.appUpdate.download,
       } };
+    }
+    case 'appUpdateDownload': {
+      const phases = ['idle', 'downloading', 'verifying', 'ready', 'permission', 'installing', 'error', 'cancelled'];
+      if (typeof message.phase !== 'string' || !phases.includes(message.phase)) return state;
+      /** @param {string} key @param {number} limit */
+      const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
+      /** @param {unknown} value */
+      const bytes = value => typeof value === 'number' && Number.isFinite(value) ? Math.floor(Math.max(0, Math.min(128 * 1024 * 1024, value))) : 0;
+      const total = bytes(message.total);
+      return { ...state,
+        dismissedUpdatePrompt: message.phase === 'installing' ? state.appUpdate.promptToken : state.dismissedUpdatePrompt,
+        appUpdate: { ...state.appUpdate, download: {
+          phase: /** @type {import('./types/monitor').UpdateDownloadState['phase']} */ (message.phase),
+          version: text('version', 64), total, downloaded: Math.min(total, bytes(message.downloaded)),
+          message: text('message', 300), error: text('error', 300),
+        } },
+      };
     }
     case 'connection': {
       const connection = String(message.url || '');
       return {
         ...createInitialState(), connection, allowHttp: Boolean(message.allowHttp),
-        appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion,
+        appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion, dismissedUpdatePrompt: state.dismissedUpdatePrompt,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
       };

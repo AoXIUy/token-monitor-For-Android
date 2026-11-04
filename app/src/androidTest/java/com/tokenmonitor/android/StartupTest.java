@@ -134,6 +134,25 @@ public final class StartupTest {
         awaitScript("document.getElementById('download-app-update') && !document.getElementById('app-update-banner')");
     }
 
+    @Test public void updateDialogHandlesDismissalProgressAndSystemInstallHandoff() throws Exception {
+        awaitConnectionPage();
+        evaluate("window.receiveNative({type:'appUpdate',currentVersion:'1.2.1',latestVersion:'9.0.0',available:true,promptToken:'offer-1',notes:'<b id=untrusted-update>Release notes</b>'})");
+        awaitScript("document.querySelector('#app-update-dialog[open]') && document.getElementById('dialog-download-app-update')");
+        assertEquals("true", evaluate("!document.getElementById('untrusted-update') && document.getElementById('app-update-dialog').textContent.includes('<b id=untrusted-update>')"));
+        assertEquals("true", evaluate("window.handleBackNavigation()"));
+        awaitScript("!document.querySelector('#app-update-dialog[open]')");
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        assertEquals("true", evaluate("!document.querySelector('#app-update-dialog[open]')"));
+        evaluate("window.receiveNative({type:'appUpdate',currentVersion:'1.2.1',latestVersion:'9.0.0',available:true,promptToken:'offer-2'})");
+        awaitScript("document.querySelector('#app-update-dialog[open]')");
+        evaluate("window.receiveNative({type:'appUpdateDownload',phase:'downloading',version:'9.0.0',downloaded:50,total:100,message:'Downloading'})");
+        awaitScript("document.querySelector('#app-update-dialog [role=progressbar]').getAttribute('aria-valuenow') === '50' && document.getElementById('dialog-cancel-app-update')");
+        evaluate("window.receiveNative({type:'appUpdateDownload',phase:'permission',version:'9.0.0',downloaded:100,total:100})");
+        awaitScript("document.getElementById('dialog-install-app-update').textContent.includes('授权并安装')");
+        evaluate("window.receiveNative({type:'appUpdateDownload',phase:'installing',version:'9.0.0',downloaded:100,total:100})");
+        awaitScript("!document.querySelector('#app-update-dialog[open]')");
+    }
+
     @Test public void systemBarsAndKeyboardResizeTheWholeWebViewport() throws Exception {
         awaitConnectionPage();
         Rect bars = new Rect(0, 24, 0, 32);
@@ -395,6 +414,43 @@ public final class StartupTest {
         String snapshot = new org.json.JSONObject().put("type", "stats").put("data", stats)
                 .put("fetchedAt", System.currentTimeMillis()).toString();
         evaluate("window.receiveNative(" + org.json.JSONObject.quote(snapshot) + ")");
+    }
+
+    @Test public void endedFilterNeverIncludesUnknownIdleOrArchivedSessions() throws Exception {
+        awaitConnectionPage();
+        long now = System.currentTimeMillis();
+        String fresh = java.time.Instant.ofEpochMilli(now - 1000).toString();
+        org.json.JSONObject sessions = new org.json.JSONObject()
+                .put("codex:running", new org.json.JSONObject().put("client", "codex").put("sessionId", "running")
+                        .put("lastUsedAt", fresh).put("turnEnded", false))
+                .put("codex:ended", new org.json.JSONObject().put("client", "codex").put("sessionId", "ended")
+                        .put("lastUsedAt", fresh).put("turnEnded", true))
+                .put("codex:idle", new org.json.JSONObject().put("client", "codex").put("sessionId", "idle")
+                        .put("lastUsedAt", java.time.Instant.ofEpochMilli(now - 700000).toString()).put("turnEnded", false))
+                .put("codex:archived", new org.json.JSONObject().put("client", "codex").put("sessionId", "archived")
+                        .put("lastUsedAt", fresh).put("archived", true));
+        org.json.JSONObject periods = new org.json.JSONObject().put("today", new org.json.JSONObject()
+                .put("totalTokens", 10).put("sessions", sessions));
+        org.json.JSONObject stats = new org.json.JSONObject().put("periods", periods).put("devices", new org.json.JSONArray()
+                .put(new org.json.JSONObject().put("deviceId", "pc").put("stale", false)
+                        .put("updatedAt", fresh).put("periods", periods)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 4 && document.querySelector('[data-session-status-filter=\"ended\"]').textContent.replace(/\\s/g,'') === '已结束1'");
+        evaluate("document.querySelector('[data-session-status-filter=\"ended\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 1 && document.querySelector('[data-session-state=\"ended\"]')");
+        evaluate("window.receiveNative({type:'status',state:'offline'})");
+        awaitScript("document.querySelectorAll('.session').length === 0 && document.querySelector('[data-session-status-filter=\"ended\"]').textContent.replace(/\\s/g,'') === '已结束0'");
+        evaluate("document.querySelector('[data-session-status-filter=\"all\"]').click()");
+        awaitScript("document.querySelectorAll('[data-session-state=\"unknown\"]').length === 3");
+        publishStats(stats);
+        evaluate("window.receiveNative({type:'lifecycle',foreground:false})");
+        awaitScript("document.querySelectorAll('[data-session-state=\"unknown\"]').length === 3 && document.querySelector('[data-session-status-filter=\"ended\"]').textContent.replace(/\\s/g,'') === '已结束0'");
+        evaluate("window.receiveNative({type:'lifecycle',foreground:true})");
+        String expired = new org.json.JSONObject().put("type", "stats").put("data", stats).put("fetchedAt", now - 30000).toString();
+        evaluate("window.receiveNative(" + org.json.JSONObject.quote(expired) + ")");
+        awaitScript("document.querySelectorAll('[data-session-state=\"unknown\"]').length === 3 && document.querySelector('[data-session-status-filter=\"ended\"]').textContent.replace(/\\s/g,'') === '已结束0'");
     }
 
     @Test public void dailyTrendKeepsRealDatesAndSelectionAcrossRefresh() throws Exception {

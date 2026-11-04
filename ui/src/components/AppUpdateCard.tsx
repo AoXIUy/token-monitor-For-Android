@@ -1,4 +1,5 @@
-import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
+import { UpdateDownloadPanel } from './UpdateDownloadPanel';
 import type { AppUpdateState } from '../types/monitor';
 
 interface AppUpdateCardProps {
@@ -64,7 +65,7 @@ export function AppUpdateCard({ state, onSimulateCheck, onSimulateAutoToggle }: 
         <span>
           <span className="font-medium text-slate-100">自动检查更新</span>
           <span className="block text-[11px] text-slate-400 mt-0.5">
-            在前台检查，间隔至少 12 小时
+            打开应用时检查，前台每 12 小时检查
           </span>
         </span>
         <span className="inline-flex items-center shrink-0">
@@ -131,24 +132,12 @@ export function AppUpdateCard({ state, onSimulateCheck, onSimulateAutoToggle }: 
               {state.notes || '此版本未提供更新说明。'}
             </p>
           </details>
-          <button
-            id="download-app-update"
-            type="button"
-            disabled={!supported}
-            onClick={() => window.HubNative?.downloadUpdate?.()}
-            className="w-full min-h-[44px] px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(56,189,248,0.25)] hover:brightness-105 active:scale-[0.99] transition-all disabled:opacity-45"
-          >
-            <Download className="w-4 h-4" />
-            <span>
-              下载 {state.latestVersion}
-              {state.size > 0 ? ` · ${(state.size / 1024 / 1024).toFixed(1)} MB` : ''}
-            </span>
-          </button>
         </div>
       )}
+      {(state.available || state.download.phase !== 'idle') && <UpdateDownloadPanel state={state} />}
 
       <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-white/6">
-        更新来源：AoXIUy/token-monitor-For-Android · GitHub Releases。下载由系统浏览器处理，安装时需要确认。
+        更新来源：AoXIUy/token-monitor-For-Android · GitHub Releases。应用内下载并校验，安装时由系统确认。
       </p>
     </section>
   );

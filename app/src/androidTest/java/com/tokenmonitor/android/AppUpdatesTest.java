@@ -38,7 +38,9 @@ public final class AppUpdatesTest {
         return new JSONObject().put("tag_name", "v" + version).put("draft", false).put("prerelease", false)
                 .put("name", "Release " + version).put("body", "Updates").put("html_url", AppUpdatePolicy.releaseUrl(version))
                 .put("assets", new JSONArray().put(new JSONObject().put("name", AppUpdatePolicy.apkName(version))
-                        .put("state", "uploaded").put("size", 123456).put("browser_download_url", AppUpdatePolicy.apkUrl(version))));
+                        .put("state", "uploaded").put("size", 123456).put("browser_download_url", AppUpdatePolicy.apkUrl(version)))
+                        .put(new JSONObject().put("name", "release-metadata.json").put("state", "uploaded").put("size", 512)
+                                .put("browser_download_url", AppUpdatePolicy.metadataUrl(version))));
     }
     private static void rejects(JSONObject data) throws Exception {
         try { GitHubRelease.parse(data); fail("Accepted an invalid release"); }
@@ -61,7 +63,35 @@ public final class AppUpdatesTest {
         data.getJSONArray("assets").getJSONObject(0).put("state", "new");
         rejects(data);
         rejects(release("1.10.0").put("assets", new JSONArray()));
+        JSONObject missingProof = release("1.10.0");
+        missingProof.getJSONArray("assets").remove(1);
+        rejects(missingProof);
+        JSONObject nullDigest = release("1.10.0");
+        nullDigest.getJSONArray("assets").getJSONObject(0).put("digest", JSONObject.NULL);
+        assertEquals("", GitHubRelease.parse(nullDigest).sha256);
         assertEquals("1.10.0", GitHubRelease.parse(GitHubRelease.parse(release("1.10.0")).cache()).version);
+    }
+
+    @Test public void coldOpenChecksRecentResultsAndPromptsOncePerOfferWhileOptOutIsRespected() throws Exception {
+        AtomicReference<JSONObject> state = new AtomicReference<>();
+        AtomicInteger calls = new AtomicInteger();
+        context.getSharedPreferences("app-updates", 0).edit().putLong("lastAttempt", 999999).commit();
+        onMain(() -> {
+            updates = new AppUpdates(context, "1.0.0", () -> new AppUpdates.Call() {
+                public JSONObject get() throws Exception { calls.incrementAndGet(); return release("2.0.0"); }
+                public void cancel() { }
+            }, () -> 1000000, state::set);
+            updates.resume();
+        });
+        await(() -> state.get() != null && !state.get().optString("promptToken").isEmpty() && !state.get().optBoolean("checking"));
+        String first = state.get().getString("promptToken");
+        onMain(() -> { updates.pause(); updates.resume(); });
+        assertEquals(first, state.get().getString("promptToken"));
+        assertEquals(1, calls.get());
+        onMain(() -> updates.check(true));
+        await(() -> !state.get().optBoolean("checking") && !first.equals(state.get().optString("promptToken")));
+        onMain(() -> updates.automatic(false));
+        assertEquals("", state.get().getString("promptToken"));
     }
 
     @Test public void checksAreCoalescedThrottledAndCachedWhileManualChecksBypassAutomaticOptOut() throws Exception {

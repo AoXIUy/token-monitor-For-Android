@@ -27,6 +27,7 @@ final class AppUpdatePolicy {
     static String apkName(String tag) { return "Token-Monitor-Android-" + version(tag) + ".apk"; }
     static String apkUrl(String tag) { return RELEASES + "/download/v" + version(tag) + "/" + apkName(tag); }
     static String releaseUrl(String tag) { return RELEASES + "/tag/v" + version(tag); }
+    static String metadataUrl(String tag) { return RELEASES + "/download/v" + version(tag) + "/release-metadata.json"; }
 
     static boolean due(boolean automatic, boolean manual, long lastAttempt, long now) {
         return manual || (automatic && (lastAttempt <= 0 || now < lastAttempt || now - lastAttempt >= CHECK_INTERVAL));

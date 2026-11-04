@@ -34,6 +34,8 @@ final class AppUpdates {
     private int generation;
     private long previousAttempt;
     private String error = "";
+    private boolean firstResume = true;
+    private String promptToken = "", offeredVersion = "";
 
     AppUpdates(Context context, Consumer<JSONObject> listener) {
         this(context, installedVersion(context), GitHubUpdateClient::new, System::currentTimeMillis, listener);
@@ -54,14 +56,26 @@ final class AppUpdates {
         }
     }
 
-    private static String installedVersion(Context context) {
+    static String installedVersion(Context context) {
         try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName; }
         catch (Exception ignored) { return "0.0.0"; }
     }
 
-    void resume() { foreground = true; send(); check(false); }
+    void resume() {
+        foreground = true;
+        boolean automatic = prefs.getBoolean("automatic", true);
+        if (automatic) offer(false);
+        send();
+        boolean startup = firstResume; firstResume = false;
+        checkInternal(startup && automatic, false);
+    }
     void pause() { foreground = false; cancel(); }
     void close() { pause(); closed = true; worker.shutdownNow(); }
+    void save(android.os.Bundle state) { state.putString("updatePrompt", promptToken); state.putString("offeredUpdate", offeredVersion); }
+    void restore(android.os.Bundle state) {
+        firstResume = false; promptToken = state.getString("updatePrompt", ""); offeredVersion = state.getString("offeredUpdate", "");
+    }
+    void dismissPrompt() { promptToken = ""; send(); }
 
     private void cancel() {
         generation++;
@@ -74,16 +88,21 @@ final class AppUpdates {
 
     void automatic(boolean enabled) {
         prefs.edit().putBoolean("automatic", enabled).apply();
-        if (!enabled) cancel();
+        if (!enabled) { cancel(); promptToken = ""; }
+        else offer(false);
         send();
         if (enabled) check(false);
     }
 
     void check(boolean manual) {
+        checkInternal(manual, manual);
+    }
+
+    private void checkInternal(boolean force, boolean promptAgain) {
         if (closed || !foreground || checking) return;
         long now = clock.getAsLong();
         previousAttempt = prefs.getLong("lastAttempt", 0);
-        if (!AppUpdatePolicy.due(prefs.getBoolean("automatic", true), manual, previousAttempt, now)) return;
+        if (!AppUpdatePolicy.due(prefs.getBoolean("automatic", true), force, previousAttempt, now)) return;
         prefs.edit().putLong("lastAttempt", now).apply();
         checking = true;
         error = "";
@@ -108,6 +127,7 @@ final class AppUpdates {
                 error = message;
                 if (result != null) {
                     release = result;
+                    offer(promptAgain);
                     try { prefs.edit().putString("release", result.cache().toString()).putLong("checkedAt", clock.getAsLong()).apply(); }
                     catch (Exception ignored) { error = "无法保存更新检查结果"; }
                 }
@@ -120,7 +140,14 @@ final class AppUpdates {
         return release != null && AppUpdatePolicy.newer(release.version, installed) ? AppUpdatePolicy.apkUrl(release.version) : null;
     }
 
-    void downloadFailed() { error = "无法打开下载，请确认设备已安装浏览器"; send(); }
+    GitHubRelease candidate() { return downloadUrl() == null ? null : release; }
+
+    private void offer(boolean again) {
+        if (downloadUrl() != null && (again || !release.version.equals(offeredVersion))) {
+            offeredVersion = release.version;
+            promptToken = java.util.UUID.randomUUID().toString();
+        }
+    }
 
     void send() {
         if (closed) return;
@@ -130,7 +157,7 @@ final class AppUpdates {
                     .put("available", downloadUrl() != null).put("checkedAt", prefs.getLong("checkedAt", 0))
                     .put("latestVersion", release == null ? "" : release.version).put("name", release == null ? "" : release.name)
                     .put("notes", release == null ? "" : release.notes).put("publishedAt", release == null ? "" : release.publishedAt)
-                    .put("size", release == null ? 0 : release.size).put("error", error));
+                    .put("size", release == null ? 0 : release.size).put("error", error).put("promptToken", promptToken));
         } catch (Exception ignored) { }
     }
 }

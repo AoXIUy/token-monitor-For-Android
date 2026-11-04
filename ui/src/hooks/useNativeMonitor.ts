@@ -53,6 +53,11 @@ export function useNativeMonitor() {
       update(previous => receiveNativeMessage(previous, message as Record<string, unknown>));
     };
     const back = () => {
+      if (document.querySelector('#app-update-dialog[open]')) {
+        update(previous => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
+        window.HubNative?.dismissAppUpdatePrompt?.();
+        return true;
+      }
       if (current.current.page !== 'sessionDetail') return false;
       update(previous => ({ ...previous, page: 'sessions' }));
       window.scrollTo(0, 0);

@@ -176,8 +176,17 @@ public final class UsageWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_all_tokens, hasData ? snapshot.optString("allTimeTokens", "—") : "—");
             views.setTextViewText(R.id.widget_all_cost, hasData ? snapshot.optString("allTimeCost", "—") : "—");
             if (size == WidgetLayoutPolicy.Size.LARGE) {
-                views.setTextViewText(R.id.widget_seven_day_tokens, hasData ? snapshot.optString("sevenDayTokens", "—") : "—");
-                views.setTextViewText(R.id.widget_peak_tokens, hasData ? snapshot.optString("peakDayTokens", "—") : "—");
+                // Older summaries used recorded rows rather than calendar days.
+                // Keep their other readings, but wait for a new history projection.
+                boolean hasHistory = hasData && snapshot.has("sevenDayDays");
+                String sevenDay = hasHistory ? snapshot.optString("sevenDayTokens", "—") : "—";
+                views.setTextViewText(R.id.widget_seven_day_tokens, sevenDay);
+                int days = snapshot.optInt("sevenDayDays", 0);
+                views.setTextViewText(R.id.widget_seven_day_label, context.getString(days > 0 && days < 7
+                        ? R.string.widget_seven_day_partial : R.string.widget_seven_day));
+                views.setContentDescription(R.id.widget_seven_day_tokens, context.getString(R.string.widget_seven_day_description,
+                        days, sevenDay));
+                views.setTextViewText(R.id.widget_peak_tokens, hasHistory ? snapshot.optString("peakDayTokens", "—") : "—");
                 views.setTextViewText(R.id.widget_cache, hasData ? snapshot.optString("cache", "—") : "—");
                 views.setTextViewText(R.id.widget_devices, hasData ? snapshot.optString("devices", "—") : "—");
                 views.setTextViewText(R.id.widget_tools_summary, hasData ? formatTopClients(snapshot.optJSONArray("topClients")) : "—");

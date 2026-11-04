@@ -118,6 +118,7 @@ export interface LimitProvider {
   updatedAt?: string;
   balance?: {
     amount?: number | null;
+    monthSpend?: number | null;
     currency?: string;
     limit?: number | null;
   };
@@ -230,6 +231,18 @@ export interface HubNativeBridge {
   checkForUpdates?: () => void;
   automaticUpdates?: (enabled: boolean) => void;
   downloadUpdate?: () => void;
+  installUpdate?: () => void;
+  cancelUpdateDownload?: () => void;
+  dismissAppUpdatePrompt?: () => void;
+}
+
+export interface UpdateDownloadState {
+  phase: 'idle' | 'downloading' | 'verifying' | 'ready' | 'permission' | 'installing' | 'error' | 'cancelled';
+  version: string;
+  downloaded: number;
+  total: number;
+  message: string;
+  error: string;
 }
 
 export interface AppUpdateState {
@@ -244,6 +257,8 @@ export interface AppUpdateState {
   publishedAt: string;
   size: number;
   error: string;
+  promptToken: string;
+  download: UpdateDownloadState;
 }
 
 declare global {
@@ -259,6 +274,7 @@ declare global {
 export interface MonitorState {
   appUpdate: AppUpdateState;
   dismissedUpdateVersion: string;
+  dismissedUpdatePrompt: string;
   page: PageId;
   period: PeriodId;
   device: string;

@@ -1,6 +1,8 @@
 package com.tokenmonitor.android;
 
 import java.util.Locale;
+import java.util.Map;
+import java.time.LocalDate;
 
 /** Pure, bounded formatting and responsive breakpoint rules for home screen widgets. */
 final class WidgetLayoutPolicy {
@@ -81,20 +83,51 @@ final class WidgetLayoutPolicy {
         };
     }
 
+    static final class HistorySummary {
+        final int recentDays, sevenDayDays;
+        final Double sevenDayTokens, peakDayTokens;
+        HistorySummary(int recentDays, int sevenDayDays, Double sevenDayTokens, Double peakDayTokens) {
+            this.recentDays = recentDays;
+            this.sevenDayDays = sevenDayDays;
+            this.sevenDayTokens = sevenDayTokens;
+            this.peakDayTokens = peakDayTokens;
+        }
+    }
+
+    static HistorySummary history(Map<String, Double> daily, LocalDate today) {
+        LocalDate start = today.minusDays(13), weekStart = today.minusDays(6);
+        int recentDays = 0, sevenDayDays = 0;
+        double week = 0, peak = 0;
+        for (Map.Entry<String, Double> row : daily.entrySet()) {
+            if (row.getKey() == null || !row.getKey().matches("\\d{4}-\\d{2}-\\d{2}")) continue;
+            LocalDate date;
+            try { date = LocalDate.parse(row.getKey()); }
+            catch (java.time.format.DateTimeParseException ignored) { continue; }
+            Double tokens = row.getValue();
+            if (date.isBefore(start) || date.isAfter(today) || tokens == null || !Double.isFinite(tokens) || tokens < 0) continue;
+            recentDays++;
+            peak = Math.max(peak, tokens);
+            if (!date.isBefore(weekStart)) { sevenDayDays++; week += tokens; }
+        }
+        return new HistorySummary(recentDays, sevenDayDays, sevenDayDays > 0 ? week : null, recentDays > 0 ? peak : null);
+    }
+
+    // Match the shared balance display: explicit percentages win, otherwise a
+    // wallet is measured against its remaining funds plus observed month spend.
     static Integer quotaUsedPercent(Double usedPercent, Double remainingPercent, String metric,
-                                    Double used, Double remaining, Double limit, Boolean showMeter) {
+                                    Double remaining, Double balanceAmount, Double monthSpend, Boolean showMeter) {
         if (Boolean.FALSE.equals(showMeter)) return null;
         Double pct = null;
         if (usedPercent != null && Double.isFinite(usedPercent)) {
             pct = usedPercent;
         } else if (remainingPercent != null && Double.isFinite(remainingPercent)) {
             pct = 100.0 - remainingPercent;
-        } else if ("credits".equals(metric) && limit != null && Double.isFinite(limit) && limit > 0) {
-            if (remaining != null && Double.isFinite(remaining)) {
-                pct = (1.0 - remaining / limit) * 100.0;
-            } else if (used != null && Double.isFinite(used)) {
-                pct = (used / limit) * 100.0;
-            }
+        } else if ("credits".equals(metric)) {
+            Double amount = remaining != null && Double.isFinite(remaining) ? remaining : balanceAmount;
+            if (amount == null || !Double.isFinite(amount)) return null;
+            double funds = Math.max(0, amount);
+            double spend = monthSpend != null && Double.isFinite(monthSpend) ? Math.max(0, monthSpend) : 0;
+            pct = funds == 0 ? 100.0 : 100.0 - funds / (funds + spend) * 100.0;
         }
         if (pct == null || !Double.isFinite(pct)) return null;
         int clamped = (int) Math.round(Math.max(0.0, Math.min(100.0, pct)));

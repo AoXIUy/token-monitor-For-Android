@@ -3,7 +3,8 @@ package com.tokenmonitor.android;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -53,7 +54,7 @@ final class UsageWidgetSnapshot {
 
         projectOtherPeriods(periods, result);
         projectTopClients(today, total, result);
-        projectHistory(stats.optJSONObject("historyPreview"), result);
+        projectHistory(stats.optJSONObject("historyPreview"), fetchedAt, result);
         projectQuotas(stats.optJSONObject("limits"), result);
         return result;
     }
@@ -113,37 +114,23 @@ final class UsageWidgetSnapshot {
         out.put("topClients", top);
     }
 
-    private static void projectHistory(JSONObject historyPreview, JSONObject out) throws Exception {
+    private static void projectHistory(JSONObject historyPreview, long fetchedAt, JSONObject out) throws Exception {
         JSONArray daily = historyPreview == null ? null : historyPreview.optJSONArray("daily");
-        List<String[]> validRows = new ArrayList<>();
+        Map<String, Double> days = new HashMap<>();
         if (daily != null) {
             for (int i = 0; i < daily.length(); i++) {
                 JSONObject row = daily.optJSONObject(i);
                 if (row == null) continue;
                 String date = row.optString("date", "");
                 Double tok = number(row, "tokens");
-                if (date.matches("^\\d{4}-\\d{2}-\\d{2}$") && tok != null) {
-                    validRows.add(new String[] {date, Double.toString(tok)});
-                }
+                if (tok != null) days.merge(date, tok, Math::max);
             }
         }
-        validRows.sort(Comparator.comparing(a -> a[0]));
-        int recentStart = Math.max(0, validRows.size() - 14);
-        List<String[]> recent14 = validRows.subList(recentStart, validRows.size());
-        if (recent14.isEmpty()) {
-            out.put("recentDays", 0).put("sevenDayTokens", "—").put("peakDayTokens", "—");
-            return;
-        }
-        double peak = 0;
-        for (String[] row : recent14) peak = Math.max(peak, Double.parseDouble(row[1]));
-        int sevenStart = Math.max(0, recent14.size() - 7);
-        double sevenSum = 0;
-        for (int i = sevenStart; i < recent14.size(); i++) {
-            sevenSum += Double.parseDouble(recent14.get(i)[1]);
-        }
-        out.put("recentDays", recent14.size())
-                .put("sevenDayTokens", compact(sevenSum))
-                .put("peakDayTokens", compact(peak));
+        WidgetLayoutPolicy.HistorySummary history = WidgetLayoutPolicy.history(days,
+                Instant.ofEpochMilli(fetchedAt).atZone(ZoneId.systemDefault()).toLocalDate());
+        out.put("recentDays", history.recentDays).put("sevenDayDays", history.sevenDayDays)
+                .put("sevenDayTokens", history.sevenDayTokens == null ? "—" : compact(history.sevenDayTokens))
+                .put("peakDayTokens", history.peakDayTokens == null ? "—" : compact(history.peakDayTokens));
     }
 
     private static void projectQuotas(JSONObject limits, JSONObject out) throws Exception {
@@ -163,19 +150,25 @@ final class UsageWidgetSnapshot {
                 if (ok) healthyAccounts++;
                 boolean hasHighUsage = false;
                 String providerTitle = WidgetLayoutPolicy.providerLabel(prov.optString("provider", ""), prov.optString("source", ""));
+                JSONObject balance = prov.optJSONObject("balance");
                 JSONArray windows = prov.optJSONArray("windows");
                 if (windows != null) {
                     for (int w = 0; w < windows.length(); w++) {
                         JSONObject win = windows.optJSONObject(w);
                         if (win == null) continue;
+                        String metric = win.optString("metric", "");
+                        if ("spend".equals(metric) || (metric.isEmpty() && "billing".equals(win.optString("kind"))
+                                && "Usage credits".equals(win.optString("label")))) continue;
+                        if ("muse".equals(prov.optString("provider")) && "web".equals(prov.optString("source"))
+                                && "credits".equals(metric) && win.optString("resetDescription").endsWith(" tokens left")) continue;
                         Boolean showMeter = win.has("showMeter") && !win.isNull("showMeter") ? win.optBoolean("showMeter", true) : null;
                         Integer pct = WidgetLayoutPolicy.quotaUsedPercent(
-                                number(win, "usedPercent"),
-                                number(win, "remainingPercent"),
-                                win.optString("metric", ""),
-                                number(win, "used"),
-                                number(win, "remaining"),
-                                number(win, "limit"),
+                                finiteNumber(win, "usedPercent"),
+                                finiteNumber(win, "remainingPercent"),
+                                metric,
+                                finiteNumber(win, "remaining"),
+                                finiteNumber(balance, "amount"),
+                                finiteNumber(balance, "monthSpend"),
                                 showMeter);
                         if (pct == null) continue;
                         if (pct >= 85) hasHighUsage = true;
@@ -203,10 +196,16 @@ final class UsageWidgetSnapshot {
     }
 
     private static Double number(JSONObject value, String key) {
+        Double number = finiteNumber(value, key);
+        return number != null && number >= 0 ? number : null;
+    }
+
+    private static Double finiteNumber(JSONObject value, String key) {
+        if (value == null) return null;
         Object raw = value.opt(key);
         if (!(raw instanceof Number)) return null;
         double number = ((Number) raw).doubleValue();
-        return Double.isFinite(number) && number >= 0 ? number : null;
+        return Double.isFinite(number) ? number : null;
     }
 
     private static double count(JSONObject value, String key) {

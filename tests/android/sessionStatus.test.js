@@ -17,6 +17,20 @@ function status(patch, options) {
   return M.sessionStatus(f.row, f.options);
 }
 
+test('Android ended filtering excludes disconnected, paused, expired, idle and archived readings', () => {
+  const readings = [status({}), status({ waitingForInput: true }), status({ turnEnded: true }),
+    status({}, { connected: false }), status({}, { foreground: false }),
+    status({}, { fetchedAt: now - 30000 }), status({ lastUsedAt: iso(-600001) }), status({ archived: true })];
+  const before = JSON.stringify(readings);
+  assert.deepEqual(M.filterSessionStatuses(readings, 'ended'), {
+    counts: { running: 1, waiting: 1, ended: 1 }, indices: [2],
+  });
+  assert.deepEqual(M.filterSessionStatuses(readings, 'running').indices, [0]);
+  assert.deepEqual(M.filterSessionStatuses(readings, 'waiting').indices, [1]);
+  assert.deepEqual(M.filterSessionStatuses(readings).indices, [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(JSON.stringify(readings), before);
+});
+
 test('Android sessions display fresh native running, waiting and idle readings with their provenance', () => {
   for (const state of ['running', 'waiting', 'idle']) {
     const result = status({ turnEnded: true, liveActivity: { state, observedAt: iso(-5000) } });

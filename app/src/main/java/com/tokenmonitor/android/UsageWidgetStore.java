@@ -41,7 +41,10 @@ final class UsageWidgetStore {
             if (binding.isEmpty() || !binding.equals(new ConnectionStore(context).binding())) return;
             if (read(context).optLong("startedAt") > startedAt) return;
             try {
-                JSONObject snapshot = read(context).put("binding", binding).put("failed", true).put("authentication", authentication);
+                // Failures advance the same result fence as successes without
+                // changing the last successful reading's timestamp or values.
+                JSONObject snapshot = read(context).put("binding", binding).put("startedAt", startedAt)
+                        .put("failed", true).put("authentication", authentication);
                 preferences(context).edit().putString("snapshot", snapshot.toString()).apply();
                 UsageWidgetProvider.renderAll(context);
             } catch (Exception ignored) { }

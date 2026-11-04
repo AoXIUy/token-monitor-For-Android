@@ -69,6 +69,16 @@ public final class UsageWidgetTest {
         UsageWidgetStore.failed(context, first, 250, false);
         assertEquals(200, UsageWidgetStore.read(context).getLong("fetchedAt"));
         assertTrue(UsageWidgetStore.read(context).getBoolean("failed"));
+        assertEquals(250, UsageWidgetStore.read(context).getLong("startedAt"));
+        UsageWidgetStore.failed(context, first, 300, true);
+        UsageWidgetStore.failed(context, first, 275, false);
+        assertFalse("An older success must not clear a newer authentication failure",
+                UsageWidgetStore.publish(context, first, stats(), 400, 200));
+        assertTrue(UsageWidgetStore.read(context).getBoolean("authentication"));
+        assertEquals(200, UsageWidgetStore.read(context).getLong("fetchedAt"));
+        assertTrue(UsageWidgetStore.publish(context, first, stats(), 450, 350));
+        assertFalse(UsageWidgetStore.read(context).optBoolean("failed"));
+        assertFalse(UsageWidgetStore.read(context).optBoolean("authentication"));
         store.save(spec);
         assertNotEquals(first, store.binding());
         assertEquals(0, UsageWidgetStore.read(context).length());
@@ -79,6 +89,86 @@ public final class UsageWidgetTest {
         store.clear();
         assertEquals(0, UsageWidgetStore.read(context).length());
         assertFalse(UsageWidgetStore.publish(context, first, stats(), 700, 650));
+    }
+
+    @Test public void failedFirstReadRejectsAnOlderSuccessWithoutInventingData() throws Exception {
+        ConnectionStore store = new ConnectionStore(context);
+        store.save(new ConnectionSpec("https://widget.example.com", "test-secret", false));
+        String binding = store.binding();
+        UsageWidgetStore.failed(context, binding, 300, true);
+        assertEquals(0, UsageWidgetStore.read(context).optLong("fetchedAt"));
+        assertFalse(UsageWidgetStore.publish(context, binding, stats(), 400, 200));
+        assertTrue(UsageWidgetStore.read(context).optBoolean("authentication"));
+        assertTrue(UsageWidgetStore.publish(context, binding, stats(), 500, 450));
+    }
+
+    @Test public void sparseCalendarHistoryUsesLocalSnapshotDateAndDoesNotDoubleCountDays() throws Exception {
+        JSONObject source = stats().put("historyPreview", new JSONObject().put("daily", new JSONArray()
+                .put(new JSONObject().put("date", "2026-10-01").put("tokens", 100))
+                .put(new JSONObject().put("date", "2026-10-15").put("tokens", 200))
+                .put(new JSONObject().put("date", "2026-11-02").put("tokens", 10))
+                .put(new JSONObject().put("date", "2026-11-04").put("tokens", 5))
+                .put(new JSONObject().put("date", "2026-11-04").put("tokens", 4))
+                .put(new JSONObject().put("date", "2026-11-05").put("tokens", 900))
+                .put(new JSONObject().put("date", "2026-11-31").put("tokens", 1000))));
+        long fetchedAt = java.time.LocalDate.of(2026, 11, 4).atStartOfDay(java.time.ZoneId.systemDefault())
+                .plusMinutes(5).toInstant().toEpochMilli();
+        JSONObject summary = UsageWidgetSnapshot.project(source, fetchedAt, fetchedAt - 100);
+        assertEquals("15", summary.getString("sevenDayTokens"));
+        assertEquals("10", summary.getString("peakDayTokens"));
+        assertEquals(2, summary.getInt("sevenDayDays"));
+        ConnectionStore store = new ConnectionStore(context);
+        store.save(new ConnectionSpec("https://widget.example.com", "test-secret", false));
+        assertTrue(UsageWidgetStore.publish(context, store.binding(), source, fetchedAt, fetchedAt - 100));
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View card = UsageWidgetProvider.views(context, WidgetLayoutPolicy.Kind.PERIODS, 280, 250)
+                    .apply(context, new FrameLayout(context));
+            assertEquals("7日小计", ((TextView) card.findViewById(R.id.widget_seven_day_label)).getText().toString());
+            assertTrue(card.findViewById(R.id.widget_seven_day_tokens).getContentDescription().toString().contains("2天读数"));
+        });
+        JSONObject legacy = UsageWidgetStore.read(context);
+        legacy.remove("sevenDayDays");
+        context.getSharedPreferences("usage-widget", 0).edit().putString("snapshot", legacy.toString()).commit();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View card = UsageWidgetProvider.views(context, WidgetLayoutPolicy.Kind.PERIODS, 280, 250)
+                    .apply(context, new FrameLayout(context));
+            assertEquals("—", ((TextView) card.findViewById(R.id.widget_seven_day_tokens)).getText().toString());
+            assertEquals("—", ((TextView) card.findViewById(R.id.widget_peak_tokens)).getText().toString());
+            assertEquals("2.8M", ((TextView) card.findViewById(R.id.widget_tokens)).getText().toString());
+        });
+    }
+
+    @Test public void walletQuotaAlertsMatchBalanceDisplayAndRespectHiddenOrUnknownReadings() throws Exception {
+        JSONObject window = new JSONObject().put("kind", "credits").put("metric", "credits").put("remaining", 0);
+        JSONObject balance = new JSONObject().put("amount", 30).put("monthSpend", 10);
+        JSONObject provider = new JSONObject().put("provider", "openrouter").put("status", "ok")
+                .put("accountEmail", "never-persist@example.com").put("balance", balance)
+                .put("windows", new JSONArray().put(window));
+        JSONObject source = stats().put("limits", new JSONObject().put("providers", new JSONArray().put(provider)));
+        JSONObject summary = UsageWidgetSnapshot.project(source, 5000, 4900);
+        assertEquals(1, summary.getInt("quotaAlerts"));
+        assertEquals(100, summary.getJSONArray("quotas").getJSONObject(0).getInt("percent"));
+        assertFalse(summary.toString().contains("never-persist@example.com"));
+        ConnectionStore store = new ConnectionStore(context);
+        store.save(new ConnectionSpec("https://widget.example.com", "test-secret", false));
+        UsageWidgetStore.publish(context, store.binding(), source, 5000, 4900);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View card = UsageWidgetProvider.views(context, WidgetLayoutPolicy.Kind.QUOTA, 150, 130)
+                    .apply(context, new FrameLayout(context));
+            assertEquals("1 项需关注", ((TextView) card.findViewById(R.id.widget_quota_headline)).getText().toString());
+        });
+        window.remove("remaining");
+        summary = UsageWidgetSnapshot.project(source, 5000, 4900);
+        assertEquals(25, summary.getJSONArray("quotas").getJSONObject(0).getInt("percent"));
+        window.put("showMeter", false);
+        assertEquals(0, UsageWidgetSnapshot.project(source, 5000, 4900).getJSONArray("quotas").length());
+        window.remove("showMeter");
+        balance.remove("amount");
+        assertEquals(0, UsageWidgetSnapshot.project(source, 5000, 4900).getJSONArray("quotas").length());
+        balance.put("amount", 0);
+        assertEquals(1, UsageWidgetSnapshot.project(source, 5000, 4900).getInt("quotaAlerts"));
+        window.put("metric", "spend").put("usedPercent", 100);
+        assertEquals(0, UsageWidgetSnapshot.project(source, 5000, 4900).getJSONArray("quotas").length());
     }
 
     @Test public void nativeRemoteViewsInflateAtMinimumAndExpandedSizes() throws Exception {
@@ -138,7 +228,8 @@ public final class UsageWidgetTest {
                         .put("windows", new JSONArray().put(new JSONObject()
                                 .put("kind", "weekly").put("remainingPercent", 38.0))))));
 
-        JSONObject summary = UsageWidgetSnapshot.project(source, 5000, 4900);
+        long fetchedAt = java.time.LocalDate.of(2026, 11, 4).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        JSONObject summary = UsageWidgetSnapshot.project(source, fetchedAt, fetchedAt - 100);
         String raw = summary.toString();
         assertFalse(raw.contains("secret-macbook"));
         assertFalse(raw.contains("dev-secret-99"));
@@ -163,7 +254,7 @@ public final class UsageWidgetTest {
 
         ConnectionStore store = new ConnectionStore(context);
         store.save(new ConnectionSpec("https://widget.example.com", "test-secret", false));
-        assertTrue(UsageWidgetStore.publish(context, store.binding(), source, System.currentTimeMillis(), 10));
+        assertTrue(UsageWidgetStore.publish(context, store.binding(), source, fetchedAt, 10));
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             float density = context.getResources().getDisplayMetrics().density;

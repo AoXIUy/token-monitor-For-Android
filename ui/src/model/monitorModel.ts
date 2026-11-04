@@ -40,12 +40,18 @@ export interface MonitorModelApi {
   breakdown(period: PeriodData | null, kind: BreakdownKind): BreakdownRow[];
   sessions(period: PeriodData | null, search?: string): SessionRow[];
   filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
+  filterSessionStatuses(statuses: SessionStatusResult[], filter?: 'all' | 'running' | 'waiting' | 'ended'): {
+    counts: { running: number; waiting: number; ended: number }; indices: number[];
+  };
   deviceKind(value?: string): string;
   sessionDevices(row: SessionRow, stats: MonitorStats, period: PeriodId, deviceId?: string): SessionDevice[];
   sessionDetail(stats: MonitorStats, key: string, options?: SessionOptions): SessionDetail | null;
   sessionStatus(row: SessionRow, options: SessionOptions): SessionStatusResult;
   sessionReasoningEffort(row: SessionRow): string | null;
   daily(stats: MonitorStats): DailyHistoryRow[];
+  widgetHistory(stats: MonitorStats | null | undefined, fetchedAt: number): {
+    recentDays: number; sevenDayDays: number; sevenDayTokens: number | null; peakDayTokens: number | null;
+  };
   components(period: PeriodData): { cached: number; output: number; cachePercent: string } | null;
   limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string };
   quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };

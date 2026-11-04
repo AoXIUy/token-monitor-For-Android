@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.2.1](https://img.shields.io/badge/version-1.2.1-38BDF8)
+![Version 1.3.0](https://img.shields.io/badge/version-1.3.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -25,7 +25,7 @@
 | 额度与余额 | 区分 Muse 网页 / CLI 额度及 Manus 积分，查看账户余额和共享订阅；账户仍在电脑端管理 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
-| 软件更新 | 在前台自动检查 GitHub 正式 Release，支持手动检查、更新说明与 APK 下载 |
+| 软件更新 | 启动时弹窗提示新版本，支持应用内下载、完整性与签名校验及系统确认安装 |
 
 ### 界面预览
 
@@ -62,7 +62,9 @@
 
 长按系统桌面 → 微件 → **Token Monitor · 今日用量** 可添加桌面卡片。微件显示带日期与时间的快照，系统约每 30 分钟请求刷新，实际执行可能延后；也可点击卡片右上角手动刷新。
 
-「连接」页的「软件更新」显示实际安装版本，可手动检查、查看更新说明并下载最新正式 APK。自动检查默认开启，在启动或回到前台且距上次尝试至少 12 小时时访问本仓库的 GitHub Release；可随时关闭。发现更高版本会显示提示，下载由系统浏览器处理，安装时需要确认。检查更新不需要连接 Hub；网络失败保留上次检查结果和时间。
+「连接」页的「软件更新」显示实际安装版本。自动检查默认开启，启动应用时检查新版本并弹窗展示说明，可选择“下载并安装”或“稍后再说”；普通前后台切换沿用 12 小时间隔，也可关闭自动检查后手动检查。更新提示独立于 Hub 连接，关闭提示后仍可在设置页继续更新。
+
+安装包由 App 内下载，支持进度、取消和失败重试。下载后校验大小、SHA-256、包名、版本和原有正式签名，校验失败会阻止安装。首次安装更新时，系统可能要求允许 Token Monitor 安装应用；授权返回后会重新校验，再打开系统安装器由你确认。下载文件保存在应用私有目录，不需要存储权限；应用重建会取消未完成的下载，已完成的包可在复核后继续安装。详见 [更新流程与验证](docs/UPDATES.md)。
 
 ## 从源码构建
 

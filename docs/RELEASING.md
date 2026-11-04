@@ -30,7 +30,11 @@ git push origin v1.0.9
 
 若已有标签指向其他提交，元数据检查会显示标签提交、本次源码提交以及升级版本的步骤，不会继续输出发布元数据。常见原因是在已发布版本后提交新代码，却未递增版本号。请按第 1 步准备新版本并从 `main` 重新运行；保留已发布的标签和附件，不能通过移动旧标签或重跑旧任务发布新源码。相同提交的轻量标签和附注标签均可通过检查。
 
-发布包包括带版本号的 APK、`SHA256SUMS`、`signature.txt` 和 `release-metadata.json`。后者记录版本、源码提交、APK 校验值和签名指纹；Release 说明附 Actions 运行链接。用户可执行：
+发布包包括带版本号的 APK、`SHA256SUMS`、`signature.txt` 和 `release-metadata.json`。后者记录版本、源码提交、APK 校验值和签名指纹；Release 说明附 Actions 运行链接。
+
+应用内更新会同时验证 APK 和 `release-metadata.json`，附件需全部上传完成后再公开。元数据的 `version`、`versionCode`、`tag`、`filename`、`sha256`、`commit`、`certificateSha256` 必须保留现有格式，签名指纹必须与 `release-signing.sha256` 一致。缺少校验附件或不匹配的版本不能用于应用内安装；安装包名称与下载路径保持不变。
+
+用户可执行：
 
 ```bash
 sha256sum --check SHA256SUMS

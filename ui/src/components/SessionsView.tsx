@@ -163,21 +163,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     );
   }
 
-  const activeCount = allStatuses.filter((s) => s.state === 'running').length;
-  const waitingCount = allStatuses.filter((s) => s.state === 'waiting').length;
-  const endedCount = allStatuses.filter(
-    (s) => s.state !== 'running' && s.state !== 'waiting'
-  ).length;
-
-  const filteredIndices = allRows
-    .map((_, idx) => idx)
-    .filter((idx) => {
-      if (statusFilter === 'all') return true;
-      const st = allStatuses[idx].state;
-      if (statusFilter === 'running') return st === 'running';
-      if (statusFilter === 'waiting') return st === 'waiting';
-      return st !== 'running' && st !== 'waiting';
-    });
+  const { counts, indices: filteredIndices } = MonitorModel.filterSessionStatuses(allStatuses, statusFilter);
+  const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
 
   return (
     <div className="space-y-3.5">
@@ -228,6 +215,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                 <button
                   key={fId}
                   type="button"
+                  data-session-status-filter={fId}
                   aria-pressed={active}
                   onClick={() => {
                     setStatusFilter(fId);
