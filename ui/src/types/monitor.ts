@@ -87,6 +87,9 @@ export interface PeriodData {
 }
 
 export interface QuotaWindow {
+  limitId?: string;
+  windowMinutes?: number;
+  additional?: boolean;
   kind?: 'session' | 'weekly' | 'daily' | 'monthly' | 'billing' | 'credits' | string;
   label?: string;
   metric?: 'spend' | 'credits' | 'percent' | string;
@@ -103,6 +106,10 @@ export interface QuotaWindow {
 }
 
 export interface LimitProvider {
+  androidHistoryKey?: string;
+  adapterId?: string;
+  region?: string;
+  sourceDetail?: string;
   provider: string;
   accountKey?: string;
   profileName?: string;
@@ -220,6 +227,7 @@ export interface SessionStatusResult {
 }
 
 export interface HubNativeBridge {
+  quotaHistory?: (key: string) => void;
   ready?: () => void;
   connect: (url: string, secret: string, allowHttp: boolean) => void;
   disconnect?: () => void;
@@ -272,6 +280,8 @@ declare global {
 }
 
 export interface MonitorState {
+  quotaHistory: QuotaHistoryPayload | null;
+  historyError: string;
   appUpdate: AppUpdateState;
   dismissedUpdateVersion: string;
   dismissedUpdatePrompt: string;
@@ -294,4 +304,36 @@ export interface MonitorState {
   connectPending: boolean;
   formError: string;
   connectionEpoch: number;
+}
+
+export interface QuotaHistoryPoint {
+  at: number;
+  value: number;
+  unit: string;
+  balance: boolean;
+  reset: number | null;
+  basis?: string;
+  interval: number;
+  breakBefore?: boolean;
+  uncertainUntil?: number;
+  allowanceMissingBefore?: boolean;
+}
+export interface QuotaHistoryWindow {
+  key: string;
+  window: QuotaWindow;
+  unit: string;
+  balance: boolean;
+  points: QuotaHistoryPoint[];
+  distribution: {
+    buckets: Array<{ key: string; value: number | null; observations: number; uncertain: boolean }>;
+    unallocated: number;
+    resets: number;
+  };
+}
+export interface QuotaHistoryPayload {
+  key: string;
+  now: number;
+  windows: QuotaHistoryWindow[];
+  persistent: boolean;
+  error?: string;
 }

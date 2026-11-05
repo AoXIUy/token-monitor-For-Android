@@ -25,7 +25,21 @@
     {
       "path": "src/shared/sessionLive.js",
       "sha256": "6447a8240dc1cae255ff29fd264a4b0792c921679b08ead20c3760b2c13886a7"
+    },
+    {
+      "path": "src/shared/limits/windowLabels.js",
+      "sha256": "9af7313e14aff954a9515a3c51149f9990ba4cc232d1c826d25eddfd673b9359",
+      "sourcePath": "src/shared/limits/windowLabels.js",
+      "sourceCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845"
+    },
+    {
+      "path": "src/shared/limits/historyModel.js",
+      "sha256": "0362e09d2b670a2451f47d52e29435b23924205dd71298206ab082282066d8a8",
+      "sourcePath": "src/electron/renderer/limits/historyModel.js",
+      "sourceCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845",
+      "transformation": "Rebase CommonJS require('../../../shared/limits/windowLabels') to require('./windowLabels'); browser API unchanged"
     }
   ],
-  "upstreamVersion": "0.85.0"
+  "upstreamVersion": "0.86.0",
+  "upstreamCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845"
 }

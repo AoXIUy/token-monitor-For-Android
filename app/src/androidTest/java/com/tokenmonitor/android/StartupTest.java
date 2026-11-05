@@ -282,6 +282,13 @@ public final class StartupTest {
         assertTrue("Shared device kinds must be packaged and allowlisted", kinds.getData().read() >= 0);
         assertNotEquals(403, kinds.getStatusCode());
         kinds.getData().close();
+        for (String file : new String[]{"windowLabels.js", "historyModel.js"}) {
+            WebResourceResponse history = client.shouldInterceptRequest(null,
+                    request(LocalContentClient.ORIGIN + "/assets/shared/limits/" + file));
+            assertTrue("Quota history helpers must be packaged", history.getData().read() >= 0);
+            assertNotEquals(403, history.getStatusCode());
+            history.getData().close();
+        }
         for (String url : new String[] {
                 "https://example.com/", "data:text/html;base64,PGh0bWw+", "file:///etc/hosts",
                 "http://appassets.androidplatform.net/assets/index.html",
@@ -293,6 +300,42 @@ public final class StartupTest {
         }) {
             assertEquals(url, 403, client.shouldInterceptRequest(null, request(url)).getStatusCode());
         }
+    }
+
+    @Test public void quotaHistoryShowsWorkspaceWindowsAndAccessibleDailyReadings() throws Exception {
+        awaitConnectionPage();
+        String key = String.join("", Collections.nCopies(64, "a"));
+        long now = System.currentTimeMillis();
+        org.json.JSONObject win = new org.json.JSONObject().put("kind", "session").put("label", "Session")
+                .put("usedPercent", 24).put("windowMinutes", 300).put("resetsAt", java.time.Instant.ofEpochMilli(now + 3600000).toString());
+        org.json.JSONObject provider = new org.json.JSONObject().put("provider", "opendesign").put("accountKey", "workspace-a")
+                .put("accountName", "Design workspace").put("status", "ok").put("androidHistoryKey", key)
+                .put("windows", new org.json.JSONArray().put(win));
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false)).put("limits",
+                new org.json.JSONObject().put("providers", new org.json.JSONArray().put(provider)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelector('[data-limit-account]').textContent.includes('OpenDesign')");
+        evaluate("document.querySelector('[data-quota-history-toggle]').click()");
+        org.json.JSONArray buckets = new org.json.JSONArray();
+        java.time.LocalDate today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        for (int i = 13; i >= 0; i--) buckets.put(new org.json.JSONObject().put("key", today.minusDays(i).toString())
+                .put("value", i == 0 ? 4 : org.json.JSONObject.NULL).put("observations", i == 0 ? 2 : 0).put("uncertain", false));
+        org.json.JSONObject history = new org.json.JSONObject().put("type", "quotaHistory").put("key", key).put("now", now).put("persistent", true)
+                .put("windows", new org.json.JSONArray().put(new org.json.JSONObject().put("key", "five-hour").put("window", win).put("unit", "pp").put("balance", false)
+                        .put("points", new org.json.JSONArray().put(new org.json.JSONObject().put("at", now - 60000).put("value", 20).put("unit", "pp").put("balance", false).put("reset", now + 3600000))
+                                .put(new org.json.JSONObject().put("at", now).put("value", 24).put("unit", "pp").put("balance", false).put("reset", now + 3600000)))
+                        .put("distribution", new org.json.JSONObject().put("buckets", buckets).put("unallocated", 0).put("resets", 0))));
+        evaluate("window.receiveNative(" + org.json.JSONObject.quote(history.toString()) + ")");
+        awaitScript("document.querySelector('[data-quota-history] [aria-live]').textContent.includes('4%')");
+        assertEquals("true", evaluate("document.querySelectorAll('[aria-label=\"近14天额度净变化\"] button').length === 14 && document.querySelector('[data-quota-history] svg').getAttribute('aria-label').includes('不是预测')"));
+        evaluate("document.querySelector('[aria-label=\"近14天额度净变化\"] button').click()");
+        awaitScript("document.querySelector('[data-quota-history] [aria-live]').textContent.includes('数据不足')");
+        publishStats(stats);
+        assertEquals("true", evaluate("document.querySelector('[data-quota-history-toggle]').getAttribute('aria-expanded') === 'true'"));
+        evaluate("window.receiveNative({type:'connection',url:'https://other.example.com'})");
+        awaitScript("!document.querySelector('[data-quota-history]')");
     }
 
     @Test public void upstreamLimitsKeepOrganizationsDevicesAndWalletsDistinct() throws Exception {

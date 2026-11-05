@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronDown, CreditCard, Gauge, ShieldAlert } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
-import { LimitProvider, MonitorStats, QuotaTabId, SubscriptionsPayload } from '../types/monitor';
+import { LimitProvider, MonitorStats, QuotaTabId, SubscriptionsPayload, QuotaHistoryPayload } from '../types/monitor';
+import { QuotaHistoryPreview } from './QuotaHistoryPreview';
 import { clientTone, formatShortTime, providerName } from '../utils/formatters';
 
 interface LimitsViewProps {
@@ -11,6 +12,10 @@ interface LimitsViewProps {
   quotaTab: QuotaTabId;
   subscriptions: SubscriptionsPayload | null;
   subscriptionError: string;
+  history: QuotaHistoryPayload | null;
+  historyError: string;
+  fetchedAt: number;
+  foreground: boolean;
 }
 
 export const LimitsView: React.FC<LimitsViewProps> = ({
@@ -20,8 +25,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   quotaTab,
   subscriptions,
   subscriptionError,
+  history,
+  historyError,
+  fetchedAt,
+  foreground,
 }) => {
   const [openTopUps, setOpenTopUps] = useState<Record<string, boolean>>({});
+  const [openHistory, setOpenHistory] = useState('');
 
   if (quotaTab === 'subscriptions') {
     const rows = subscriptions?.subscriptions;
@@ -199,8 +209,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
   return (
     <div className="space-y-3.5">
+      {historyError && <p role="alert" className="text-xs text-amber-300 p-3 glass-panel rounded-2xl">{historyError}</p>}
       {providers.map((provider) => {
         const account = MonitorModel.limitAccount(provider, stats, deviceId);
+        const windows = MonitorModel.limitWindows(provider);
         const statusText = provider.stale
           ? '读数已过期'
           : ({
@@ -272,9 +284,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               </span>
             </div>
 
-            {provider.windows && provider.windows.length > 0 ? (
+            {windows.length > 0 ? (
               <div className="mt-3.5 space-y-3 pt-3 border-t border-white/8">
-                {provider.windows.map((win, wIdx) => {
+                {windows.map((win, wIdx) => {
                   const q = MonitorModel.quota(provider, win);
                   const isWarn =
                     q.percent !== null && (q.remaining ? q.percent < 15 : q.percent > 85);
@@ -344,6 +356,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             <p className="text-[11px] text-slate-400 font-mono-tabular mt-3 pt-2 border-t border-white/5">
               读数更新 {formatShortTime(provider.updatedAt)}
             </p>
+            <button type="button" data-quota-history-toggle={account.key} aria-expanded={openHistory === account.key}
+              onClick={() => setOpenHistory(openHistory === account.key ? '' : account.key)}
+              className="min-h-[44px] w-full mt-2 flex items-center justify-between text-xs text-sky-300">
+              <span>额度历史</span><ChevronDown className={`w-4 h-4 ${openHistory === account.key ? 'rotate-180' : ''}`} />
+            </button>
+            {openHistory === account.key && <QuotaHistoryPreview key={`${deviceId}:${account.key}`} provider={provider} history={history} fetchedAt={fetchedAt} foreground={foreground} />}
           </section>
         );
       })}

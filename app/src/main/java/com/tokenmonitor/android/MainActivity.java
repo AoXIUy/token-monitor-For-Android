@@ -40,6 +40,10 @@ public final class MainActivity extends Activity {
     private String subscriptionVersion;
     private String initialError = "";
     private String pendingNotificationAction;
+    private JSONObject latestStats;
+    private boolean historyBusy;
+    private String pendingHistoryKey;
+    private String historyError = "";
     private static final int NOTIFICATION_REQUEST = 42;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -146,6 +150,10 @@ public final class MainActivity extends Activity {
     }
 
     private void connectionChanged() {
+        latestStats = null;
+        historyError = "";
+        historyBusy = false;
+        pendingHistoryKey = null;
         try {
             emit(event("connection").put("url", spec == null ? "" : spec.url)
                     .put("allowHttp", spec != null && spec.allowHttp).put("error", initialError));
@@ -238,6 +246,8 @@ public final class MainActivity extends Activity {
 
     private void cancel() {
         generation++;
+        historyBusy = false;
+        pendingHistoryKey = null;
         main.removeCallbacks(poll);
         if (client != null) client.cancel();
         busy = false;
@@ -277,15 +287,24 @@ public final class MainActivity extends Activity {
                 }
                 JSONObject subscriptionData = subscriptions;
                 String subscriptionMessage = subscriptionError;
+                // Use the provider's observation time, never the polling clock.
+                // Persistence failures must not fail a healthy Hub read.
+                String persistenceError = "";
+                try (LimitsHistoryStore history = new LimitsHistoryStore(MainActivity.this, destination.fingerprint())) {
+                    history.record(stats, System.currentTimeMillis());
+                } catch (Exception problem) { persistenceError = "额度历史未能保存，请检查可用存储空间后刷新重试"; }
+                String historyMessage = persistenceError;
                 main.post(() -> {
                     if (epoch != generation || !foreground) return;
                     busy = false;
                     failures = 0;
+                    latestStats = stats;
+                    historyError = historyMessage;
                     if (UsageWidgetProvider.hasAnyWidgets(MainActivity.this)) {
                         UsageWidgetStore.publish(MainActivity.this, widgetBinding, stats, System.currentTimeMillis(), startedAt);
                     }
                     try {
-                        emit(event("stats").put("data", stats).put("fetchedAt", System.currentTimeMillis()));
+                        emit(event("stats").put("data", stats).put("fetchedAt", System.currentTimeMillis()).put("historyError", historyError));
                         if (subscriptionData != null) {
                             subscriptionVersion = marker;
                             emit(event("subscriptions").put("data", subscriptionData));
@@ -347,6 +366,7 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void refresh() { main.post(() -> MainActivity.this.refresh(true)); }
         @JavascriptInterface public void subscriptions() { main.post(() -> MainActivity.this.refresh(true)); }
+        @JavascriptInterface public void quotaHistory(String key) { main.post(() -> readQuotaHistory(key)); }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
         @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }
@@ -378,6 +398,52 @@ public final class MainActivity extends Activity {
                 connectionChanged();
             });
         }
+    }
+
+    private void readQuotaHistory(String key) {
+        if (!foreground || spec == null || latestStats == null || key == null || !key.matches("[a-f0-9]{64}")) return;
+        if (historyBusy) { pendingHistoryKey = key; return; }
+        JSONObject provider = historyProvider(latestStats.optJSONObject("limits"), key);
+        org.json.JSONArray devices = latestStats.optJSONArray("devices");
+        for (int i = 0; provider == null && devices != null && i < devices.length(); i++) {
+            JSONObject device = devices.optJSONObject(i);
+            if (device != null) provider = historyProvider(device.optJSONObject("limits"), key);
+        }
+        // Only identities from the current native snapshot may be queried.
+        if (provider == null) return;
+        JSONObject selected = provider;
+        String scope = spec.fingerprint();
+        String persistenceError = historyError;
+        int epoch = generation;
+        historyBusy = true;
+        network.execute(() -> {
+            JSONObject result;
+            try (LimitsHistoryStore history = new LimitsHistoryStore(MainActivity.this, scope)) {
+                result = history.query(selected, System.currentTimeMillis());
+                result.put("error", persistenceError);
+            } catch (Exception problem) {
+                result = event("quotaHistory");
+                try { result.put("key", key).put("error", "额度历史暂不可用，请检查可用存储空间后重试"); } catch (Exception ignored) { }
+            }
+            JSONObject payload = result;
+            main.post(() -> {
+                if (epoch != generation || !foreground) return;
+                historyBusy = false;
+                try { emit(payload.put("type", "quotaHistory")); } catch (Exception ignored) { }
+                String pending = pendingHistoryKey;
+                pendingHistoryKey = null;
+                if (pending != null) readQuotaHistory(pending);
+            });
+        });
+    }
+
+    private static JSONObject historyProvider(JSONObject limits, String key) {
+        org.json.JSONArray providers = limits == null ? null : limits.optJSONArray("providers");
+        for (int i = 0; providers != null && i < providers.length(); i++) {
+            JSONObject provider = providers.optJSONObject(i);
+            if (provider != null && key.equals(provider.optString("androidHistoryKey"))) return provider;
+        }
+        return null;
     }
 
     @Override protected void onResume() {

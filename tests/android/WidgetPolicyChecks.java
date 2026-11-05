@@ -9,6 +9,7 @@ public final class WidgetPolicyChecks {
     }
 
     public static void main(String[] args) {
+        check("OpenDesign".equals(WidgetLayoutPolicy.providerLabel("opendesign", "web")));
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 0, 0) == WidgetLayoutPolicy.Size.COMPACT_BAR);
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 110, 56) == WidgetLayoutPolicy.Size.COMPACT_BAR);
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 140, 120) == WidgetLayoutPolicy.Size.SMALL);

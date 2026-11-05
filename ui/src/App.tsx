@@ -682,6 +682,10 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
                   quotaTab={quotaTab}
                   subscriptions={subscriptions}
                   subscriptionError={subscriptionError}
+                  history={state.quotaHistory}
+                  historyError={state.historyError}
+                  fetchedAt={fetchedAt}
+                  foreground={foreground}
                 />
               )}
 

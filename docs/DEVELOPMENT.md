@@ -57,6 +57,16 @@ Android 15+ 对 `dataSync` 前台服务有后台运行预算；应用处理服�
 
 已有 Activity 收到通知点击时，只更新启动 Intent 中的会话键与连接指纹，页面就绪后校验并消费一次；通知 URI 仅区分 PendingIntent，不替换 Activity 的启动身份。AndroidX `ActivityScenario` 按启动 Intent 的 action、data 和 categories 等字段匹配生命周期事件，替换整个 Intent 会使通知跳转后的销毁事件被忽略，最终在测试清理时停留于 `PAUSED` 并超时。回归用真实通知 PendingIntent 检查跳转、参数消费及跳转后的后台 / 前台转换，清理仍须正常等待 Activity 销毁。
 
+## 额度历史
+
+`LimitsHistoryStore` 将前台成功读取的 Hub 额度写入 Android 私有 SQLite；记录使用 provider 的原始 `updatedAt`，不把轮询时间当作新的测量。所有写入与查询均在现有网络工作线程执行，不额外探测 provider、不增加 Hub API，也不在后台新增服务。数据库异常只影响历史，界面显示存储错误并继续展示 Hub 统计；保留出错数据库，不自动删除或重建。
+
+历史按连接指纹、provider、已验证账户/工作区、产品、窗口 ID 与单位隔离；匿名账户继续按来源设备隔离。持久化仅包含散列身份、数值、时间和摘要，不存储账户名称、邮箱、工作区名称或凭据。当前原生统计附加不透明的 `androidHistoryKey`，`HubNative.quotaHistory(key)` 只允许查询当前快照中的键，并使用连接代次拒绝迟到响应。查询最多保留一个进行中的任务及一个最新待查询键；WebView 仍禁止直接联网。
+
+观测与日汇总在同一事务提交。相同时间戳、乱序或过期读数不新增消费；一致的来源切换沿用已验证账户时间线，冲突、配额缺失、实际额度变化和重置打断比较。失败刷新与普通采样间隔仍允许同一手机本地日期的兼容端点计算净变化，并标记覆盖不完整；跨日变化不分摊。零变化需要真实区间，无区间保持未知。百分比与原币种分别记录，不把余额推算比例写成测量。
+
+保留 180 个本地日的明细与 730 个本地日的摘要，保留最后真实基线以检测重置；稳定读数在同一小时合并首尾观测。预览只显示当前周期/最近范围的趋势和近 14 天日汇总；一次曲线最多 1440 个点，高密度数据省略的区间不连线，日汇总不受绘图采样影响。新增共享计算脚本必须同时进入 Gradle、Vite 与 `LocalContentClient` 的明确白名单。详见 [v0.86 适配记录](upstream-0.86.md)。
+
 ## 桌面微件
 
 桌面微件提供四类原生 `RemoteViews` 卡片：`UsageWidgetProvider`（今日用量，支持 `2×2` / `4×2` / `4×3`）、`CompactUsageWidgetProvider`（紧凑速览，支持 `2×1` 横条与 `2×2` / `4×2` 展开）、`PeriodOverviewWidgetProvider`（多周期总览，同屏对比今日、本月、累计及展开的近 7 日总量与单日峰值）和 `QuotaWidgetProvider`（额度监控，展示账户健康数与高占用率窗口进度条）。Android 12+ 使用 `SizeF` 响应式视图映射，Android 8.0–11 按 `AppWidgetOptions` 断点切换尺寸布局；所有卡片共享同一个 `UsageWidgetRefreshService`（`JobScheduler`）与本地快照。系统每 30 分钟请求刷新，实际运行可能延后；前台成功读取也会同步更新全部已放置微件。

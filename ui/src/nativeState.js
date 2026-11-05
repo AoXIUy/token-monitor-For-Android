@@ -8,6 +8,7 @@ function isConnectionStatus(value) {
 /** @returns {import('./types/monitor').MonitorState} */
 export function createInitialState() {
   return {
+    quotaHistory: null, historyError: '',
     appUpdate: { currentVersion: '', latestVersion: '', automatic: true, checking: false, available: false,
       checkedAt: 0, name: '', notes: '', publishedAt: '', size: 0, error: '', promptToken: '',
       download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' } },
@@ -73,7 +74,18 @@ export function receiveNativeMessage(state, message) {
         ...state, stats: /** @type {import('./types/monitor').MonitorStats | null} */ (message.data || null),
         fetchedAt: typeof message.fetchedAt === 'number' && Number.isFinite(message.fetchedAt) ? message.fetchedAt : 0,
         statusHealthy: true,
+        historyError: typeof message.historyError === 'string' ? message.historyError.slice(0, 300) : '',
       };
+    case 'quotaHistory': {
+      if (typeof message.key !== 'string' || !/^[a-f0-9]{64}$/.test(message.key)) return state;
+      const providers = [state.stats?.limits?.providers || [], ...(state.stats?.devices || []).map(device => device.limits?.providers || [])].flat();
+      if (!providers.some(provider => provider.androidHistoryKey === message.key)) return state;
+      return { ...state, quotaHistory: /** @type {import('./types/monitor').QuotaHistoryPayload} */ ({
+        key: message.key, now: typeof message.now === 'number' ? message.now : 0,
+        windows: Array.isArray(message.windows) ? message.windows : [], persistent: message.persistent === true,
+        error: typeof message.error === 'string' ? message.error.slice(0, 300) : '',
+      }) };
+    }
     case 'subscriptions': return {
       ...state, subscriptions: /** @type {import('./types/monitor').SubscriptionsPayload | null} */ (message.data || null), subscriptionError: '',
     };

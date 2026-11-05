@@ -1,0 +1,142 @@
+package com.tokenmonitor.android;
+
+import android.content.Context;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import static org.junit.Assert.*;
+
+@RunWith(AndroidJUnit4.class)
+public final class LimitsHistoryStoreTest {
+    private Context context;
+    private LimitsHistoryStore store;
+    private long now;
+
+    @Before public void createHistory() {
+        context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        context.deleteDatabase(LimitsHistoryStore.DATABASE);
+        store = new LimitsHistoryStore(context, "hub-a");
+        now = LocalDate.of(2026, 11, 5).atTime(10, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+    @After public void closeHistory() { store.close(); context.deleteDatabase(LimitsHistoryStore.DATABASE); }
+
+    private JSONObject provider(String account, String source, long at, double used) throws Exception {
+        return new JSONObject().put("provider", "opendesign").put("accountKey", account).put("source", "web")
+                .put("sourceDeviceId", source).put("accountName", "Private workspace").put("accountEmail", "private@example.invalid")
+                .put("status", "ok").put("updatedAt", java.time.Instant.ofEpochMilli(at).toString())
+                .put("windows", new JSONArray().put(new JSONObject().put("kind", "session").put("label", "Session")
+                        .put("usedPercent", used).put("limit", 100).put("windowMinutes", 300)
+                        .put("resetsAt", java.time.Instant.ofEpochMilli(now + 4 * 3600000).toString())));
+    }
+    private JSONObject record(JSONObject... providers) throws Exception {
+        JSONObject stats = new JSONObject().put("limits", new JSONObject().put("providers", new JSONArray(java.util.Arrays.asList(providers))));
+        store.record(stats, now + 24 * 3600000);
+        return stats;
+    }
+    private JSONObject entry(JSONObject provider, long at) throws Exception { return store.query(provider, at).getJSONArray("windows").getJSONObject(0); }
+    private JSONObject today(JSONObject provider, long at) throws Exception { return entry(provider, at).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13); }
+
+    @Test public void repeatedAndOutOfOrderObservationsDoNotBecomeNewConsumption() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20);
+        record(p); record(p); record(provider("workspace-a", "laptop", now - 1000, 15));
+        assertTrue(today(p, now).isNull("value"));
+        assertEquals(1, today(p, now).getInt("observations"));
+        p = provider("workspace-a", "laptop", now + 60000, 24); record(p);
+        assertEquals(4, today(p, now + 60000).getDouble("value"), 0);
+        assertEquals(2, today(p, now + 60000).getInt("observations"));
+        assertTrue(store.query(p, now + 60000).getBoolean("persistent"));
+    }
+
+    @Test public void localSqliteSurvivesReopeningAndKeepsScopesAndWorkspacesSeparate() throws Exception {
+        JSONObject a = provider("workspace-a", "laptop", now, 20), b = provider("workspace-b", "laptop", now, 80);
+        record(a, b);
+        a = provider("workspace-a", "laptop", now + 60000, 24); record(a);
+        assertNotEquals(a.getString("androidHistoryKey"), b.getString("androidHistoryKey"));
+        store.close(); store = new LimitsHistoryStore(context, "hub-a");
+        assertEquals(4, today(a, now + 60000).getDouble("value"), 0);
+        assertTrue(today(b, now + 60000).isNull("value"));
+        try (LimitsHistoryStore other = new LimitsHistoryStore(context, "hub-b")) {
+            JSONObject copy = provider("workspace-a", "laptop", now + 60000, 24);
+            other.record(new JSONObject().put("limits", new JSONObject().put("providers", new JSONArray().put(copy))), now + 60000);
+            assertNotEquals(a.getString("androidHistoryKey"), copy.getString("androidHistoryKey"));
+            assertTrue(other.query(copy, now + 60000).getJSONArray("windows").getJSONObject(0).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13).isNull("value"));
+        }
+        try (android.database.Cursor cursor = store.getReadableDatabase().rawQuery("SELECT id,account,source FROM streams", null)) {
+            while (cursor.moveToNext()) for (int i = 0; i < 3; i++) assertTrue(cursor.getString(i).matches("[a-f0-9]{64}"));
+        }
+    }
+
+    @Test public void consistentDevicesContinueOneTimelineAndInactiveFailuresDoNotCutIt() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
+        p = provider("workspace-a", "server", now + 60000, 24); record(p);
+        assertEquals(4, today(p, now + 60000).getDouble("value"), 0);
+        record(provider("workspace-a", "laptop", now + 70000, 24).put("status", "unauthorized"));
+        p = provider("workspace-a", "server", now + 120000, 28); record(p);
+        assertEquals(8, today(p, now + 120000).getDouble("value"), 0);
+        assertFalse(today(p, now + 120000).getBoolean("uncertain"));
+    }
+
+    @Test public void sourceConflictsAndMissingWindowsBreakConsumptionWithoutDeletingHistory() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
+        record(provider("workspace-a", "server", now + 60000, 5));
+        p = provider("workspace-a", "laptop", now + 120000, 24); record(p);
+        assertTrue(today(p, now + 120000).isNull("value"));
+        assertTrue(today(p, now + 120000).getBoolean("uncertain"));
+        record(provider("workspace-a", "laptop", now + 180000, 24).put("windows", new JSONArray()));
+        p = provider("workspace-a", "laptop", now + 240000, 30); record(p);
+        assertTrue(today(p, now + 240000).isNull("value"));
+        assertTrue(entry(p, now + 240000).getJSONArray("points").length() >= 3);
+    }
+
+    @Test public void failuresAndSamplingGapsKeepSameDayNetChangesButNotFabricatedCrossDayUsage() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
+        record(provider("workspace-a", "laptop", now + 60000, 20).put("status", "unauthorized"));
+        p = provider("workspace-a", "laptop", now + 120000, 24); record(p);
+        assertEquals(4, today(p, now + 120000).getDouble("value"), 0);
+        assertTrue(today(p, now + 120000).getBoolean("uncertain"));
+        // Use a wallet without a reset deadline for a cross-day observation.
+        JSONObject wallet = provider("wallet", "laptop", now, 0);
+        JSONObject win = new JSONObject().put("kind", "credits").put("metric", "credits").put("currency", "USD").put("remaining", 10).put("showMeter", false);
+        wallet.put("windows", new JSONArray().put(win)); record(wallet);
+        wallet.put("updatedAt", java.time.Instant.ofEpochMilli(now + 86400000).toString()); win.put("remaining", 8); record(wallet);
+        JSONObject summary = entry(wallet, now + 86400000).getJSONObject("distribution");
+        assertTrue(summary.getJSONArray("buckets").getJSONObject(13).isNull("value"));
+        assertEquals(2, summary.getDouble("unallocated"), 0);
+    }
+
+    @Test public void allowanceChangesAndResetsNeverBecomeOrdinaryUsage() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
+        p = provider("workspace-a", "laptop", now + 60000, 24);
+        p.getJSONArray("windows").getJSONObject(0).put("limit", 200); record(p);
+        assertTrue(today(p, now + 60000).isNull("value"));
+        p = provider("workspace-a", "laptop", now + 120000, 4); record(p);
+        assertTrue(today(p, now + 120000).isNull("value"));
+    }
+
+    @Test public void measuredZeroIsDifferentFromNoIntervalAndOldDetailKeepsDailySummaries() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
+        p = provider("workspace-a", "laptop", now + 60000, 20); record(p);
+        assertEquals(0, today(p, now + 60000).getDouble("value"), 0);
+        assertEquals(2, entry(p, now + 60000).getJSONArray("points").length());
+        store.record(new JSONObject(), now + 200L * 86400000);
+        assertEquals(1, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT COUNT(*) FROM daily", null));
+    }
+
+    @Test public void stableWindowIdsSurviveLabelChangesAndWalletsRetainTheirUnits() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 20);
+        p.getJSONArray("windows").getJSONObject(0).put("limitId", "five-hour"); record(p);
+        p = provider("workspace-a", "laptop", now + 60000, 24);
+        p.getJSONArray("windows").getJSONObject(0).put("limitId", "five-hour").put("label", "Renamed"); record(p);
+        assertEquals(4, today(p, now + 60000).getDouble("value"), 0);
+        JSONObject credits = new JSONObject().put("metric", "credits").put("remaining", 8).put("currency", "CREDITS").put("showMeter", false);
+        assertEquals("CREDITS", LimitsHistoryStore.readings(credits).get(0).unit);
+        assertTrue(LimitsHistoryStore.readings(credits).get(0).balance);
+    }
+}

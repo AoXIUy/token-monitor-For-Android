@@ -55,6 +55,7 @@ export interface MonitorModelApi {
   components(period: PeriodData): { cached: number; output: number; cachePercent: string } | null;
   limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string };
   quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
+  limitWindows(provider: LimitProvider): QuotaWindow[];
   subscriptionAmount(row: SubscriptionRow): number | null;
 }
 

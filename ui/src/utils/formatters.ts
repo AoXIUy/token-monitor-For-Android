@@ -28,6 +28,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   muse: 'Muse Code',
   ollama: 'Ollama',
   manus: 'Manus',
+  opendesign: 'OpenDesign',
   senpi: 'Senpi',
 };
 

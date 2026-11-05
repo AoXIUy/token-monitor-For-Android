@@ -226,6 +226,7 @@
       provider.profileName || '', provider.workspaceKind || '',
       museSource === 'cli' || (!provider.accountKey && museSource !== 'web') ? sourceId : '',
       museSource,
+      provider.adapterId || '', provider.region || '',
     ]);
     return { key, sourceLabel, ...(museSource ? { productLabel: museSource === 'web' ? 'Muse (Meta)' : 'Muse Code' } : {}) };
   }
@@ -262,6 +263,14 @@
       percent: percent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, percent)),
       remaining: false,
     };
+  }
+  function limitWindows(provider) {
+    const windows = provider.windows || [];
+    // Older Hub snapshots can carry a wallet solely on the account. Display
+    // the actual amount without inventing a quota denominator or history.
+    if (numeric(provider.balance?.amount) === null || windows.some(window => balance.isCreditsWindow(window))) return windows;
+    return [...windows, { kind: 'credits', metric: 'credits', label: '账户余额', remaining: numeric(provider.balance.amount),
+      currency: provider.balance.currency, showMeter: false }];
   }
   function daily(stats) {
     return (stats?.historyPreview?.daily || []).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
@@ -302,5 +311,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, quota, daily, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitWindows, quota, daily, widgetHistory, components, subscriptionAmount };
 });

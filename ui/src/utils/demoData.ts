@@ -1,4 +1,4 @@
-import type { AppUpdateState, MonitorStats, NotificationState, SubscriptionsPayload } from '../types/monitor';
+import type { AppUpdateState, MonitorStats, NotificationState, SubscriptionsPayload, QuotaHistoryPayload } from '../types/monitor';
 
 export function createDemoPayload(nowMs: number = Date.now()): {
   connectionUrl: string;
@@ -6,6 +6,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
   subscriptions: SubscriptionsPayload;
   notifications: NotificationState;
   appUpdate: AppUpdateState;
+  quotaHistory: QuotaHistoryPayload;
 } {
   const nowIso = new Date(nowMs).toISOString();
   const fiveMinsAgo = new Date(nowMs - 5 * 60 * 1000).toISOString();
@@ -308,6 +309,14 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
   const providers: NonNullable<MonitorStats['limits']>['providers'] = [
     {
+      provider: 'opendesign', accountKey: 'sha256:demo-design-workspace', androidHistoryKey: 'd'.repeat(64),
+      accountName: 'Design workspace', planLabel: 'Pro', source: 'web', sourceDeviceId: 'mbp-m4-max', status: 'ok', updatedAt: nowIso,
+      windows: [
+        { kind: 'session', label: '5 小时额度', windowMinutes: 300, usedPercent: 24, used: 24, limit: 100, resetsAt: inThreeHours },
+        { kind: 'weekly', label: '每周额度', windowMinutes: 10080, usedPercent: 56, used: 56, limit: 100, resetsAt: inFourDays },
+      ],
+    },
+    {
       provider: 'claude',
       accountKey: 'sha256:claude-max-team',
       accountName: 'Core Engineering',
@@ -608,7 +617,26 @@ export function createDemoPayload(nowMs: number = Date.now()): {
     ],
   };
 
+  const quotaHistory: QuotaHistoryPayload = {
+    key: 'd'.repeat(64), now: nowMs, persistent: true,
+    windows: (providers[0].windows || []).map((window, index) => ({
+      key: `demo-${window.kind}`, window, unit: 'pp', balance: false,
+      points: [0, 1, 2, 3, 4].map(i => ({ at: nowMs - (4 - i) * 20 * 60000,
+        value: (index ? 40 : 8) + i * 4, unit: 'pp', balance: false,
+        reset: Date.parse(window.resetsAt || ''), basis: '100', interval: 300000 })),
+      distribution: {
+        buckets: Array.from({ length: 14 }, (_, i) => {
+          const date = new Date(nowMs); date.setDate(date.getDate() - 13 + i);
+          return { key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+            value: i < 2 || i === 6 ? null : (i * 3 + index * 7) % 18,
+            observations: i < 2 || i === 6 ? 0 : 8, uncertain: i === 5 };
+        }),
+        unallocated: 0, resets: 0,
+      },
+    })),
+  };
   return {
+    quotaHistory,
     connectionUrl: 'https://hub.tokenmonitor.internal:8443',
     stats,
     subscriptions,

@@ -65,6 +65,7 @@ final class WidgetLayoutPolicy {
             case "muse" -> "web".equalsIgnoreCase(source) ? "Muse (Meta)" : "Muse Code";
             case "ollama" -> "Ollama";
             case "manus" -> "Manus";
+            case "opendesign" -> "OpenDesign";
             case "senpi" -> "Senpi";
             default -> "其他";
         };

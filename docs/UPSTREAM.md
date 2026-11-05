@@ -8,7 +8,9 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 ## 共享模块
 
-独立仓库的 `src/shared/` 带入源工程的可移植计算模块，保持原路径及字节内容。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
+2026-11-05 从主线 `main` 同步至 **`8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845`**（源码版本 **0.86.0**，包含标签之后的 OpenDesign 功能）。本次适配 OpenDesign 工作区额度、只在手机本地积累的额度历史和余额展示，随 Android **1.4.0 / versionCode 15** 发布；范围及 Android 差异见 [v0.86 适配记录](upstream-0.86.md)。
+
+独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
 这些模块负责紧凑 Token 显示、额度金额格式、活动来源、会话状态、会话分组及设备类型规范化。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码。
 

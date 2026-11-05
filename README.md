@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.3.0](https://img.shields.io/badge/version-1.3.0-38BDF8)
+![Version 1.4.0](https://img.shields.io/badge/version-1.4.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -23,6 +23,7 @@
 | 会话与状态 | 搜索并按工具筛选，查看状态及所有来源设备；子代理保留完整分组和用量 |
 | 会话详情 | 查看 Token 和模型组成、推理强度、费用、来源设备、上下文快照和父子会话关系 |
 | 额度与余额 | 区分 Muse 网页 / CLI 额度及 Manus 积分，查看账户余额和共享订阅；账户仍在电脑端管理 |
+| 额度历史 | 点击展开本机观测的额度趋势和近 14 天净变化，支持 OpenDesign 工作区；缺失读数保持未知 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
 | 软件更新 | 启动时弹窗提示新版本，支持应用内下载、完整性与签名校验及系统确认安装 |
@@ -44,6 +45,8 @@
 1.1.0 同步主线 v0.84/v0.85 的 Android 适配：工具筛选在搜索结果内生效，匹配组内任一工具时保留整个会话家族；来源标签列出当前周期内实际持有记录的所有设备。设备硬件图标使用 Hub 上报信息，旧 Hub 保留通用图标。模型组成明确显示已观测覆盖范围，其余组成保持未知；提示缓存估计仅用于 Claude。
 
 [1.1.0 工具筛选与来源设备预览](docs/screenshots/sessions-1.1.0.jpg)：生产 React 包与演示原生桥接的浏览器截图，不代表真机验收。
+
+1.4.0 适配上游主线 v0.86 / OpenDesign 及手机本地额度历史，范围和验证限制见 [适配记录](docs/upstream-0.86.md)，更新内容见 [发布说明](docs/releases/1.4.0.md)。
 
 ## 安装与连接
 
@@ -105,12 +108,15 @@ sh ./gradlew connectedDebugAndroidTest  # 需要专用模拟器或测试设备
 
 工程以 Java 原生层处理网络、加密存储、通知和微件，React + TypeScript 在本地 WebView 中展示界面；运行时不依赖 CDN 或远程字体。源码与边界约定见 [开发指南](docs/DEVELOPMENT.md)。
 
+后续功能的现状对照、优先级、工作量和验收条件见 [新增功能与改进开发计划书](docs/plans/2026-11-04-feature-development-plan.md)；该计划为评审建议，未实现功能以文中标注为准。
+
 ## 数据与隐私
 
 - Hub 连接仅调用允许的 GET 接口，不注册采集设备、不上传用量、不修改订阅、不删除设备。软件更新独立读取固定仓库的 GitHub 公开 Release 接口，不向它发送 Hub 凭据或统计。
 - shared secret 由原生层通过 Android Keystore 的 AES-GCM 密钥加密保存，已有凭据不返回网页；更换地址需要重新输入 secret。
 - WebView 仅加载 APK 中允许的本地资源，页面不直接访问网络；原生请求使用系统 TLS 校验并拒绝重定向。
 - 不持久化完整统计快照或对话正文；提醒去重和微件只保存必要的有界摘要，应用禁用云备份。
+- 额度历史只在本机保存散列账户 / 工作区身份、数值、时间和日汇总，不保存账户名称、邮箱或凭据，不上传 Hub；明细保留 180 个本地日，日汇总保留 730 个本地日。
 
 ## 致谢与许可
 
