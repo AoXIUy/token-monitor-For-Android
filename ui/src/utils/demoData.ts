@@ -309,6 +309,27 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
   const providers: NonNullable<MonitorStats['limits']>['providers'] = [
     {
+      provider: 'minimax', accountKey: `sha256:${'a'.repeat(64)}`, source: 'oauth', region: 'cn',
+      accountLabel: 'MiniMax Code', planLabel: 'Starter', sourceDeviceId: 'mbp-m4-max', status: 'ok', updatedAt: nowIso,
+      windows: [
+        { kind: 'billing', metric: 'credits', label: 'Credits', remaining: 4624, currency: 'CREDITS' },
+        { kind: 'session', label: '5h', windowMinutes: 300, detail: 'unlimited', showMeter: false },
+        { kind: 'weekly', label: 'Weekly', usedPercent: 15, windowMinutes: 10080, resetsAt: inFourDays },
+        { kind: 'weekly', label: 'Video', used: 3, limit: 20, remaining: 17, usedPercent: 15, resetsAt: inThreeHours },
+      ],
+    },
+    {
+      provider: 'minimax', accountKey: `sha256:${'b'.repeat(64)}`, relatedAccountKey: `sha256:${'a'.repeat(64)}`,
+      source: 'api', region: 'cn', accountLabel: 'Pay-as-you-go', sourceDeviceId: 'mbp-m4-max', status: 'ok', updatedAt: nowIso,
+      balance: { amount: 14.97, currency: 'CNY', todaySpend: 0, weekSpend: null, monthSpend: 5.66, allTimeSpend: 89.2 },
+      windows: [{ kind: 'billing', metric: 'credits', label: 'Balance', remaining: 14.97, currency: 'CNY' }],
+    },
+    {
+      provider: 'minimax', accountKey: `sha256:${'c'.repeat(64)}`, source: 'api', region: 'en',
+      accountLabel: 'Token Plan', sourceDeviceId: 'linux-ws-01', status: 'ok', updatedAt: nowIso,
+      windows: [{ kind: 'session', label: '5h', usedPercent: 35, windowMinutes: 300, resetsAt: inThreeHours }],
+    },
+    {
       provider: 'opendesign', accountKey: 'sha256:demo-design-workspace', androidHistoryKey: 'd'.repeat(64),
       accountName: 'Design workspace', planLabel: 'Pro', source: 'web', sourceDeviceId: 'mbp-m4-max', status: 'ok', updatedAt: nowIso,
       windows: [
@@ -619,7 +640,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
   const quotaHistory: QuotaHistoryPayload = {
     key: 'd'.repeat(64), now: nowMs, persistent: true,
-    windows: (providers[0].windows || []).map((window, index) => ({
+    windows: (providers.find(row => row.provider === 'opendesign')?.windows || []).map((window, index) => ({
       key: `demo-${window.kind}`, window, unit: 'pp', balance: false,
       points: [0, 1, 2, 3, 4].map(i => ({ at: nowMs - (4 - i) * 20 * 60000,
         value: (index ? 40 : 8) + i * 4, unit: 'pp', balance: false,

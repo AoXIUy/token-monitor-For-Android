@@ -210,11 +210,20 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   return (
     <div className="space-y-3.5">
       {historyError && <p role="alert" className="text-xs text-amber-300 p-3 glass-panel rounded-2xl">{historyError}</p>}
-      {providers.map((provider) => {
+      {MonitorModel.limitGroups(providers, stats, deviceId).map(group => <div key={group.key} className="space-y-3.5">
+        {group.linked && <div data-limit-linked-group={group.key} className="px-2 pt-1 text-xs text-slate-300">
+          <span className="font-semibold">{group.label}</span>
+          <span className="ml-2 text-slate-400">已验证的 MiniMax 同一账户 · 各产品独立计量</span>
+        </div>}
+        {group.providers.map((provider) => {
         const account = MonitorModel.limitAccount(provider, stats, deviceId);
         const windows = MonitorModel.limitWindows(provider);
+        const spend = MonitorModel.limitSpend(provider);
+        const code = provider.provider === 'minimax' && provider.source === 'oauth';
         const statusText = provider.stale
           ? '读数已过期'
+          : code && provider.status === 'notConfigured' ? '需登录 Code'
+          : provider.provider === 'minimax' && provider.source === 'api' && provider.status === 'unauthorized' ? 'API 凭据失效'
           : ({
               ok: '正常',
               unavailable: '读取失败',
@@ -233,7 +242,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         const tone = clientTone(provider.provider);
         const subMeta = [
           provider.accountName || provider.accountEmail,
-          provider.planLabel || provider.accountLabel,
+          provider.planLabel || (provider.provider === 'minimax' ? '' : provider.accountLabel),
+          account.regionLabel,
         ].filter(Boolean);
 
         return (
@@ -347,9 +357,21 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               </p>
             )}
 
+            {spend.length > 0 && <div data-limit-spend className="mt-3 pt-3 border-t border-white/8">
+              <p className="text-xs text-slate-300 mb-2">API 现金消费</p>
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                {spend.map(row => <div key={row.key}>
+                  <dt className="text-slate-400 text-[11px]">{row.label}</dt>
+                  <dd className="font-mono-tabular text-slate-200 mt-0.5">{row.value}</dd>
+                </div>)}
+              </dl>
+            </div>}
+
             {provider.status !== 'ok' && (
               <p className="mt-3 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-400/20 rounded-xl p-3 leading-relaxed">
-                显示的已有读数可能来自上次成功采集，请在来源设备处理账户状态。
+                显示的已有读数可能来自上次成功采集。
+                {code ? '请在来源设备检查 MiniMax Code 登录状态。'
+                  : provider.provider === 'minimax' ? '请在来源设备检查此 API 账户的凭据与计费类型。' : '请在来源设备处理账户状态。'}
               </p>
             )}
 
@@ -364,7 +386,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             {openHistory === account.key && <QuotaHistoryPreview key={`${deviceId}:${account.key}`} provider={provider} history={history} fetchedAt={fetchedAt} foreground={foreground} />}
           </section>
         );
-      })}
+        })}
+      </div>)}
 
       <p className="text-[11px] text-slate-400/80 text-center leading-relaxed pt-3 pb-2">
         账户与来源设备按 Hub 读数展示 · 刷新只读取已有额度

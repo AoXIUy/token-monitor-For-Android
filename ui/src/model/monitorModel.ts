@@ -53,7 +53,10 @@ export interface MonitorModelApi {
     recentDays: number; sevenDayDays: number; sevenDayTokens: number | null; peakDayTokens: number | null;
   };
   components(period: PeriodData): { cached: number; output: number; cachePercent: string } | null;
-  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string };
+  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string; regionLabel?: string };
+  limitGroups(providers: LimitProvider[], stats?: MonitorStats | null, deviceId?: string): Array<{key: string; label: string; linked: boolean; providers: LimitProvider[]}>;
+  limitSpend(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
+  quotaTrendBounds(provider: LimitProvider, window: QuotaWindow, now: number): { start: number; end: number; cycle: boolean };
   quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
   limitWindows(provider: LimitProvider): QuotaWindow[];
   subscriptionAmount(row: SubscriptionRow): number | null;

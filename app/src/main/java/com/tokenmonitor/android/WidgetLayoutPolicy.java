@@ -65,6 +65,8 @@ final class WidgetLayoutPolicy {
             case "muse" -> "web".equalsIgnoreCase(source) ? "Muse (Meta)" : "Muse Code";
             case "ollama" -> "Ollama";
             case "manus" -> "Manus";
+            case "minimax" -> "oauth".equals(source) ? "MiniMax Code" : "api".equals(source) ? "MiniMax API" : "MiniMax";
+            case "mcode" -> "MiniMax Code";
             case "opendesign" -> "OpenDesign";
             case "senpi" -> "Senpi";
             default -> "其他";
@@ -82,6 +84,10 @@ final class WidgetLayoutPolicy {
             case "credits" -> "额度";
             default -> "配额";
         };
+    }
+
+    static String windowLabel(String provider, String kind, String label) {
+        return "minimax".equals(provider) && "Video".equals(label) ? "视频" : windowLabel(kind);
     }
 
     static final class HistorySummary {

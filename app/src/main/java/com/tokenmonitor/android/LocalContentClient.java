@@ -20,6 +20,7 @@ final class LocalContentClient extends WebViewClient {
             "/assets/index.html", "/assets/app.css", "/assets/app.js", "/assets/model.js",
             "/assets/shared/compactTokens.js", "/assets/shared/limits/balanceDisplay.js",
             "/assets/shared/limits/windowLabels.js", "/assets/shared/limits/historyModel.js",
+            "/assets/shared/limits/windowText.js",
             "/assets/shared/deviceKind.js",
             "/assets/shared/sessionActivityProviders.js", "/assets/shared/sessionLive.js",
             "/assets/shared/sessionGroups.js"));

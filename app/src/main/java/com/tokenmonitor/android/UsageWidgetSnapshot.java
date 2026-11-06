@@ -172,7 +172,7 @@ final class UsageWidgetSnapshot {
                                 showMeter);
                         if (pct == null) continue;
                         if (pct >= 85) hasHighUsage = true;
-                        String winTitle = WidgetLayoutPolicy.windowLabel(win.optString("kind", ""));
+                        String winTitle = WidgetLayoutPolicy.windowLabel(prov.optString("provider"), win.optString("kind", ""), win.optString("label"));
                         boolean warn = pct >= 85 || !ok;
                         windowsOut.add(new JSONObject()
                                 .put("label", providerTitle + " · " + winTitle)

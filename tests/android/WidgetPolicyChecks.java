@@ -9,6 +9,12 @@ public final class WidgetPolicyChecks {
     }
 
     public static void main(String[] args) {
+        check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("minimax", "oauth")));
+        check("MiniMax API".equals(WidgetLayoutPolicy.providerLabel("minimax", "api")));
+        check("MiniMax".equals(WidgetLayoutPolicy.providerLabel("minimax", "")));
+        check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("mcode", "")));
+        check("视频".equals(WidgetLayoutPolicy.windowLabel("minimax", "weekly", "Video")));
+        check("周度".equals(WidgetLayoutPolicy.windowLabel("other", "weekly", "Video")));
         check("OpenDesign".equals(WidgetLayoutPolicy.providerLabel("opendesign", "web")));
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 0, 0) == WidgetLayoutPolicy.Size.COMPACT_BAR);
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 110, 56) == WidgetLayoutPolicy.Size.COMPACT_BAR);

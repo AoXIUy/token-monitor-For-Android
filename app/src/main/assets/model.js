@@ -6,11 +6,13 @@
     node ? require('../../../../src/shared/limits/balanceDisplay') : root.TokenMonitorLimitBalanceDisplay,
     node ? require('../../../../src/shared/sessionLive') : root.TokenMonitorSessionLive,
     node ? require('../../../../src/shared/sessionGroups') : root.TokenMonitorSessionGroups,
-    node ? require('../../../../src/shared/deviceKind') : root.TokenMonitorDeviceKind
+    node ? require('../../../../src/shared/deviceKind') : root.TokenMonitorDeviceKind,
+    node ? require('../../../../src/shared/limits/windowText') : root.TokenMonitorLimitWindowText,
+    node ? require('../../../../src/shared/limits/historyModel') : root.TokenMonitorLimitsHistoryModel
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.MonitorModel = api;
-})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds) {
+})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
   function numeric(value) {
     return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -214,6 +216,7 @@
   }
   function limitAccount(provider, stats, deviceId = '') {
     const museSource = provider.provider === 'muse' ? provider.source === 'web' ? 'web' : 'cli' : '';
+    const minimaxSource = provider.provider === 'minimax' ? provider.source || '' : '';
     const sourceId = deviceId || provider.sourceDeviceId || '';
     const device = (stats?.devices || []).find((row) => row.deviceId === sourceId);
     const sourceLabel = sourceId
@@ -227,13 +230,64 @@
       museSource === 'cli' || (!provider.accountKey && museSource !== 'web') ? sourceId : '',
       museSource,
       provider.adapterId || '', provider.region || '',
+      minimaxSource,
     ]);
-    return { key, sourceLabel, ...(museSource ? { productLabel: museSource === 'web' ? 'Muse (Meta)' : 'Muse Code' } : {}) };
+    const productLabel = museSource ? museSource === 'web' ? 'Muse (Meta)' : 'Muse Code'
+      : provider.provider === 'minimax' ? minimaxSource === 'oauth' ? 'MiniMax Code'
+        : provider.accountLabel === 'Pay-as-you-go' ? 'MiniMax API' : provider.accountLabel === 'Token Plan' ? 'MiniMax Token Plan' : 'MiniMax' : '';
+    const regionLabel = provider.provider === 'minimax' ? ({ cn: '中国', en: '国际' })[provider.region] || '' : '';
+    return { key, sourceLabel, ...(productLabel ? { productLabel } : {}), ...(regionLabel ? { regionLabel } : {}) };
+  }
+  function limitGroups(providers, stats, deviceId = '') {
+    const groups = new Map();
+    const individuals = new Map();
+    for (const provider of providers) {
+      // A verified API -> Code link groups headings only. Each original row,
+      // quota, status, currency and history identity remains independent.
+      const code = provider.provider === 'minimax' && provider.source === 'api'
+        && provider.accountKey && provider.accountKey !== provider.relatedAccountKey
+        && /^sha256:[a-f0-9]{64}$/.test(provider.relatedAccountKey || '')
+        && providers.find(row => row.provider === 'minimax' && row.source === 'oauth'
+          && row.accountKey === provider.relatedAccountKey && row.region && row.region === provider.region);
+      const owner = code || provider;
+      let key;
+      if (owner.provider === 'minimax' && owner.source === 'oauth' && owner.accountKey) {
+        key = JSON.stringify(['minimax-group', owner.region || '', owner.accountKey]);
+      } else {
+        const identity = limitAccount(provider, stats, deviceId).key;
+        const duplicate = individuals.get(identity) || 0;
+        individuals.set(identity, duplicate + 1);
+        key = JSON.stringify(['card', identity, duplicate]);
+      }
+      if (!groups.has(key)) groups.set(key, { key, label: owner.accountName || owner.accountEmail || 'MiniMax 账户', providers: [] });
+      groups.get(key).providers.push(provider);
+    }
+    return [...groups.values()].map(group => ({ ...group,
+      linked: group.providers.some(row => row.source === 'oauth') && group.providers.some(row => row.source === 'api'),
+      providers: group.providers.slice().sort((a, b) => Number(b.source === 'oauth') - Number(a.source === 'oauth')),
+    }));
+  }
+  function limitSpend(provider) {
+    if (provider.provider !== 'minimax' || provider.source !== 'api' || provider.accountLabel !== 'Pay-as-you-go') return [];
+    const currency = provider.balance?.currency;
+    if (!['CNY', 'USD'].includes(currency)) return [];
+    const fields = [['todaySpend', '今日'], ['weekSpend', '近7天'], ['monthSpend', '本月'], ['allTimeSpend', '累计']];
+    if (!fields.some(([key]) => Object.prototype.hasOwnProperty.call(provider.balance, key))) return [];
+    return fields.map(([key, label]) => ({ key, label, value: money(numeric(provider.balance[key]), currency) }));
+  }
+  function quotaTrendBounds(provider, window, now = Date.now()) {
+    // Video is an interval count pool. Its wire kind does not prove a weekly
+    // duration. Only an explicit duration can establish its cycle start.
+    const video = provider.provider === 'minimax' && window.label === 'Video' && !(numeric(window.windowMinutes) > 0);
+    return historyModel.trendBounds(video ? { ...window, kind: '' } : window, now, provider.provider);
   }
   function sessionReasoningEffort(row) {
     return sessionLive.isSessionReasoningEffortClient(row?.client) ? sessionLive.normalizeReasoningEffort(row.reasoningEffort) : null;
   }
   function quota(provider, window) {
+    if (String(window.detail || '').trim().toLowerCase() === 'unlimited') {
+      return { label: window.label || '额度', value: '无限额', percent: null, remaining: false };
+    }
     if (balance.isCreditsWindow(window)) {
       if (provider.provider === 'muse' && provider.source === 'web' && window.resetDescription?.endsWith(' tokens left')) {
         return { label: '额外 Tokens', value: `${window.resetDescription.slice(0, -' tokens left'.length)} Tokens`,
@@ -257,11 +311,13 @@
     const used = numeric(window.usedPercent);
     const remaining = numeric(window.remainingPercent);
     const percent = used ?? (remaining === null ? null : 100 - remaining);
+    const detail = provider.provider === 'minimax' ? windowText?.limitWindowText(provider, window, { showLimitUsed: true }).detail : '';
     return {
       label: window.label || ({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window.kind] || window.kind || '额度',
       value: percent === null ? '暂无读数' : `${Math.round(percent * 10) / 10}% 已用`,
       percent: percent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, percent)),
       remaining: false,
+      ...(detail ? { detail: `${detail} 次` } : {}),
     };
   }
   function limitWindows(provider) {
@@ -311,5 +367,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitWindows, quota, daily, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitGroups, limitSpend, limitWindows, quota, quotaTrendBounds, daily, widgetHistory, components, subscriptionAmount };
 });

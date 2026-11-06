@@ -38,8 +38,14 @@
       "sourcePath": "src/electron/renderer/limits/historyModel.js",
       "sourceCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845",
       "transformation": "Rebase CommonJS require('../../../shared/limits/windowLabels') to require('./windowLabels'); browser API unchanged"
+    },
+    {
+      "path": "src/shared/limits/windowText.js",
+      "sha256": "3f43fe0cc6eca232a584fc56931b78084a8b3ddd465cf7250c6e942f46fee481",
+      "sourcePath": "src/shared/limits/windowText.js",
+      "sourceCommit": "00effb2b62535afeb9f85874ff349dc278a51bfa"
     }
   ],
-  "upstreamVersion": "0.86.0",
-  "upstreamCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845"
+  "upstreamVersion": "0.87.0",
+  "upstreamCommit": "00effb2b62535afeb9f85874ff349dc278a51bfa"
 }

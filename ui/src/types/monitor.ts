@@ -103,6 +103,7 @@ export interface QuotaWindow {
   resetDescription?: string;
   boundaryKind?: 'reset' | 'expiry' | 'mixed';
   showMeter?: boolean;
+  detail?: string;
 }
 
 export interface LimitProvider {
@@ -112,6 +113,7 @@ export interface LimitProvider {
   sourceDetail?: string;
   provider: string;
   accountKey?: string;
+  relatedAccountKey?: string;
   profileName?: string;
   workspaceKind?: string;
   sourceDeviceId?: string;
@@ -126,6 +128,9 @@ export interface LimitProvider {
   balance?: {
     amount?: number | null;
     monthSpend?: number | null;
+    todaySpend?: number | null;
+    weekSpend?: number | null;
+    allTimeSpend?: number | null;
     currency?: string;
     limit?: number | null;
   };

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { MonitorModel } from '../model/monitorModel';
-import type { LimitProvider, QuotaHistoryPayload, QuotaHistoryPoint, QuotaWindow } from '../types/monitor';
+import type { LimitProvider, QuotaHistoryPayload, QuotaHistoryPoint } from '../types/monitor';
 import { formatShortTime } from '../utils/formatters';
 
 interface HistoryModel {
-  trendBounds(window: QuotaWindow, now: number, provider: string): { start: number; end: number; cycle: boolean };
   segments(points: QuotaHistoryPoint[]): QuotaHistoryPoint[][];
 }
 const historyModel = (window as unknown as { TokenMonitorLimitsHistoryModel: HistoryModel }).TokenMonitorLimitsHistoryModel;
@@ -21,7 +20,7 @@ export function QuotaHistoryPreview({ provider, history, fetchedAt, foreground }
   }, [key, fetchedAt, foreground]);
   const entry = data?.windows.find(row => row.key === selected) || data?.windows[0];
   const now = data?.now || fetchedAt;
-  const bounds = entry ? historyModel.trendBounds(entry.window, now, provider.provider) : null;
+  const bounds = entry ? MonitorModel.quotaTrendBounds(provider, entry.window, now) : null;
   const points = entry && bounds ? entry.points.filter(point => point.at >= bounds.start && point.at <= Math.min(bounds.end, now)) : [];
   const percent = entry?.unit === 'pp';
   const value = (n: number) => percent ? `${Number(n.toFixed(2))}%` : `${MonitorModel.money(n, entry?.unit)}${entry?.unit.toUpperCase() === 'CREDITS' ? ' 积分' : ''}`;

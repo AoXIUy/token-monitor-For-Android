@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.4.0](https://img.shields.io/badge/version-1.4.0-38BDF8)
+![Version 1.5.0](https://img.shields.io/badge/version-1.5.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -22,7 +22,7 @@
 | 历史趋势 | 展示 Hub 提供的每日记录，支持每日 / 区间累计和单日数值查看 |
 | 会话与状态 | 搜索并按工具筛选，查看状态及所有来源设备；子代理保留完整分组和用量 |
 | 会话详情 | 查看 Token 和模型组成、推理强度、费用、来源设备、上下文快照和父子会话关系 |
-| 额度与余额 | 区分 Muse 网页 / CLI 额度及 Manus 积分，查看账户余额和共享订阅；账户仍在电脑端管理 |
+| 额度与余额 | 区分 Muse 网页 / CLI、MiniMax Code 积分 / API 账单及 Manus 积分，查看账户余额和共享订阅；账户仍在电脑端管理 |
 | 额度历史 | 点击展开本机观测的额度趋势和近 14 天净变化，支持 OpenDesign 工作区；缺失读数保持未知 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
@@ -47,6 +47,8 @@
 [1.1.0 工具筛选与来源设备预览](docs/screenshots/sessions-1.1.0.jpg)：生产 React 包与演示原生桥接的浏览器截图，不代表真机验收。
 
 1.4.0 适配上游主线 v0.86 / OpenDesign 及手机本地额度历史，范围和验证限制见 [适配记录](docs/upstream-0.86.md)，更新内容见 [发布说明](docs/releases/1.4.0.md)。
+
+1.5.0 增量适配 [上游 v0.87 主线](docs/upstream-0.87.md)，包含 MiniMax 产品分离、已验证账户分组、现金消费周期、视频次数及无限额展示，更新内容见 [发布说明](docs/releases/1.5.0.md)。
 
 ## 安装与连接
 

@@ -74,6 +74,9 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
                 .put(key.isEmpty() ? new JSONArray().put(provider.optString("accountEmail")).put(provider.optString("accountName")) : key)
                 .put(provider.optString("region")).put(provider.optString("workspaceKind"));
         if ("muse".equals(id)) parts.put(source);
+        // Retain legacy API histories while keeping the new Code product's
+        // points and quotas separate, including on mixed-version Hubs.
+        if ("minimax".equals(id) && "oauth".equals(source)) parts.put("oauth");
         if (anonymous) parts.put("unverified").put(device).put(provider.optString("sourceDetail"));
         return parts.toString();
     }
@@ -116,6 +119,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
     // based on balance + spend remains a raw monetary observation in history.
     static List<Point> readings(JSONObject window) {
         List<Point> result = new ArrayList<>();
+        if ("unlimited".equalsIgnoreCase(window.optString("detail").trim())) return result;
         String metric = window.optString("metric");
         boolean credits = "credits".equals(metric), spend = "spend".equals(metric);
         Double limit = number(window, "limit");
@@ -421,7 +425,8 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         String kind = window.optString("kind");
         if (minutes == null || minutes <= 0) {
             boolean fiveHour = java.util.Arrays.asList("claude", "alibaba", "antigravity", "cline", "commandcode", "kimi", "volcengine", "zai", "zaiteam").contains(provider);
-            minutes = "weekly".equals(kind) ? 10080d : "daily".equals(kind) ? 1440d : fiveHour && "session".equals(kind) ? 300d : 0d;
+            boolean video = "minimax".equals(provider) && "Video".equals(window.optString("label"));
+            minutes = "weekly".equals(kind) && !video ? 10080d : "daily".equals(kind) ? 1440d : fiveHour && "session".equals(kind) ? 300d : 0d;
         }
         return reset > 0 && minutes > 0 ? reset - (long) (minutes * 60_000) : now - 14 * 86400_000L;
     }

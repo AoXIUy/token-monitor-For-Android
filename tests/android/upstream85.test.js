@@ -87,6 +87,7 @@ test('Android hardware hints use the shared normalization and leave old Hub reco
 test('packaged Android scripts expose hardware and tool filtering without Node globals', () => {
   const browser = vm.createContext({ window: {} });
   for (const filename of ['src/shared/compactTokens.js', 'src/shared/limits/balanceDisplay.js',
+    'src/shared/limits/windowText.js', 'src/shared/limits/windowLabels.js', 'src/shared/limits/historyModel.js',
     'src/shared/deviceKind.js', 'src/shared/sessionActivityProviders.js', 'src/shared/sessionLive.js',
     'src/shared/sessionGroups.js', 'app/src/main/assets/model.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../..', filename), 'utf8'), browser, { filename });

@@ -1,0 +1,97 @@
+{
+  "providers": [
+    {
+      "provider": "minimax",
+      "accountKey": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "accountLabel": "MiniMax Code",
+      "planLabel": "Starter",
+      "source": "oauth",
+      "region": "cn",
+      "sourceDeviceId": "pc",
+      "status": "ok",
+      "updatedAt": "2026-11-06T02:00:00.000Z",
+      "windows": [
+        {
+          "kind": "billing",
+          "metric": "credits",
+          "label": "Credits",
+          "remaining": 4624,
+          "currency": "CREDITS"
+        },
+        {
+          "kind": "session",
+          "label": "5h",
+          "windowMinutes": 300,
+          "detail": "unlimited",
+          "showMeter": false,
+          "usedPercent": null
+        },
+        {
+          "kind": "weekly",
+          "label": "Weekly",
+          "usedPercent": 15,
+          "windowMinutes": 10080,
+          "resetsAt": "2026-11-10T02:00:00.000Z"
+        },
+        {
+          "kind": "weekly",
+          "label": "Video",
+          "used": 3,
+          "limit": 20,
+          "remaining": 17,
+          "usedPercent": 15,
+          "remainingPercent": 85,
+          "resetsAt": "2026-11-06T06:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "provider": "minimax",
+      "accountKey": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "relatedAccountKey": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "accountLabel": "Pay-as-you-go",
+      "planLabel": "",
+      "source": "api",
+      "region": "cn",
+      "sourceDeviceId": "pc",
+      "status": "ok",
+      "updatedAt": "2026-11-06T02:00:00.000Z",
+      "windows": [
+        {
+          "kind": "billing",
+          "metric": "credits",
+          "label": "Balance",
+          "remaining": 14.97,
+          "currency": "CNY"
+        }
+      ],
+      "balance": {
+        "amount": 14.97,
+        "currency": "CNY",
+        "todaySpend": 0,
+        "weekSpend": null,
+        "monthSpend": 5.66,
+        "allTimeSpend": 89.2
+      }
+    },
+    {
+      "provider": "minimax",
+      "accountKey": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "accountLabel": "Token Plan",
+      "planLabel": "",
+      "source": "api",
+      "region": "en",
+      "sourceDeviceId": "server",
+      "status": "ok",
+      "updatedAt": "2026-11-06T02:00:00.000Z",
+      "windows": [
+        {
+          "kind": "session",
+          "label": "5h",
+          "usedPercent": 35,
+          "windowMinutes": 300
+        }
+      ]
+    }
+  ]
+}

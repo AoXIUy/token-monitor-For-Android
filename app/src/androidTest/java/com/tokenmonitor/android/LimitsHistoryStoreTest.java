@@ -43,6 +43,26 @@ public final class LimitsHistoryStoreTest {
     private JSONObject entry(JSONObject provider, long at) throws Exception { return store.query(provider, at).getJSONArray("windows").getJSONObject(0); }
     private JSONObject today(JSONObject provider, long at) throws Exception { return entry(provider, at).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13); }
 
+    @Test public void minimaxCodeAndApiStaySeparateEvenWhenDisplayAffiliationExists() throws Exception {
+        JSONObject code = provider("shared-legacy-key", "laptop", now, 20).put("provider", "minimax").put("source", "oauth").put("region", "cn");
+        code.put("windows", new JSONArray().put(new JSONObject().put("kind", "billing").put("metric", "credits")
+                .put("label", "Credits").put("remaining", 4624).put("currency", "CREDITS")));
+        JSONObject api = new JSONObject(code.toString()).put("source", "api").put("relatedAccountKey", code.getString("accountKey"));
+        api.put("windows", new JSONArray().put(new JSONObject().put("kind", "billing").put("metric", "credits")
+                .put("label", "Balance").put("remaining", 14.97).put("currency", "CNY")));
+        record(code, api);
+        assertNotEquals(code.getString("androidHistoryKey"), api.getString("androidHistoryKey"));
+        assertEquals("CREDITS", entry(code, now).getString("unit"));
+        assertEquals("CNY", entry(api, now).getString("unit"));
+        JSONObject unlimited = new JSONObject().put("kind", "session").put("detail", "unlimited").put("usedPercent", 0);
+        assertTrue(LimitsHistoryStore.readings(unlimited).isEmpty());
+        JSONObject video = new JSONObject().put("kind", "weekly").put("label", "Video")
+                .put("resetsAt", java.time.Instant.ofEpochMilli(now + 7200000).toString());
+        assertEquals(now - 14 * 86400000L, LimitsHistoryStore.trendStart("minimax", video, now));
+        video.put("windowMinutes", 120);
+        assertEquals(now, LimitsHistoryStore.trendStart("minimax", video, now));
+    }
+
     @Test public void repeatedAndOutOfOrderObservationsDoNotBecomeNewConsumption() throws Exception {
         JSONObject p = provider("workspace-a", "laptop", now, 20);
         record(p); record(p); record(provider("workspace-a", "laptop", now - 1000, 15));

@@ -282,7 +282,7 @@ public final class StartupTest {
         assertTrue("Shared device kinds must be packaged and allowlisted", kinds.getData().read() >= 0);
         assertNotEquals(403, kinds.getStatusCode());
         kinds.getData().close();
-        for (String file : new String[]{"windowLabels.js", "historyModel.js"}) {
+        for (String file : new String[]{"windowLabels.js", "windowText.js", "historyModel.js"}) {
             WebResourceResponse history = client.shouldInterceptRequest(null,
                     request(LocalContentClient.ORIGIN + "/assets/shared/limits/" + file));
             assertTrue("Quota history helpers must be packaged", history.getData().read() >= 0);
@@ -336,6 +336,31 @@ public final class StartupTest {
         assertEquals("true", evaluate("document.querySelector('[data-quota-history-toggle]').getAttribute('aria-expanded') === 'true'"));
         evaluate("window.receiveNative({type:'connection',url:'https://other.example.com'})");
         awaitScript("!document.querySelector('[data-quota-history]')");
+    }
+
+    @Test public void minimaxProductsRenderSeparatePointsCashSpendAndUnlimitedWindows() throws Exception {
+        awaitConnectionPage();
+        String codeKey = "sha256:" + String.join("", Collections.nCopies(64, "a"));
+        String apiKey = "sha256:" + String.join("", Collections.nCopies(64, "b"));
+        org.json.JSONObject code = new org.json.JSONObject().put("provider", "minimax").put("accountKey", codeKey)
+                .put("source", "oauth").put("region", "cn").put("accountLabel", "MiniMax Code").put("planLabel", "Starter").put("status", "ok")
+                .put("windows", new org.json.JSONArray()
+                        .put(new org.json.JSONObject().put("kind", "billing").put("metric", "credits").put("remaining", 4624).put("currency", "CREDITS"))
+                        .put(new org.json.JSONObject().put("kind", "session").put("label", "5h").put("detail", "unlimited").put("showMeter", false))
+                        .put(new org.json.JSONObject().put("kind", "weekly").put("label", "Video").put("used", 3).put("limit", 20).put("usedPercent", 15)));
+        org.json.JSONObject api = new org.json.JSONObject().put("provider", "minimax").put("accountKey", apiKey).put("relatedAccountKey", codeKey)
+                .put("source", "api").put("region", "cn").put("accountLabel", "Pay-as-you-go").put("status", "unauthorized")
+                .put("windows", new org.json.JSONArray().put(new org.json.JSONObject().put("kind", "billing").put("metric", "credits").put("remaining", 14.97).put("currency", "CNY")))
+                .put("balance", new org.json.JSONObject().put("amount", 14.97).put("currency", "CNY").put("todaySpend", 0).put("monthSpend", 5.66));
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false)).put("limits",
+                new org.json.JSONObject().put("providers", new org.json.JSONArray().put(api).put(code)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 2 && document.querySelector('[data-limit-linked-group]')");
+        assertEquals("true", evaluate("document.querySelectorAll('[data-limit-account]')[0].textContent.includes('MiniMax Code') && document.querySelectorAll('[data-limit-account]')[1].textContent.includes('MiniMax API')"));
+        assertEquals("true", evaluate("document.body.innerText.includes('4624.00 积分') && document.body.innerText.includes('无限额') && document.body.innerText.includes('3/20 次') && document.body.innerText.includes('API 凭据失效')"));
+        assertEquals("true", evaluate("document.querySelector('[data-limit-spend]').textContent.includes('¥0.00') && document.querySelector('[data-limit-spend]').textContent.includes('—') && !document.querySelectorAll('[data-limit-account]')[0].querySelector('[data-limit-spend]')"));
     }
 
     @Test public void upstreamLimitsKeepOrganizationsDevicesAndWalletsDistinct() throws Exception {
