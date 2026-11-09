@@ -40,12 +40,18 @@
       "transformation": "Rebase CommonJS require('../../../shared/limits/windowLabels') to require('./windowLabels'); browser API unchanged"
     },
     {
+      "path": "src/shared/clientCatalog.js",
+      "sha256": "34bb705e0daa4e5f4ea04ec25fc6f69ad6c1c35d951429646fe9df4b30e33986",
+      "sourcePath": "src/shared/clientCatalog.js",
+      "sourceCommit": "eb8cf9d8de2b243deb3f00658ec75440e7dfe880"
+    },
+    {
       "path": "src/shared/limits/windowText.js",
-      "sha256": "3f43fe0cc6eca232a584fc56931b78084a8b3ddd465cf7250c6e942f46fee481",
+      "sha256": "55b228dbabcf158d989ab20d3799f3a84fd62629652f85cd9aa1f9a9eae43349",
       "sourcePath": "src/shared/limits/windowText.js",
-      "sourceCommit": "00effb2b62535afeb9f85874ff349dc278a51bfa"
+      "sourceCommit": "eb8cf9d8de2b243deb3f00658ec75440e7dfe880"
     }
   ],
-  "upstreamVersion": "0.87.0",
-  "upstreamCommit": "00effb2b62535afeb9f85874ff349dc278a51bfa"
+  "upstreamVersion": "0.88.0",
+  "upstreamCommit": "eb8cf9d8de2b243deb3f00658ec75440e7dfe880"
 }

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import { MonitorStats } from '../types/monitor';
-import { formatShortTime, providerName } from '../utils/formatters';
+import { formatShortTime, clientName, providerName } from '../utils/formatters';
 
 type WidgetKindId = 'compact' | 'today' | 'periods' | 'quota';
 type WidgetSizeId = '2x1' | '2x2' | '4x2' | '4x3';
@@ -138,7 +138,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
     const topToolsStr =
       clientRows.length > 0
         ? clientRows
-            .map((r) => `${providerName(r.id)} ${MonitorModel.compact(r.tokens)}`)
+            .map((r) => `${clientName(r.id)} ${MonitorModel.compact(r.tokens)}`)
             .join(' · ')
         : '—';
 

@@ -93,7 +93,7 @@ final class UsageWidgetSnapshot {
                 String rawKey = keys.next();
                 Double tok = number(clients, rawKey);
                 if (tok == null || tok <= 0) continue;
-                String label = WidgetLayoutPolicy.providerLabel(rawKey, null);
+                String label = WidgetLayoutPolicy.clientLabel(rawKey);
                 bucketed.put(label, bucketed.getOrDefault(label, 0.0) + tok);
             }
             List<Map.Entry<String, Double>> sorted = new ArrayList<>(bucketed.entrySet());

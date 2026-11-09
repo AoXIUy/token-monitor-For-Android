@@ -67,6 +67,11 @@ final class WidgetLayoutPolicy {
             case "manus" -> "Manus";
             case "minimax" -> "oauth".equals(source) ? "MiniMax Code" : "api".equals(source) ? "MiniMax API" : "MiniMax";
             case "mcode" -> "MiniMax Code";
+            case "mistral" -> "Mistral";
+            case "mimo" -> "MiMo";
+            case "gemini" -> "Gemini";
+            case "prime-agent" -> "Prime Agent";
+            case "jcode" -> "Jcode";
             case "opendesign" -> "OpenDesign";
             case "senpi" -> "Senpi";
             default -> "其他";
@@ -84,6 +89,12 @@ final class WidgetLayoutPolicy {
             case "credits" -> "额度";
             default -> "配额";
         };
+    }
+
+    static String clientLabel(String client) {
+        if ("gemini".equals(client)) return "Gemini CLI";
+        if ("mistral".equals(client)) return "Mistral Vibe";
+        return providerLabel(client, "");
     }
 
     static String windowLabel(String provider, String kind, String label) {

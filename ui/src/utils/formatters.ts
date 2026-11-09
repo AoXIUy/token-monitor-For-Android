@@ -31,6 +31,9 @@ export const PROVIDER_LABELS: Record<string, string> = {
   minimax: 'MiniMax',
   mcode: 'MiniMax Code',
   opendesign: 'OpenDesign',
+  mistral: 'Mistral',
+  gemini: 'Gemini',
+  mimo: 'MiMo',
   senpi: 'Senpi',
 };
 
@@ -38,6 +41,8 @@ export function providerName(id?: string): string {
   if (!id) return '未知工具';
   return PROVIDER_LABELS[id] || id;
 }
+
+export function clientName(id?: string): string { return MonitorModel.clientLabel(id); }
 
 export function clientTone(client?: string): {
   text: string;

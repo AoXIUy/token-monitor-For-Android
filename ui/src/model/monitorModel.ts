@@ -34,6 +34,7 @@ interface SessionDetail {
 export interface MonitorModelApi {
   numeric(value: unknown): number | null;
   count(value: unknown): number;
+  clientLabel(id?: string): string;
   compact(value: unknown): string;
   money(value: unknown, currency?: string): string;
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
@@ -56,6 +57,7 @@ export interface MonitorModelApi {
   limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string; regionLabel?: string };
   limitGroups(providers: LimitProvider[], stats?: MonitorStats | null, deviceId?: string): Array<{key: string; label: string; linked: boolean; providers: LimitProvider[]}>;
   limitSpend(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
+  limitBalanceDetails(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
   quotaTrendBounds(provider: LimitProvider, window: QuotaWindow, now: number): { start: number; end: number; cycle: boolean };
   quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
   limitWindows(provider: LimitProvider): QuotaWindow[];

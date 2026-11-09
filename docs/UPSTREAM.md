@@ -12,9 +12,11 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 2026-11-06 增量同步至 **`00effb2b62535afeb9f85874ff349dc278a51bfa`**（源码版本 **0.87.0**，包含标签之后的 MiniMax 与月度托盘提交）。安卓适配 MiniMax Code / API / Token Plan 的独立展示、已确认账户关联、现金消费周期和视频次数 / 无限额窗口，随 Android **1.5.0 / versionCode 16** 发布；详见 [v0.87 适配记录](upstream-0.87.md)。
 
+2026-11-09 增量同步主线 `main` 至 **`eb8cf9d8de2b243deb3f00658ec75440e7dfe880`**（源码版本 **0.88.0**，包含标签之后的 Gemini CLI 提交）。适配 Gemini CLI、Mistral Vibe、Prime Agent、Jcode 的工具展示，Mistral 额度、MiMo 产品及余额明细，以及兼容来源切换后的本地额度历史，随 Android **1.6.0 / versionCode 17** 发布；详见 [v0.88 适配记录](upstream-0.88.md)。
+
 独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
-这些模块负责紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.87 新增 `limits/windowText.js` 保持上游字节内容，复用已有 `balanceDisplay.js`，不引入 Electron 或新的 npm 依赖。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码。
+这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js` 并更新 `limits/windowText.js`，两者与固定上游提交字节一致；其余共享文件保留各自的快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。
 
 更新共享模块时，从对应源版本一次同步必要的闭包，检查 CommonJS require 和浏览器全局依赖，更新校验记录，并运行 `npm run verify` 和 Android 构建 / 仪器测试。不要仅更新 APK 生成目录，也不要为通过测试复制 Hub 或 Electron 应用。
 

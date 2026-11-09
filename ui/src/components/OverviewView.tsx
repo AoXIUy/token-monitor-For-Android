@@ -3,7 +3,7 @@ import { ChevronDown, Layers, TrendingUp } from 'lucide-react';
 import { HistoryChart } from './HistoryChart';
 import { MonitorModel } from '../model/monitorModel';
 import { BreakdownKind, DeviceData, MonitorStats, PeriodData, PeriodId } from '../types/monitor';
-import { clientTone, PERIOD_LABELS, providerName } from '../utils/formatters';
+import { clientTone, PERIOD_LABELS, clientName } from '../utils/formatters';
 
 interface OverviewViewProps {
   stats: MonitorStats;
@@ -410,7 +410,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 const pct =
                   totalTokensCount > 0 ? Math.min(100, (row.tokens / totalTokensCount) * 100) : 0;
                 const displayLabel =
-                  breakdownKind === 'clients' ? providerName(row.label) : row.label;
+                  breakdownKind === 'clients' ? clientName(row.label) : row.label;
                 const tone =
                   breakdownKind === 'clients' ? clientTone(row.id) : clientTone(undefined);
 

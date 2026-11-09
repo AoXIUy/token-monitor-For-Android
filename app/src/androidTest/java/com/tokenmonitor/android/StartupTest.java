@@ -103,6 +103,7 @@ public final class StartupTest {
 
     @Test public void packagedPageLoadsCssScriptsAndNativeReadyCallback() throws Exception {
         awaitConnectionPage();
+        assertEquals("true", evaluate("window.TokenMonitorClientCatalog.CLIENT_LABELS.gemini === 'Gemini CLI' && window.TokenMonitorClientCatalog.CLIENT_LABELS.mistral === 'Mistral Vibe'"));
         assertEquals("true", evaluate("location.href === '" + LocalContentClient.START_URL + "'"));
         assertEquals("true", evaluate("document.getElementById('page-title').textContent === '连接 Hub'"));
         assertEquals("true", evaluate("getComputedStyle(document.body).backgroundColor === 'rgb(9, 12, 16)'"));
@@ -282,6 +283,11 @@ public final class StartupTest {
         assertTrue("Shared device kinds must be packaged and allowlisted", kinds.getData().read() >= 0);
         assertNotEquals(403, kinds.getStatusCode());
         kinds.getData().close();
+        WebResourceResponse catalog = client.shouldInterceptRequest(null,
+                request(LocalContentClient.ORIGIN + "/assets/shared/clientCatalog.js"));
+        assertTrue("Client catalog must be packaged", catalog.getData().read() >= 0);
+        assertNotEquals(403, catalog.getStatusCode());
+        catalog.getData().close();
         for (String file : new String[]{"windowLabels.js", "windowText.js", "historyModel.js"}) {
             WebResourceResponse history = client.shouldInterceptRequest(null,
                     request(LocalContentClient.ORIGIN + "/assets/shared/limits/" + file));
@@ -336,6 +342,50 @@ public final class StartupTest {
         assertEquals("true", evaluate("document.querySelector('[data-quota-history-toggle]').getAttribute('aria-expanded') === 'true'"));
         evaluate("window.receiveNative({type:'connection',url:'https://other.example.com'})");
         awaitScript("!document.querySelector('[data-quota-history]')");
+    }
+
+    @Test public void newUsageClientsKeepLabelsAccountingAndToolFilters() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject sessions = new org.json.JSONObject(), clients = new org.json.JSONObject();
+        String fresh = java.time.Instant.now().toString();
+        for (String id : new String[]{"gemini", "mistral", "prime-agent", "jcode"}) {
+            sessions.put(id + ":same", new org.json.JSONObject().put("client", id).put("sessionId", "same").put("title", "Same title")
+                    .put("totalTokens", 120).put("inputTokens", 80).put("outputTokens", 20).put("cacheReadTokens", 20).put("lastUsedAt", fresh));
+            clients.put(id, 120);
+        }
+        org.json.JSONObject period = new org.json.JSONObject().put("sessions", sessions).put("clients", clients).put("totalTokens", 480);
+        org.json.JSONObject periods = new org.json.JSONObject().put("today", period);
+        org.json.JSONObject stats = new org.json.JSONObject().put("periods", periods).put("devices", new org.json.JSONArray()
+                .put(new org.json.JSONObject().put("deviceId", "pc").put("updatedAt", fresh).put("stale", false).put("periods", periods)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 4 && document.querySelector('[data-session-tool=\"gemini\"]')");
+        assertEquals("true", evaluate("document.querySelector('[data-session-tool=\"gemini\"]').textContent.includes('Gemini CLI') && document.querySelector('[data-session-tool=\"mistral\"]').textContent.includes('Mistral Vibe') && document.body.innerText.includes('Prime Agent') && document.body.innerText.includes('Jcode')"));
+        evaluate("document.querySelector('[data-session-tool=\"mistral\"]').click()");
+        awaitScript("document.querySelectorAll('.session').length === 1 && document.querySelector('.session').textContent.includes('120')");
+        assertEquals("true", evaluate("document.querySelector('[data-state-source=\"inferred\"]') && !document.querySelector('[data-state-source=\"native\"]')"));
+    }
+
+    @Test public void mistralAllowancesAndMimoWalletDetailsRemainIndependent() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject mistral = new org.json.JSONObject().put("provider", "mistral").put("status", "ok").put("source", "web")
+                .put("windows", new org.json.JSONArray()
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Included API").put("usedPercent", 25).put("used", 25).put("limit", 100).put("currency", "USD"))
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Included Vibe Code").put("usedPercent", 68))
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Balance").put("metric", "credits").put("remaining", 12).put("currency", "USD").put("showMeter", false)));
+        org.json.JSONObject mimo = new org.json.JSONObject().put("provider", "mimo").put("accountKey", "console").put("accountLabel", "Console").put("status", "error")
+                .put("balance", new org.json.JSONObject().put("amount", 50).put("currency", "CNY").put("giftBalance", 0).put("cashBalance", 30));
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false)).put("limits",
+                new org.json.JSONObject().put("providers", new org.json.JSONArray().put(mistral).put(mimo)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 2 && document.body.innerText.includes('$25.00 / $100.00')");
+        assertEquals("true", evaluate("document.body.innerText.includes('Included Vibe Code') && document.body.innerText.includes('68% 已用') && document.body.innerText.includes('剩余 $12.00') && document.querySelector('[data-limit-account]').querySelectorAll('[style]').length === 2"));
+        evaluate("document.querySelector('[data-balance-details] summary').click()");
+        awaitScript("document.querySelector('[data-balance-details]').open && document.querySelector('[data-balance-details]').textContent.includes('¥0.00')");
+        assertEquals("true", evaluate("document.body.innerText.includes('MiMo Console') && document.body.innerText.includes('剩余 ¥50.00') && document.querySelector('[data-balance-details]').textContent.includes('¥30.00') && document.body.innerText.includes('读取失败')"));
     }
 
     @Test public void minimaxProductsRenderSeparatePointsCashSpendAndUnlimitedWindows() throws Exception {

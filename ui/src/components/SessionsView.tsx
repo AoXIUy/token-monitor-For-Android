@@ -8,7 +8,7 @@ import {
   PeriodId,
   SessionStatusResult,
 } from '../types/monitor';
-import { clientTone, copyTextToClipboard, formatShortTime, providerName } from '../utils/formatters';
+import { clientTone, copyTextToClipboard, formatShortTime, clientName } from '../utils/formatters';
 import { DeviceIcon } from './DeviceIcon';
 
 interface SessionsViewProps {
@@ -249,7 +249,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                 selection.tool === client ? 'bg-sky-400/15 border-sky-400/40 text-sky-200' : 'glass-inset text-slate-300'
               }`}
             >
-              {client ? providerName(client) : '全部工具'}
+              {client ? clientName(client) : '全部工具'}
             </button>
           ))}
         </div>
@@ -333,7 +333,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <span className={`text-xs font-semibold ${tone.text}`}>
-                          {providerName(row.client)}
+                          {clientName(row.client)}
                         </span>
                         <span className="text-slate-600" aria-hidden="true">
                           ·
@@ -545,7 +545,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <span className="text-[10px] font-semibold text-sky-300">
                                       {member.groupRole === 'main' ? '主会话' : '子代理'} ·{' '}
-                                      {providerName(member.client)}
+                                      {clientName(member.client)}
                                     </span>
                                     {renderStatusText(
                                       MonitorModel.sessionStatus(member, statusOptions)

@@ -219,6 +219,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         const account = MonitorModel.limitAccount(provider, stats, deviceId);
         const windows = MonitorModel.limitWindows(provider);
         const spend = MonitorModel.limitSpend(provider);
+        const balanceDetails = MonitorModel.limitBalanceDetails(provider);
         const code = provider.provider === 'minimax' && provider.source === 'oauth';
         const statusText = provider.stale
           ? '读数已过期'
@@ -242,7 +243,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         const tone = clientTone(provider.provider);
         const subMeta = [
           provider.accountName || provider.accountEmail,
-          provider.planLabel || (provider.provider === 'minimax' ? '' : provider.accountLabel),
+          provider.planLabel || (provider.provider === 'minimax' || provider.provider === 'mimo' && account.productLabel ? '' : provider.accountLabel),
           account.regionLabel,
         ].filter(Boolean);
 
@@ -356,6 +357,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                 暂无额度窗口读数
               </p>
             )}
+
+            {balanceDetails.length > 0 && <details data-balance-details className="mt-3 pt-3 border-t border-white/8">
+              <summary className="min-h-[44px] text-xs text-sky-300 cursor-pointer">余额组成</summary>
+              <dl className="space-y-2 text-xs">
+                {balanceDetails.map(row => <div key={row.key} className="flex justify-between gap-2">
+                  <dt className="text-slate-400">{row.label}</dt><dd className="font-mono-tabular text-slate-200">{row.value}</dd>
+                </div>)}
+              </dl>
+            </details>}
 
             {spend.length > 0 && <div data-limit-spend className="mt-3 pt-3 border-t border-white/8">
               <p className="text-xs text-slate-300 mb-2">API 现金消费</p>

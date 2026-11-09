@@ -24,8 +24,8 @@ android {
         applicationId 'com.tokenmonitor.android'
         minSdk 26
         targetSdk 36
-        versionCode 16
-        versionName '1.5.0'
+        versionCode 17
+        versionName '1.6.0'
         buildConfigField 'String', 'RELEASE_CERTIFICATE_SHA256', '"' + releaseCertificate + '"'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
@@ -63,7 +63,7 @@ dependencies {
 
 tasks.register('syncDisplayAssets', Sync) {
     from('../src/shared') {
-        include 'compactTokens.js', 'limits/balanceDisplay.js', 'limits/windowLabels.js', 'limits/windowText.js', 'limits/historyModel.js', 'sessionLive.js', 'sessionActivityProviders.js', 'sessionGroups.js', 'deviceKind.js'
+        include 'compactTokens.js', 'clientCatalog.js', 'limits/balanceDisplay.js', 'limits/windowLabels.js', 'limits/windowText.js', 'limits/historyModel.js', 'sessionLive.js', 'sessionActivityProviders.js', 'sessionGroups.js', 'deviceKind.js'
     }
     into layout.buildDirectory.dir('generated/assets/shared')
 }

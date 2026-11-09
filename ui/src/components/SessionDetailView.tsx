@@ -19,7 +19,7 @@ import {
   formatExact,
   formatFullTime,
   PERIOD_LABELS,
-  providerName,
+  clientName,
 } from '../utils/formatters';
 import { renderStatusText } from './SessionsView';
 import { DeviceIcon } from './DeviceIcon';
@@ -193,7 +193,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
       <section className="glass-hero rounded-3xl p-5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs font-semibold ${tone.text}`}>
-            {providerName(row.client)}
+            {clientName(row.client)}
           </span>
           <span className="text-slate-500">·</span>
           {renderStatusText(status)}

@@ -13,9 +13,9 @@ function run(command, args) {
   if (result.status !== 0) throw new Error(`${command} failed with exit code ${result.status}`);
 }
 try {
-  const sources = ['ConnectionSpec', 'SessionCompletionTracker', 'AppUpdatePolicy', 'ApkUpdatePolicy', 'WidgetLayoutPolicy'].map(name =>
+  const sources = ['ConnectionSpec', 'SessionCompletionTracker', 'AppUpdatePolicy', 'ApkUpdatePolicy', 'WidgetLayoutPolicy', 'LimitsHistoryPolicy'].map(name =>
     `app/src/main/java/com/tokenmonitor/android/${name}.java`);
-  const checks = ['ConnectionSpecChecks', 'CompletionTrackerChecks', 'AppUpdatePolicyChecks', 'ApkUpdatePolicyChecks', 'WidgetPolicyChecks'];
+  const checks = ['ConnectionSpecChecks', 'CompletionTrackerChecks', 'AppUpdatePolicyChecks', 'ApkUpdatePolicyChecks', 'WidgetPolicyChecks', 'LimitsHistoryPolicyChecks'];
   run('javac', ['--release', '17', '-encoding', 'UTF-8', '-d', output, ...sources,
     ...checks.map(name => `tests/android/${name}.java`)]);
   for (const name of checks) run('java', ['-cp', output, `com.tokenmonitor.android.${name}`]);

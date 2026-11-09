@@ -175,7 +175,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         }
     }
     private static void interrupt(SQLiteDatabase db, String stream, Point tail, long at, long now, int reason) {
-        db.execSQL("UPDATE runs SET break_after=break_after|?,uncertain_until=? WHERE id=?", new Object[]{reason, at, tail.id});
+        db.execSQL("UPDATE runs SET break_after=break_after|?,uncertain_until=MAX(COALESCE(uncertain_until,end_at),?) WHERE id=?", new Object[]{reason, at, tail.id});
         uncertain(db, stream, tail.at, at, now);
     }
 
@@ -289,9 +289,10 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         origin(db, id, source, p.at);
         Point tail = latest(db, id);
         String observer;
-        boolean guarded, failed;
+        int guarded;
+        boolean failed;
         try (Cursor c = db.rawQuery("SELECT source,guarded,failed FROM streams WHERE id=?", new String[]{id})) {
-            c.moveToFirst(); observer = c.getString(0); guarded = c.getInt(1) != 0; failed = c.getInt(2) != 0;
+            c.moveToFirst(); observer = c.getString(0); guarded = c.getInt(1); failed = c.getInt(2) != 0;
         }
         boolean consistent = tail == null || sameCycle(tail, p);
         boolean missingBasis = tail != null && !tail.basis.isEmpty() && p.basis.isEmpty();
@@ -309,24 +310,26 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         }
         boolean switched = tail != null && !source.equals(observer);
         boolean healthy = tail != null && !failed && p.at - tail.at <= Math.max(tail.interval, p.interval) * 2.5;
-        if (switched && healthy && (guarded || !consistent)) {
-            if (!consistent && !missingBasis) {
+        boolean basisChanged = tail != null && !tail.basis.equals(p.basis);
+        LimitsHistoryPolicy.Decision decision = LimitsHistoryPolicy.handoff(guarded, switched, healthy, consistent, basisChanged, missingBasis);
+        if (!decision.accept) {
+            if (decision.conflict) {
                 interrupt(db, id, tail, p.at, now, 1);
                 db.execSQL("UPDATE streams SET guarded=1 WHERE id=?", new Object[]{id});
             }
             return;
         }
-        boolean ambiguous = tail != null && !tail.basis.equals(p.basis) || switched && (guarded || !consistent || !healthy);
-        if (ambiguous) {
+        boolean ambiguous = decision.ambiguous;
+        if (decision.breakBefore) {
             interrupt(db, id, tail, p.at, now, 1);
-            tail.broken |= 1; tail.uncertainUntil = p.at;
+            tail.broken |= 1; tail.uncertainUntil = Math.max(tail.uncertainUntil, p.at);
         }
         String date = day(p.at);
         db.execSQL("INSERT OR IGNORE INTO daily(stream,day) VALUES(?,?)", new Object[]{id, date});
         db.execSQL("UPDATE daily SET observations=observations+1 WHERE stream=? AND day=?", new Object[]{id, date});
         if (tail != null) {
             boolean recovered = tail.broken == 2 && consistent;
-            boolean comparable = consistent && !ambiguous && (tail.uncertainUntil == 0 || recovered);
+            boolean comparable = consistent && (tail.uncertainUntil == 0 || recovered);
             boolean reset = !ambiguous && !consistent;
             boolean gap = ambiguous || tail.broken != 0 || p.at - tail.at > Math.max(tail.interval, p.interval) * 2.5;
             boolean crossDay = !day(tail.at).equals(date);
@@ -344,7 +347,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         if (extend) db.execSQL("UPDATE runs SET end_at=? WHERE id=?", new Object[]{p.at, tail.id});
         else db.execSQL("INSERT INTO runs(stream,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,uncertain_before) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 new Object[]{id, p.at, p.at, p.value, p.unit, p.balance ? 1 : 0, p.reset == 0 ? null : p.reset, p.basis, p.interval, ambiguous ? 1 : 0});
-        db.execSQL("UPDATE streams SET source=?,guarded=?,failed=0 WHERE id=?", new Object[]{source, guarded || ambiguous ? 1 : 0, id});
+        db.execSQL("UPDATE streams SET source=?,guarded=?,failed=0 WHERE id=?", new Object[]{source, decision.guard, id});
     }
 
     private static JSONObject json(Point p, long at) throws Exception {

@@ -9,6 +9,13 @@ public final class WidgetPolicyChecks {
     }
 
     public static void main(String[] args) {
+        check("Gemini CLI".equals(WidgetLayoutPolicy.clientLabel("gemini")));
+        check("Gemini".equals(WidgetLayoutPolicy.providerLabel("gemini", "")));
+        check("Mistral Vibe".equals(WidgetLayoutPolicy.clientLabel("mistral")));
+        check("Mistral".equals(WidgetLayoutPolicy.providerLabel("mistral", "web")));
+        check("Prime Agent".equals(WidgetLayoutPolicy.clientLabel("prime-agent")));
+        check("Jcode".equals(WidgetLayoutPolicy.clientLabel("jcode")));
+        check("其他".equals(WidgetLayoutPolicy.clientLabel("arbitrary-user-string")));
         check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("minimax", "oauth")));
         check("MiniMax API".equals(WidgetLayoutPolicy.providerLabel("minimax", "api")));
         check("MiniMax".equals(WidgetLayoutPolicy.providerLabel("minimax", "")));

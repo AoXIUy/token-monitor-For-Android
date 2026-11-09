@@ -8,16 +8,19 @@
     node ? require('../../../../src/shared/sessionGroups') : root.TokenMonitorSessionGroups,
     node ? require('../../../../src/shared/deviceKind') : root.TokenMonitorDeviceKind,
     node ? require('../../../../src/shared/limits/windowText') : root.TokenMonitorLimitWindowText,
-    node ? require('../../../../src/shared/limits/historyModel') : root.TokenMonitorLimitsHistoryModel
+    node ? require('../../../../src/shared/limits/historyModel') : root.TokenMonitorLimitsHistoryModel,
+    node ? require('../../../../src/shared/clientCatalog') : root.TokenMonitorClientCatalog,
+    node ? require('../../../../src/shared/limits/windowLabels') : root.TokenMonitorLimitWindowLabels
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.MonitorModel = api;
-})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel) {
+})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
   function numeric(value) {
     return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
   }
   function count(value) { return Math.max(0, numeric(value) ?? 0); }
+  function clientLabel(id) { return clientCatalog?.CLIENT_LABELS[id] || id || '未知工具'; }
   function compact(value) {
     return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(count(value));
   }
@@ -232,7 +235,9 @@
       provider.adapterId || '', provider.region || '',
       minimaxSource,
     ]);
+    const mimoProduct = provider.provider === 'mimo' ? windowLabels?.mimoProductLabel(provider) : '';
     const productLabel = museSource ? museSource === 'web' ? 'Muse (Meta)' : 'Muse Code'
+      : mimoProduct ? mimoProduct === 'Console' ? 'MiMo Console' : 'MiMo Desktop'
       : provider.provider === 'minimax' ? minimaxSource === 'oauth' ? 'MiniMax Code'
         : provider.accountLabel === 'Pay-as-you-go' ? 'MiniMax API' : provider.accountLabel === 'Token Plan' ? 'MiniMax Token Plan' : 'MiniMax' : '';
     const regionLabel = provider.provider === 'minimax' ? ({ cn: '中国', en: '国际' })[provider.region] || '' : '';
@@ -275,6 +280,14 @@
     if (!fields.some(([key]) => Object.prototype.hasOwnProperty.call(provider.balance, key))) return [];
     return fields.map(([key, label]) => ({ key, label, value: money(numeric(provider.balance[key]), currency) }));
   }
+  function limitBalanceDetails(provider) {
+    if (provider.provider !== 'mimo') return [];
+    const currency = provider.balance?.currency;
+    if (!currency) return [];
+    return [['giftBalance', '赠送余额'], ['cashBalance', '现金余额']]
+      .filter(([key]) => numeric(provider.balance?.[key]) !== null)
+      .map(([key, label]) => ({ key, label, value: money(provider.balance[key], currency) }));
+  }
   function quotaTrendBounds(provider, window, now = Date.now()) {
     // Video is an interval count pool. Its wire kind does not prove a weekly
     // duration. Only an explicit duration can establish its cycle start.
@@ -311,13 +324,13 @@
     const used = numeric(window.usedPercent);
     const remaining = numeric(window.remainingPercent);
     const percent = used ?? (remaining === null ? null : 100 - remaining);
-    const detail = provider.provider === 'minimax' ? windowText?.limitWindowText(provider, window, { showLimitUsed: true }).detail : '';
+    const detail = ['minimax', 'mistral'].includes(provider.provider) ? windowText?.limitWindowText(provider, window, { showLimitUsed: true }).detail : '';
     return {
       label: window.label || ({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window.kind] || window.kind || '额度',
       value: percent === null ? '暂无读数' : `${Math.round(percent * 10) / 10}% 已用`,
       percent: percent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, percent)),
       remaining: false,
-      ...(detail ? { detail: `${detail} 次` } : {}),
+      ...(detail ? { detail: provider.provider === 'minimax' ? `${detail} 次` : detail } : {}),
     };
   }
   function limitWindows(provider) {
@@ -367,5 +380,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitGroups, limitSpend, limitWindows, quota, quotaTrendBounds, daily, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, quota, quotaTrendBounds, daily, widgetHistory, components, subscriptionAmount };
 });

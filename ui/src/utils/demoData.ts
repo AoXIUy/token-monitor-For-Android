@@ -309,6 +309,19 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
   const providers: NonNullable<MonitorStats['limits']>['providers'] = [
     {
+      provider: 'mistral', source: 'web', sourceDeviceId: 'mbp-m4-max', planLabel: 'Pro', status: 'ok', updatedAt: nowIso,
+      windows: [
+        { kind: 'billing', label: 'Included API', used: 25, limit: 100, remaining: 75, usedPercent: 25, currency: 'USD', resetsAt: nextMonthStart },
+        { kind: 'billing', label: 'Included Vibe Code', usedPercent: 68, resetsAt: nextMonthStart },
+        { kind: 'billing', metric: 'credits', label: 'Balance', remaining: 12, currency: 'USD', showMeter: false },
+      ],
+    },
+    {
+      provider: 'mimo', accountKey: 'sha256:demo-mimo-console', accountLabel: 'Console', sourceDeviceId: 'linux-ws-01', status: 'ok', updatedAt: nowIso,
+      balance: { amount: 30, currency: 'CNY', giftBalance: 0, cashBalance: 30 },
+      windows: [],
+    },
+    {
       provider: 'minimax', accountKey: `sha256:${'a'.repeat(64)}`, source: 'oauth', region: 'cn',
       accountLabel: 'MiniMax Code', planLabel: 'Starter', sourceDeviceId: 'mbp-m4-max', status: 'ok', updatedAt: nowIso,
       windows: [

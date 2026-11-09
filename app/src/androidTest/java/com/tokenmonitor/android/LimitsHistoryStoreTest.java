@@ -63,6 +63,41 @@ public final class LimitsHistoryStoreTest {
         assertEquals(now, LimitsHistoryStore.trendStart("minimax", video, now));
     }
 
+    @Test public void repeatedCompatibleHandoffsPreserveNetChangeAfterReopening() throws Exception {
+        for (boolean failed : new boolean[]{false, true}) {
+            store.close(); context.deleteDatabase(LimitsHistoryStore.DATABASE);
+            store = new LimitsHistoryStore(context, "hub-a");
+            record(provider("workspace-a", "a", now, 54));
+            record(provider("workspace-a", "a", now + 5 * 60000, 55));
+            if (failed) record(provider("workspace-a", "a", now + 6 * 60000, 55).put("status", "unavailable"));
+            JSONObject p = provider("workspace-a", "b", now + (failed ? 10 : 40) * 60000, 56); record(p);
+            store.close(); store = new LimitsHistoryStore(context, "hub-a");
+            if (failed) record(provider("workspace-a", "b", now + 11 * 60000, 56).put("status", "unavailable"));
+            record(provider("workspace-a", "a", now + (failed ? 15 : 75) * 60000, 56));
+            if (failed) record(provider("workspace-a", "a", now + 16 * 60000, 56).put("status", "unavailable"));
+            long end = now + (failed ? 20 : 110) * 60000;
+            p = provider("workspace-a", "b", end, 58); record(p);
+            store.close(); store = new LimitsHistoryStore(context, "hub-a");
+            JSONObject result = entry(p, end).getJSONObject("distribution");
+            assertEquals(4, today(p, end).getDouble("value"), 0);
+            assertTrue(today(p, end).getBoolean("uncertain"));
+            assertEquals(0, result.getDouble("unallocated"), 0);
+            assertEquals(0, result.getInt("resets"));
+            assertEquals(5, entry(p, end).getJSONArray("points").length());
+            assertEquals(2, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
+        }
+    }
+
+    @Test public void storedLegacyConflictStillBlocksCompatibleSourceJump() throws Exception {
+        JSONObject p = provider("workspace-a", "a", now, 20); record(p);
+        store.getWritableDatabase().execSQL("UPDATE streams SET guarded=1");
+        record(provider("workspace-a", "a", now + 60000, 20).put("status", "unavailable"));
+        p = provider("workspace-a", "b", now + 120000, 24); record(p);
+        assertTrue(today(p, now + 120000).isNull("value"));
+        assertTrue(today(p, now + 120000).getBoolean("uncertain"));
+        assertEquals(1, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
+    }
+
     @Test public void repeatedAndOutOfOrderObservationsDoNotBecomeNewConsumption() throws Exception {
         JSONObject p = provider("workspace-a", "laptop", now, 20);
         record(p); record(p); record(provider("workspace-a", "laptop", now - 1000, 15));
