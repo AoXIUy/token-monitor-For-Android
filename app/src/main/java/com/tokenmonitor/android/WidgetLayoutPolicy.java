@@ -68,6 +68,8 @@ final class WidgetLayoutPolicy {
             case "minimax" -> "oauth".equals(source) ? "MiniMax Code" : "api".equals(source) ? "MiniMax API" : "MiniMax";
             case "mcode" -> "MiniMax Code";
             case "mistral" -> "Mistral";
+            case "hark" -> "Hark";
+            case "qoder" -> "Qoder";
             case "mimo" -> "MiMo";
             case "gemini" -> "Gemini";
             case "prime-agent" -> "Prime Agent";

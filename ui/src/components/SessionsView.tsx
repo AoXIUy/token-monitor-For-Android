@@ -307,7 +307,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const encodedKey = encodeURIComponent(row.key);
               const isOpen = openKeys.has(encodedKey);
               const tone = clientTone(row.client);
-              const modelNames = Object.keys(row.models || {}).join(', ') || '模型未知';
+              const modelNames = MonitorModel.sessionModelLabel(row);
+              const latestModel = MonitorModel.sessionLatestModel(row);
               const isCopied = copiedKey === row.key;
 
               const inTok = MonitorModel.count(row.inputTokens);
@@ -371,7 +372,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       <div className="flex items-center gap-1.5 min-w-0 flex-1 font-mono-tabular">
                         <span className="shrink-0">{formatShortTime(row.lastUsedAt)}</span>
                         <span className="text-slate-600">·</span>
-                        <span className="truncate">{modelNames}</span>
+                        <span data-session-model title={[latestModel ? `最近使用：${latestModel}` : '', ...Object.keys(row.models || {})].filter(Boolean).join('\n')}
+                          className="truncate">{modelNames}</span>
                         {effort && <span data-reasoning-effort={effort} className="shrink-0 text-sky-300">推理 {effort}</span>}
                       </div>
                       {row.subagentCount ? (

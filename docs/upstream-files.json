@@ -34,9 +34,9 @@
     },
     {
       "path": "src/shared/limits/historyModel.js",
-      "sha256": "0362e09d2b670a2451f47d52e29435b23924205dd71298206ab082282066d8a8",
+      "sha256": "6dc2027391cb79628b2d32d973a8cf92e682f73a011cf957699db6ab41dc5fcf",
       "sourcePath": "src/electron/renderer/limits/historyModel.js",
-      "sourceCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845",
+      "sourceCommit": "82e00510cf93fc61415571ccc04d4ab58e68202f",
       "transformation": "Rebase CommonJS require('../../../shared/limits/windowLabels') to require('./windowLabels'); browser API unchanged"
     },
     {
@@ -47,11 +47,11 @@
     },
     {
       "path": "src/shared/limits/windowText.js",
-      "sha256": "55b228dbabcf158d989ab20d3799f3a84fd62629652f85cd9aa1f9a9eae43349",
+      "sha256": "15fb522d7fc4da663658df3e6680cf6cf4dfa6978c7a17eba8cd2becb7dac064",
       "sourcePath": "src/shared/limits/windowText.js",
-      "sourceCommit": "eb8cf9d8de2b243deb3f00658ec75440e7dfe880"
+      "sourceCommit": "82e00510cf93fc61415571ccc04d4ab58e68202f"
     }
   ],
-  "upstreamVersion": "0.88.0",
-  "upstreamCommit": "eb8cf9d8de2b243deb3f00658ec75440e7dfe880"
+  "upstreamVersion": "0.90.0",
+  "upstreamCommit": "82e00510cf93fc61415571ccc04d4ab58e68202f"
 }

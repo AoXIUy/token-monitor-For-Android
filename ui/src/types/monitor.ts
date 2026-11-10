@@ -41,8 +41,10 @@ export interface SessionRow {
   outputTokens?: number | null;
   cacheReadTokens?: number | null;
   cacheWriteTokens?: number | null;
+  cacheReported?: boolean;
   reasoningTokens?: number | null;
   reasoningEffort?: string | null;
+  latestModel?: string | null;
   unclassifiedTokens?: number | null;
   unpricedTokens?: number | null;
   timedOutputTokens?: number | null;
@@ -73,6 +75,7 @@ export interface PeriodData {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  unclassifiedTokens?: number;
   unpricedTokens?: number;
   costUsd?: number | null;
   capabilities?: {
@@ -180,6 +183,7 @@ export interface MonitorStats {
   };
   historyPreview?: {
     daily?: DailyHistoryRow[];
+    summary?: { activeDays?: number; activeDaysComplete?: boolean };
   };
   projectsIncomplete?: boolean;
   periodProjectsOmitted?: Partial<Record<PeriodId, number>>;

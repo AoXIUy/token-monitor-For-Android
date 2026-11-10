@@ -61,6 +61,8 @@ public final class WidgetPolicyChecks {
 
         check("Claude".equals(WidgetLayoutPolicy.providerLabel("claude", null)));
         check("Codex".equals(WidgetLayoutPolicy.providerLabel(" CODEX ", null)));
+        check("Hark".equals(WidgetLayoutPolicy.providerLabel("hark", "web")));
+        check("Qoder".equals(WidgetLayoutPolicy.providerLabel("qoder", "web")));
         check("Muse (Meta)".equals(WidgetLayoutPolicy.providerLabel("muse", "web")));
         check("Muse Code".equals(WidgetLayoutPolicy.providerLabel("muse", "cli")));
         check("其他".equals(WidgetLayoutPolicy.providerLabel("user@example.com", null)));

@@ -64,7 +64,7 @@
     const search = query.trim().toLocaleLowerCase();
     const rows = Object.entries(period?.sessions || {}).map(([key, row]) => ({ ...row, key,
       parentKey: row.parentSessionId ? `${row.parentClient || row.client}:${row.parentSessionId}` : '' }));
-    const matches = row => [row.title, row.sessionId, row.client, row.projectLabel, ...Object.keys(row.models || {})]
+    const matches = row => [row.title, row.sessionId, row.client, row.projectLabel, row.latestModel, ...Object.keys(row.models || {})]
       .some(value => String(value || '').toLocaleLowerCase().includes(search));
     // Filter whole families so a matching child never loses its parent or the
     // other accounting members. Pagination is applied by the view afterwards.
@@ -297,6 +297,21 @@
   function sessionReasoningEffort(row) {
     return sessionLive.isSessionReasoningEffortClient(row?.client) ? sessionLive.normalizeReasoningEffort(row.reasoningEffort) : null;
   }
+  // The latest main continuation owns this snapshot; a newer child or a large
+  // historical model bucket cannot establish the parent's last-used model.
+  function sessionLatestModel(row) {
+    const value = (row?.groupRows?.[0] || row)?.latestModel;
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+  function sessionModelLabel(row) {
+    const models = Object.entries(row?.models || {}).filter(([, tokens]) => count(tokens) > 0).map(([model]) => model);
+    const latest = sessionLatestModel(row);
+    if (latest) {
+      const others = models.filter(model => model !== latest).length;
+      return `${latest}${others ? ` +${others}` : ''}`;
+    }
+    return models.length > 1 ? `${models.length} 个模型` : models[0] || '模型未知';
+  }
   function quota(provider, window) {
     if (String(window.detail || '').trim().toLowerCase() === 'unlimited') {
       return { label: window.label || '额度', value: '无限额', percent: null, remaining: false };
@@ -324,7 +339,8 @@
     const used = numeric(window.usedPercent);
     const remaining = numeric(window.remainingPercent);
     const percent = used ?? (remaining === null ? null : 100 - remaining);
-    const detail = ['minimax', 'mistral'].includes(provider.provider) ? windowText?.limitWindowText(provider, window, { showLimitUsed: true }).detail : '';
+    const detail = ['minimax', 'mistral', 'qoder', 'hark'].includes(provider.provider)
+      ? windowText?.limitWindowText(provider, window, { showLimitUsed: true, formatCompact: compact }).detail : '';
     return {
       label: window.label || ({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window.kind] || window.kind || '额度',
       value: percent === null ? '暂无读数' : `${Math.round(percent * 10) / 10}% 已用`,
@@ -344,6 +360,16 @@
   function daily(stats) {
     return (stats?.historyPreview?.daily || []).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
       .slice().sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  }
+  function activityDays(stats) {
+    const summary = stats?.historyPreview?.summary;
+    const lifetime = numeric(summary?.activeDays);
+    if (summary?.activeDaysComplete === true && lifetime !== null && lifetime >= 0) {
+      return { count: Math.round(lifetime), complete: true };
+    }
+    const rows = daily(stats);
+    if (!rows.length) return null;
+    return { count: new Set(rows.filter(row => count(row.tokens) > 0).map(row => row.date)).size, complete: false };
   }
   function widgetHistory(stats, fetchedAt) {
     const empty = { recentDays: 0, sevenDayDays: 0, sevenDayTokens: null, peakDayTokens: null };
@@ -375,10 +401,36 @@
     const cached = count(period.cacheReadTokens);
     return { cached, output: count(period.outputTokens), cachePercent: total > 0 ? (cached / total * 100).toFixed(1) : '0.0' };
   }
+  function sessionCacheEfficiency(row) {
+    const hit = count(row?.cacheReadTokens), miss = count(row?.inputTokens) + count(row?.cacheWriteTokens);
+    if (hit + count(row?.cacheWriteTokens) <= 0 && row?.cacheReported !== true) return null;
+    return hit + miss > 0 ? { hit, miss, percent: hit / (hit + miss) * 100 } : null;
+  }
+  function cacheEfficiency(period) {
+    if (!period) return null;
+    const total = count(period.totalTokens);
+    const unknown = numeric(period.unclassifiedTokens);
+    // Match upstream fixedPeriodRanges.tokenComponentBreakdown for normalized
+    // periods. Old responses without a coverage marker only prove cache input
+    // when they actually report cache traffic, like the session helper.
+    if (unknown === null && period.capabilities?.tokenComponents !== true) return sessionCacheEfficiency(period);
+    const classified = total - Math.min(total, count(unknown));
+    const hit = Math.min(classified, count(period.cacheReadTokens));
+    const output = Math.min(classified - hit, count(period.outputTokens));
+    const miss = Math.max(0, classified - hit - output);
+    return hit + miss > 0 ? { hit, miss, percent: hit / (hit + miss) * 100 } : null;
+  }
+  function cacheSessions(period) {
+    return Object.entries(period?.sessions || {}).filter(([, row]) => row.sessionKind !== 'background-review')
+      .flatMap(([key, row]) => {
+        const reading = sessionCacheEfficiency(row);
+        return reading ? [{ key, client: row.client, title: row.title || row.projectLabel || row.sessionId || key, ...reading }] : [];
+      }).sort((a, b) => (b.hit + b.miss) - (a.hit + a.miss) || a.key.localeCompare(b.key));
+  }
   function subscriptionAmount(row) {
     return row.kind === 'topup'
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, quota, quotaTrendBounds, daily, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });

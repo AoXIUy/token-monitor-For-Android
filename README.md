@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-38BDF8)
+![Version 1.7.0](https://img.shields.io/badge/version-1.7.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -21,8 +21,8 @@
 | 用量总览 | 查看全部设备或单设备的今日、本月、累计 Token、费用、缓存及输出统计 |
 | 历史趋势 | 展示 Hub 提供的每日记录，支持每日 / 区间累计和单日数值查看 |
 | 会话与状态 | 搜索并按工具筛选，查看状态及所有来源设备；子代理保留完整分组和用量 |
-| 会话详情 | 查看 Token 和模型组成、推理强度、费用、来源设备、上下文快照和父子会话关系 |
-| 额度与余额 | 区分 Muse 网页 / CLI、MiniMax Code / API、MiMo Console / Desktop，查看 Mistral 订阅额度、账户余额和共享订阅；账户仍在电脑端管理 |
+| 会话详情 | 查看最近使用模型、完整模型组成、输入缓存命中率、推理强度、费用、来源设备与父子会话关系 |
+| 额度与余额 | 查看 Hark、Mistral 额度与 Qoder 独立个人 / 团队积分；区分 Muse 网页 / CLI、MiniMax Code / API 和 MiMo 产品；账户仍在电脑端管理 |
 | 额度历史 | 点击展开本机观测的额度趋势和近 14 天净变化，支持 OpenDesign 工作区；缺失读数保持未知 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
@@ -51,6 +51,8 @@
 1.5.0 增量适配 [上游 v0.87 主线](docs/upstream-0.87.md)，包含 MiniMax 产品分离、已验证账户分组、现金消费周期、视频次数及无限额展示，更新内容见 [发布说明](docs/releases/1.5.0.md)。
 
 1.6.0 适配 [主线 v0.88 / `eb8cf9d`](docs/upstream-0.88.md)：新增 Gemini CLI、Mistral Vibe、Prime Agent、Jcode 的工具展示，Mistral 额度、MiMo 余额组成，以及兼容来源反复接管后的额度历史，更新内容见 [发布说明](docs/releases/1.6.0.md)。
+
+1.7.0 适配 [主线 v0.89 / v0.90 / `82e0051`](docs/upstream-0.90.md)：Hark 额度、Qoder 个人 / 团队积分、最近模型、输入缓存命中率与会话缓存明细，以及累计活跃天数的完整性校验，更新内容见 [发布说明](docs/releases/1.7.0.md)。
 
 ## 安装与连接
 

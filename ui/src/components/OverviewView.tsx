@@ -43,6 +43,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   }
 
   const components = MonitorModel.components(p);
+  const cache = MonitorModel.cacheEfficiency(p);
+  const cacheRows = MonitorModel.cacheSessions(p);
+  const activity = MonitorModel.activityDays(stats);
   const devices = stats.devices || [];
   const activeDevicesCount = devices.filter((d) => !d.stale).length;
   const unpriced = MonitorModel.count(p.unpricedTokens);
@@ -190,13 +193,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </p>
         </section>
 
-        <section className="glass-panel rounded-2xl p-4 flex flex-col justify-between">
+        <section data-cache-hit className="glass-panel rounded-2xl p-4 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-400">缓存读取占比</p>
+            <p className="text-xs font-medium text-slate-400">输入缓存命中率</p>
             <div className="text-2xl font-bold text-emerald-400 font-mono-tabular mt-2 mb-1 tracking-tight">
-              {components ? (
+              {cache ? (
                 <>
-                  {components.cachePercent}
+                  {cache.percent.toFixed(1)}
                   <span className="text-sm font-semibold ml-0.5 text-emerald-400/80">%</span>
                 </>
               ) : (
@@ -205,14 +208,23 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
           </div>
           <p className="text-[11px] text-slate-400/90 leading-snug mt-1 font-mono-tabular">
-            {components
-              ? `${MonitorModel.compact(components.cached)} 缓存 / ${MonitorModel.compact(
-                  components.output
-                )} 输出`
-              : '采集端未提供完整组件读数'}
+            {cache ? `命中 ${MonitorModel.compact(cache.hit)} · 未命中 ${MonitorModel.compact(cache.miss)}`
+              : '暂无可用的输入缓存读数'}
           </p>
         </section>
       </div>
+
+      {cache && cacheRows.length > 0 && <details data-cache-sessions className="glass-panel rounded-2xl px-4">
+        <summary className="min-h-[44px] py-3 text-xs text-sky-300 cursor-pointer">会话缓存明细 · {cacheRows.length}</summary>
+        <p className="text-[11px] text-slate-400 mb-3">按已观测输入量排序，包含已结束会话；输出与未知用量不计入命中率。</p>
+        <ul className="max-h-80 overflow-y-auto space-y-3 pb-4" aria-label="会话缓存命中明细">
+          {cacheRows.map(row => <li key={row.key} className="border-t border-white/8 pt-3 text-xs">
+            <div className="flex justify-between gap-3"><span className="min-w-0 break-words text-slate-200">{row.title}</span>
+              <span className="shrink-0 text-emerald-300 font-mono-tabular">{row.percent.toFixed(1)}%</span></div>
+            <p className="text-[11px] text-slate-400 mt-1">{clientName(row.client)} · 命中 {MonitorModel.compact(row.hit)} · 未命中 {MonitorModel.compact(row.miss)}</p>
+          </li>)}
+        </ul>
+      </details>}
 
       {!deviceId && (
         <div className="pt-2">
@@ -225,6 +237,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               全部设备 · 最近 14 个有记录日
             </span>
           </div>
+          {activity && <p data-active-days className="text-[11px] text-slate-400 px-1 mb-3">
+            {activity.complete ? '累计活跃' : '所示日期内活跃'} {activity.count} 天
+          </p>}
 
           {trend.length > 0 ? (
             <section className="trend-card glass-panel rounded-3xl p-5">

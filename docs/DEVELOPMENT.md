@@ -49,11 +49,17 @@
 
 用量工具名称来自共享 `clientCatalog.js`，与额度 provider 和模型名称分开：`gemini` 工具显示 Gemini CLI，`mistral` 工具显示 Mistral Vibe，额度 provider 仍显示 Mistral。Prime Agent、Jcode 等工具沿用 Hub 的 Token、费用及会话身份；没有逐消息数据时不补造消息归属，也不将最近使用时间升级为原生活动或完成通知。
 
+会话 `latestModel` 是上游提供的最近模型快照，与各模型的历史用量分开。组标题只使用最新主会话续接记录的字段，子代理不能覆盖它；缺失或显式 `null` 时回退到模型数量，不从最大用量或对象顺序推断。详情保留完整模型组成，最近模型可以尚无 Token 记录，归档会话也可以保留历史快照。输入缓存命中率使用已观测缓存读取 / 已观测总输入，缓存写入属于未命中；输出与 `unclassifiedTokens` 不参与。总览可展开全部有测量的会话明细，包含已结束会话，且不读取实时状态。会话零命中需要明确的 `cacheReported` 或真实缓存流量；没有读数不显示为零。原生微件原有“缓存读取占比”继续表示缓存读取 / 总 Token，与输入命中率分别命名。
+
+累计活跃天数只接受 `historyPreview.summary.activeDaysComplete === true` 的计数。旧 Hub、混合版本或失败采集没有确认完整性时，仅显示当前 14 条日记录内去重后的活跃日期，不把设备天数相加，也不把滚动记录叫作累计值；不额外请求完整历史接口。
+
 Codex / Claude 推理强度独立于活动状态和推理 Token 显示；模型组成只展示 Hub 的已观测覆盖范围，不按比例补齐未知组成。提示缓存估计仅用于 Claude，旧 Codex 记录携带此字段时也不展示。额度保持 Hub 的产品和账户边界：Muse 网页与 CLI 分开，Manus 积分不显示为美元，余额说明与重置时间可同时展示。
 
 MiniMax 按 `source`、`accountKey` 和区域保留 Code、API 与 Token Plan 的独立卡片。只有同区域 API 行的有效 `relatedAccountKey` 明确指向当前 Code 行时才共享账户分组；这不改变卡片读数、状态、历史身份或币种，也不加总额度。Code 积分保持 `CREDITS`，API 账单现金消费仅展示原始 `todaySpend` / `weekSpend` / `monthSpend` / `allTimeSpend`，未知周期保持未知，近 7 天不解释为自然周。API 密钥和 Code 登录异常分别提示在来源设备处理。
 
 Mistral 的 Included API / Included Vibe Code 展示上游占用率与已知金额；仅有占用率的快照不推算金额。独立钱包 `Balance` 保留原币种和负余额，`showMeter: false` 时不画额度条，没有明确周期时长时不倒推自然月。当前上游没有验证过的 Mistral 账户键，匿名读数按来源设备隔离。MiMo 的 Console / Desktop 产品名称与套餐分开，赠送及现金余额只在折叠明细展示，零值保留，不再累加进已有总余额。上游桌面插件的本地额度尚未进入 Hub 传输，安卓不直接读取插件凭据或建立新接口。
+
+Hark 仅是额度 provider，不创建用量工具或会话。Daily / Monthly / 功能额度显示原始已用与上限，超额读数保留绝对值，仅限制进度条宽度；Top-up 以独立 USD 消费展示，不画额度条。没有窗口不代表零额度或无限额，周期时长只采用明确字段。Qoder 的 Credits 与 Team credits 使用独立上限、重置时间及历史窗口；部分失败保留 Hub 给出的旧读数与失败状态，不将个人额度填入团队池，也不重新合计为一个积分池。
 
 前台每 5 秒读取 Hub，失败后退避至 60 秒；后台暂停界面轮询。会话状态依赖观测所属设备及新鲜 Hub 读取，30 秒原生活动租约到期后重新判断。推断活动保留独立标记，其他在线设备不能使旧观测重新有效。父子分组只使用明确关系或已验证连续身份，不能按标题合并。
 

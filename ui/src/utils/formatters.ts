@@ -34,6 +34,8 @@ export const PROVIDER_LABELS: Record<string, string> = {
   mistral: 'Mistral',
   gemini: 'Gemini',
   mimo: 'MiMo',
+  hark: 'Hark',
+  qoder: 'Qoder',
   senpi: 'Senpi',
 };
 

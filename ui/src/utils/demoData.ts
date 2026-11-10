@@ -50,13 +50,15 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       cursor: 1.20,
     },
     models: {
-      'claude-sonnet-4-20250514': 1940000,
+      'claude-sonnet-4-20250514': 1860000,
+      'claude-opus-4-1-20250805': 80000,
       'gemini-2.5-pro': 1265600,
       'gpt-5': 680000,
       'deepseek-r1': 400000,
     },
     modelCosts: {
-      'claude-sonnet-4-20250514': 7.85,
+      'claude-sonnet-4-20250514': 7.53,
+      'claude-opus-4-1-20250805': 0.32,
       'gemini-2.5-pro': 4.92,
       'gpt-5': 2.45,
       'deepseek-r1': 1.20,
@@ -87,11 +89,12 @@ export function createDemoPayload(nowMs: number = Date.now()): {
         timedDurationMs: 1185000,
         costUsd: 5.94,
         messageCount: 38,
+        latestModel: 'claude-opus-4-1-20250805',
         contextTokens: 148000,
         contextWindow: 200000,
         promptCacheExpiresAt: inTwelveMins,
-        models: { 'claude-sonnet-4-20250514': 1485200 },
-        modelCosts: { 'claude-sonnet-4-20250514': 5.94 },
+        models: { 'claude-sonnet-4-20250514': 1405200, 'claude-opus-4-1-20250805': 80000 },
+        modelCosts: { 'claude-sonnet-4-20250514': 5.62, 'claude-opus-4-1-20250805': 0.32 },
         providers: { anthropic: 1485200 },
         liveActivity: {
           state: 'running',
@@ -309,6 +312,23 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
   const providers: NonNullable<MonitorStats['limits']>['providers'] = [
     {
+      provider: 'hark', accountKey: 'sha256:demo-hark-session', source: 'web', sourceDeviceId: 'mbp-m4-max',
+      planLabel: 'Hark Pro', status: 'ok', updatedAt: nowIso,
+      windows: [
+        { kind: 'daily', label: 'Daily', used: 1200, limit: 10000, remaining: 8800, usedPercent: 12, resetsAt: tomorrowStart },
+        { kind: 'billing', label: 'Monthly', used: 20000, limit: 100000, remaining: 80000, usedPercent: 20, resetsAt: nextMonthStart },
+        { kind: 'billing', label: 'Top-up', metric: 'spend', used: 1.25, currency: 'USD', showMeter: false },
+      ],
+    },
+    {
+      provider: 'qoder', accountKey: 'sha256:demo-qoder-account', source: 'web', sourceDeviceId: 'linux-ws-01',
+      planLabel: 'Pro', status: 'ok', updatedAt: nowIso,
+      windows: [
+        { kind: 'billing', label: 'Credits', used: 20, limit: 100, remaining: 80, usedPercent: 20, resetsAt: inFourDays },
+        { kind: 'billing', label: 'Team credits', used: 10, limit: 50, remaining: 40, usedPercent: 20, resetsAt: nextMonthStart },
+      ],
+    },
+    {
       provider: 'mistral', source: 'web', sourceDeviceId: 'mbp-m4-max', planLabel: 'Pro', status: 'ok', updatedAt: nowIso,
       windows: [
         { kind: 'billing', label: 'Included API', used: 25, limit: 100, remaining: 75, usedPercent: 25, currency: 'USD', resetsAt: nextMonthStart },
@@ -474,6 +494,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
     },
     historyPreview: {
       daily: dailyHistory,
+      summary: { activeDays: 126, activeDaysComplete: true },
     },
     devices: [
       {

@@ -63,6 +63,28 @@ public final class LimitsHistoryStoreTest {
         assertEquals(now, LimitsHistoryStore.trendStart("minimax", video, now));
     }
 
+    @Test public void qoderPoolsAndHarkSpendKeepIndependentHistoryStreams() throws Exception {
+        JSONObject qoder = provider("qoder", "pc", now, 20).put("provider", "qoder");
+        qoder.put("windows", new JSONArray()
+                .put(new JSONObject().put("kind", "billing").put("label", "Credits").put("usedPercent", 20).put("limit", 100))
+                .put(new JSONObject().put("kind", "billing").put("label", "Team credits").put("usedPercent", 20).put("limit", 50)));
+        JSONObject hark = provider("hark", "pc", now, 12).put("provider", "hark");
+        hark.put("windows", new JSONArray()
+                .put(new JSONObject().put("kind", "daily").put("label", "Daily").put("usedPercent", 12).put("limit", 10000))
+                .put(new JSONObject().put("kind", "billing").put("label", "Top-up").put("metric", "spend").put("used", 1.25).put("currency", "USD").put("showMeter", false)));
+        record(qoder, hark);
+        qoder.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        qoder.getJSONArray("windows").getJSONObject(0).put("usedPercent", 40); record(qoder);
+        store.close(); store = new LimitsHistoryStore(context, "hub-a");
+        JSONArray rows = store.query(qoder, now + 60000).getJSONArray("windows");
+        assertEquals(2, rows.length());
+        assertEquals(20, rows.getJSONObject(0).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13).getDouble("value"), 0);
+        assertEquals(0, rows.getJSONObject(1).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13).getDouble("value"), 0);
+        rows = store.query(hark, now + 60000).getJSONArray("windows");
+        assertEquals("pp", rows.getJSONObject(0).getString("unit"));
+        assertEquals("USD", rows.getJSONObject(1).getString("unit"));
+    }
+
     @Test public void repeatedCompatibleHandoffsPreserveNetChangeAfterReopening() throws Exception {
         for (boolean failed : new boolean[]{false, true}) {
             store.close(); context.deleteDatabase(LimitsHistoryStore.DATABASE);

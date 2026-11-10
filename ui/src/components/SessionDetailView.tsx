@@ -153,6 +153,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
     );
   };
 
+  const cache = MonitorModel.sessionCacheEfficiency(row);
   const tokenParts = [
     {
       id: 'input',
@@ -319,6 +320,8 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           {renderField('输出 Tokens', formatExact(row.outputTokens))}
           {renderField('缓存读取', formatExact(row.cacheReadTokens))}
           {renderField('缓存写入', formatExact(row.cacheWriteTokens))}
+          {renderField('输入缓存命中率', cache ? `${cache.percent.toFixed(1)}%` : '—')}
+          {renderField('最近使用模型', MonitorModel.sessionLatestModel(row) || '未知')}
           {renderField('推理 Tokens', formatExact(row.reasoningTokens))}
           {renderField('未分类 Tokens', formatExact(row.unclassifiedTokens))}
           {renderField('匹配计时的输出', formatExact(row.timedOutputTokens))}

@@ -10,6 +10,7 @@ export interface Selection {
   expired: boolean;
 }
 interface BreakdownRow { id: string; label: string; tokens: number; cost: number | null; components?: ModelTokenComponents }
+interface CacheEfficiency { hit: number; miss: number; percent: number }
 interface SessionOptions {
   now?: number;
   stats?: MonitorStats;
@@ -49,7 +50,13 @@ export interface MonitorModelApi {
   sessionDetail(stats: MonitorStats, key: string, options?: SessionOptions): SessionDetail | null;
   sessionStatus(row: SessionRow, options: SessionOptions): SessionStatusResult;
   sessionReasoningEffort(row: SessionRow): string | null;
+  sessionLatestModel(row: SessionRow): string | null;
+  sessionModelLabel(row: SessionRow): string;
+  sessionCacheEfficiency(row: SessionRow): CacheEfficiency | null;
+  cacheEfficiency(period: PeriodData | null): CacheEfficiency | null;
+  cacheSessions(period: PeriodData): Array<CacheEfficiency & { key: string; client?: string; title: string }>;
   daily(stats: MonitorStats): DailyHistoryRow[];
+  activityDays(stats: MonitorStats): { count: number; complete: boolean } | null;
   widgetHistory(stats: MonitorStats | null | undefined, fetchedAt: number): {
     recentDays: number; sevenDayDays: number; sevenDayTokens: number | null; peakDayTokens: number | null;
   };

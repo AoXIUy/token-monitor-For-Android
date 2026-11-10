@@ -344,6 +344,75 @@ public final class StartupTest {
         awaitScript("!document.querySelector('[data-quota-history]')");
     }
 
+    @Test public void latestModelRendersApartFromHistoricalModelUsage() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(true));
+        org.json.JSONObject row = stats.getJSONObject("periods").getJSONObject("today").getJSONObject("sessions").getJSONObject("codex:test");
+        row.put("latestModel", "newer").put("models", new org.json.JSONObject().put("older", 90).put("newer", 10));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelector('[data-session-model]').textContent === 'newer +1'");
+        evaluate("document.querySelector('.session-toggle').click()");
+        awaitScript("document.querySelector('[data-session-detail]')");
+        evaluate("document.querySelector('[data-session-detail]').click()");
+        awaitScript("document.getElementById('page-title').textContent === '会话详情'");
+        assertEquals("true", evaluate("Array.from(document.querySelectorAll('dt')).find(x => x.textContent === '最近使用模型').nextElementSibling.textContent === 'newer' && document.body.innerText.includes('older')"));
+        row.put("latestModel", org.json.JSONObject.NULL); publishStats(stats);
+        awaitScript("Array.from(document.querySelectorAll('dt')).find(x => x.textContent === '最近使用模型').nextElementSibling.textContent === '未知'");
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelector('[data-session-model]').textContent === '2 个模型'");
+    }
+
+    @Test public void harkAndQoderRenderIndependentCountsAndTopupSpend() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject hark = new org.json.JSONObject().put("provider", "hark").put("status", "ok").put("planLabel", "Hark Pro")
+                .put("windows", new org.json.JSONArray()
+                        .put(new org.json.JSONObject().put("kind", "daily").put("label", "Daily").put("used", 125).put("limit", 100).put("usedPercent", 125))
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Monthly").put("used", 20000).put("limit", 100000).put("usedPercent", 20))
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Top-up").put("metric", "spend").put("used", 1.25).put("currency", "USD").put("showMeter", false)));
+        org.json.JSONObject qoder = new org.json.JSONObject().put("provider", "qoder").put("status", "unavailable")
+                .put("windows", new org.json.JSONArray()
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Credits").put("used", 20).put("limit", 100).put("usedPercent", 20))
+                        .put(new org.json.JSONObject().put("kind", "billing").put("label", "Team credits").put("used", 10).put("limit", 50).put("usedPercent", 20)));
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false)).put("limits",
+                new org.json.JSONObject().put("providers", new org.json.JSONArray().put(hark).put(qoder)));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 2 && document.body.innerText.includes('125 / 100')");
+        assertEquals("true", evaluate("document.body.innerText.includes('Hark Pro') && document.body.innerText.includes('20K / 100K') && document.body.innerText.includes('$1.25') && document.querySelector('[data-limit-account]').querySelectorAll('[style]').length === 2"));
+        assertEquals("true", evaluate("document.body.innerText.includes('Qoder') && document.body.innerText.includes('Team credits') && document.body.innerText.includes('20/100') && document.body.innerText.includes('10/50') && document.body.innerText.includes('读取失败')"));
+    }
+
+    @Test public void cacheHitKeepsCompletedAndZeroReadingsAndGatesLifetimeDays() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(true));
+        org.json.JSONObject period = stats.getJSONObject("periods").getJSONObject("today");
+        period.put("totalTokens", 1000).put("cacheReadTokens", 600).put("cacheWriteTokens", 100).put("inputTokens", 100)
+                .put("outputTokens", 100).put("unclassifiedTokens", 100).put("capabilities", new org.json.JSONObject().put("tokenComponents", true));
+        period.put("sessions", new org.json.JSONObject()
+                .put("codex:done", new org.json.JSONObject().put("client", "codex").put("sessionId", "done").put("title", "Completed cached session")
+                        .put("inputTokens", 100).put("cacheReadTokens", 600).put("cacheWriteTokens", 100).put("turnEnded", true))
+                .put("codex:zero", new org.json.JSONObject().put("client", "codex").put("title", "Measured zero hits").put("inputTokens", 100).put("cacheReported", true))
+                .put("unknown", new org.json.JSONObject().put("title", "Unknown cache telemetry").put("inputTokens", 100)));
+        org.json.JSONObject summary = new org.json.JSONObject().put("activeDays", 999).put("activeDaysComplete", false);
+        stats.put("historyPreview", new org.json.JSONObject().put("summary", summary).put("daily", new org.json.JSONArray()
+                .put(new org.json.JSONObject().put("date", "2026-11-10").put("tokens", 1000))));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"overview\"]').click()");
+        awaitScript("document.querySelector('[data-cache-hit]').textContent.includes('75.0') && document.querySelector('[data-cache-sessions]')");
+        assertEquals("true", evaluate("document.querySelector('[data-active-days]').textContent.includes('所示日期') && !document.querySelector('[data-active-days]').textContent.includes('999')"));
+        evaluate("document.querySelector('[data-cache-sessions] summary').click()");
+        awaitScript("document.querySelector('[data-cache-sessions]').open && document.querySelectorAll('[data-cache-sessions] li').length === 2");
+        assertEquals("true", evaluate("document.querySelector('[data-cache-sessions]').textContent.includes('Completed cached session') && document.querySelector('[data-cache-sessions]').textContent.includes('0.0%') && !document.querySelector('[data-cache-sessions]').textContent.includes('Unknown cache telemetry')"));
+        summary.put("activeDaysComplete", true); publishStats(stats);
+        awaitScript("document.querySelector('[data-active-days]').textContent.includes('累计活跃') && document.querySelector('[data-active-days]').textContent.includes('999')");
+        stats.getJSONObject("periods").put("today", new org.json.JSONObject().put("totalTokens", 1000)); publishStats(stats);
+        awaitScript("document.querySelector('[data-cache-hit]').textContent.includes('—') && !document.querySelector('[data-cache-sessions]')");
+    }
+
     @Test public void newUsageClientsKeepLabelsAccountingAndToolFilters() throws Exception {
         awaitConnectionPage();
         org.json.JSONObject sessions = new org.json.JSONObject(), clients = new org.json.JSONObject();
