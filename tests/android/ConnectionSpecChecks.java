@@ -12,6 +12,16 @@ public final class ConnectionSpecChecks {
         ConnectionSpec prefixed = new ConnectionSpec("https://monitor.example.com/proxy/", "secret", false);
         if (!prefixed.endpoint("/api/stats").equals("https://monitor.example.com/proxy/api/stats")) throw new AssertionError("Lost proxy prefix");
         checks++;
+        String conversation = prefixed.conversationEndpoint("PC & 移动", "codex:rollout-2026-11-11", "");
+        if (!conversation.startsWith("https://monitor.example.com/proxy/api/session-conversations?deviceId=PC+%26+")) throw new AssertionError("Unescaped device query");
+        if (!conversation.endsWith("&key=codex%3Arollout-2026-11-11&cursor=")) throw new AssertionError("Invalid conversation route");
+        checks++;
+        for (String key : new String[] {"codex:..", "codex:../../secret", "antigravity:x/y", "codex:a\\b", "claude:example", "codex:a\n"}) {
+            try { prefixed.conversationEndpoint("pc", key, ""); throw new AssertionError("Accepted invalid conversation key"); }
+            catch (IllegalArgumentException expected) { checks++; }
+        }
+        try { prefixed.conversationEndpoint("pc", "codex:example", "https://evil.test"); throw new AssertionError("Accepted arbitrary cursor"); }
+        catch (IllegalArgumentException expected) { checks++; }
         ConnectionSpec local = new ConnectionSpec("http://[::1]:17321/", "secret", true);
         if (!local.endpoint("/api/subscriptions").equals("http://[::1]:17321/api/subscriptions")) throw new AssertionError("Invalid IPv6 URL");
         checks++;

@@ -12,7 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
-import { MonitorStats, PeriodId } from '../types/monitor';
+import { MonitorStats, PeriodId, SessionConversationState } from '../types/monitor';
 import {
   clientTone,
   copyTextToClipboard,
@@ -23,6 +23,7 @@ import {
 } from '../utils/formatters';
 import { renderStatusText } from './SessionsView';
 import { DeviceIcon } from './DeviceIcon';
+import { SessionConversation } from './SessionConversation';
 
 interface SessionDetailViewProps {
   stats: MonitorStats;
@@ -35,6 +36,9 @@ interface SessionDetailViewProps {
   now: number;
   onBack: () => void;
   onSelectSession: (key: string) => void;
+  conversation?: SessionConversationState | null;
+  onQueryConversation?: (deviceId: string, key: string, cursor?: string) => void;
+  onClearConversation?: () => void;
 }
 
 export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
@@ -48,6 +52,9 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   now,
   onBack,
   onSelectSession,
+  conversation = null,
+  onQueryConversation,
+  onClearConversation,
 }) => {
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
   const copyTimer = useRef<number | null>(null);
@@ -232,6 +239,10 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           </p>
         ) : null}
       </section>
+
+      {onQueryConversation && onClearConversation && <SessionConversation key={detailKey} detailKey={detailKey} client={row.client}
+        owners={data.owners} available={foreground && statusHealthy && fetchedAt > 0 && now - fetchedAt < 30000 && now >= fetchedAt}
+        conversation={conversation} onQuery={onQueryConversation} onClear={onClearConversation} />}
 
       <section className="glass-panel rounded-3xl p-5">
         <div className="flex items-center gap-2 mb-3.5">
@@ -541,7 +552,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
       </section>
 
       <p className="text-[11px] text-slate-400/80 text-center leading-relaxed pt-3 pb-2">
-        Hub 同步统计与元数据，不包含对话正文或工具调用原文。
+        统计与元数据来自 Hub 快照；Antigravity 与 Codex 对话仅在查看时向在线设备查询。
         <br />
         缺失字段显示为 —，不代表零。
       </p>

@@ -1,4 +1,5 @@
 // @ts-check
+import { receiveConversation } from './conversationState.js';
 
 /** @param {unknown} value @returns {value is import('./types/monitor').ConnectionStatus} */
 function isConnectionStatus(value) {
@@ -8,6 +9,7 @@ function isConnectionStatus(value) {
 /** @returns {import('./types/monitor').MonitorState} */
 export function createInitialState() {
   return {
+    conversation: null,
     quotaHistory: null, historyError: '',
     appUpdate: { currentVersion: '', latestVersion: '', automatic: true, checking: false, available: false,
       checkedAt: 0, name: '', notes: '', publishedAt: '', size: 0, error: '', promptToken: '',
@@ -29,6 +31,9 @@ export function createInitialState() {
  */
 export function receiveNativeMessage(state, message) {
   switch (message.type) {
+    case 'conversation':
+      if (state.page !== 'sessionDetail' || state.detailKey !== message.key) return state;
+      return { ...state, conversation: receiveConversation(state.conversation, message) };
     case 'appUpdate': {
       /** @param {string} key @param {number} limit */
       const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
@@ -98,7 +103,7 @@ export function receiveNativeMessage(state, message) {
         message: message.state === 'offline' ? String(message.message || '无法连接 Hub') : '',
       };
     }
-    case 'lifecycle': return { ...state, foreground: Boolean(message.foreground) };
+    case 'lifecycle': return { ...state, foreground: Boolean(message.foreground), conversation: message.foreground ? state.conversation : null };
     case 'notifications':
       return {
         ...state, monitorPending: false,

@@ -50,7 +50,7 @@ export default function App() {
   </>;
 }
 
-function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor) {
+function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation }: Monitor) {
   const {
     page,
     period,
@@ -720,6 +720,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
 
               {page === 'sessionDetail' && (
                 <SessionDetailView
+                  key={detailKey}
                   stats={stats}
                   detailKey={detailKey}
                   deviceId={device}
@@ -730,6 +731,9 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo }: Monitor
                   now={nowTick}
                   onBack={() => setPage('sessions')}
                   onSelectSession={openSession}
+                  conversation={state.conversation}
+                  onQueryConversation={queryConversation}
+                  onClearConversation={clearConversation}
                 />
               )}
             </div>

@@ -23,6 +23,8 @@
 
 `ConnectionSpec` 限制 Hub 地址与只读 GET 路径。请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应。
 
+在线对话使用独立有界执行队列，通过 `ConnectionSpec.conversationEndpoint()` 从设备 ID、会话键和分页游标构建固定 GET 地址，网页不能传入 URL 或文件路径。仅允许当前原生统计快照中对应设备的 Antigravity / Codex 会话键。正文响应限制 384 KiB；连接代次和查询代次共同拒绝迟到结果。返回列表、切换来源或进入后台时取消读取并清除页面正文，不进入历史数据库、微件或完成通知。详见 [SESSION_CONVERSATIONS.md](SESSION_CONVERSATIONS.md)。
+
 原生外层容器根据系统栏、DisplayCutout 和键盘边距缩小整个 WebView 视区，不能只给 WebView 加 padding。已处理的 Insets 继续传给子视图时清零，网页不重复添加安全区留白。验收时覆盖刘海模拟、横竖屏、手势 / 三键导航和键盘弹出收起。
 
 ## 软件更新

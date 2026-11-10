@@ -238,6 +238,8 @@ export interface SessionStatusResult {
 }
 
 export interface HubNativeBridge {
+  conversation?: (deviceId: string, key: string, cursor: string, requestId: string) => void;
+  cancelConversation?: () => void;
   quotaHistory?: (key: string) => void;
   ready?: () => void;
   connect: (url: string, secret: string, allowHttp: boolean) => void;
@@ -291,6 +293,7 @@ declare global {
 }
 
 export interface MonitorState {
+  conversation: SessionConversationState | null;
   quotaHistory: QuotaHistoryPayload | null;
   historyError: string;
   appUpdate: AppUpdateState;
@@ -315,6 +318,28 @@ export interface MonitorState {
   connectPending: boolean;
   formError: string;
   connectionEpoch: number;
+}
+
+export interface SessionConversationMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  text: string;
+  timestamp: string;
+  kind: string;
+  continued: boolean;
+}
+
+export interface SessionConversationState {
+  deviceId: string;
+  key: string;
+  requestId: string;
+  cursor: string;
+  messages: SessionConversationMessage[];
+  revision: string;
+  nextCursor: string;
+  incomplete: boolean;
+  loading: boolean;
+  error: string;
 }
 
 export interface QuotaHistoryPoint {

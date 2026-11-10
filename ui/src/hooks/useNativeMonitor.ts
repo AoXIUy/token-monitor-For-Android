@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
 import type { MonitorState } from '../types/monitor';
 import { createDemoPayload } from '../utils/demoData';
+import { beginConversation } from '../conversationState';
 
 export function useNativeMonitor() {
   const [state, setState] = useState<MonitorState>(createInitialState);
   const current = useRef(state);
+  const conversationSequence = useRef(0);
   const isBrowserPreview = typeof window !== 'undefined' && !window.HubNative;
 
   const update = useCallback((change: (previous: MonitorState) => MonitorState) => {
@@ -15,6 +17,19 @@ export function useNativeMonitor() {
     current.current = next;
     setState(next);
   }, []);
+
+  const clearConversation = useCallback(() => {
+    window.HubNative?.cancelConversation?.();
+    update(previous => previous.conversation ? { ...previous, conversation: null } : previous);
+  }, [update]);
+
+  const queryConversation = useCallback((deviceId: string, key: string, cursor = '') => {
+    const query = { deviceId, key, cursor, requestId: `${Date.now()}-${++conversationSequence.current}` };
+    update(previous => ({ ...previous, conversation: beginConversation(previous.conversation, query) }));
+    if (window.HubNative?.conversation) window.HubNative.conversation(deviceId, key, cursor, query.requestId);
+    else update(previous => receiveNativeMessage(previous, { type: 'conversation', ...query,
+      page: { error: window.HubNative ? 'unsupported_app' : 'preview_unavailable' } }));
+  }, [update]);
 
   const loadBrowserDemo = useCallback((customUrl?: string, allowHttpFlag?: boolean) => {
     const now = Date.now();
@@ -77,5 +92,5 @@ export function useNativeMonitor() {
     };
   }, [update, loadBrowserDemo]);
 
-  return { state, update, isBrowserPreview, loadBrowserDemo };
+  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation };
 }

@@ -23,6 +23,11 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private final java.util.concurrent.ThreadPoolExecutor conversationNetwork = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+    private HubClient conversationClient;
+    private int conversationGeneration;
     private final Runnable poll = () -> refresh(false);
     private WebView web;
     private ConnectionStore store;
@@ -245,6 +250,7 @@ public final class MainActivity extends Activity {
     }
 
     private void cancel() {
+        cancelConversation();
         generation++;
         historyBusy = false;
         pendingHistoryKey = null;
@@ -367,6 +373,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void refresh() { main.post(() -> MainActivity.this.refresh(true)); }
         @JavascriptInterface public void subscriptions() { main.post(() -> MainActivity.this.refresh(true)); }
         @JavascriptInterface public void quotaHistory(String key) { main.post(() -> readQuotaHistory(key)); }
+        @JavascriptInterface public void conversation(String deviceId, String key, String cursor, String requestId) {
+            main.post(() -> readConversation(deviceId, key, cursor, requestId));
+        }
+        @JavascriptInterface public void cancelConversation() { main.post(() -> MainActivity.this.cancelConversation()); }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
         @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }
@@ -398,6 +408,63 @@ public final class MainActivity extends Activity {
                 connectionChanged();
             });
         }
+    }
+
+    private void cancelConversation() {
+        conversationGeneration++;
+        conversationNetwork.getQueue().clear();
+        if (conversationClient != null) conversationClient.cancel();
+        conversationClient = null;
+    }
+
+    private void readConversation(String deviceId, String key, String cursor, String requestId) {
+        cancelConversation();
+        if (!foreground || spec == null || latestStats == null || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+        try { spec.conversationEndpoint(deviceId, key, cursor); } catch (IllegalArgumentException error) { return; }
+        org.json.JSONArray devices = latestStats.optJSONArray("devices");
+        boolean found = false;
+        for (int i = 0; devices != null && i < devices.length(); i++) {
+            JSONObject device = devices.optJSONObject(i);
+            if (device == null || !deviceId.equals(device.optString("deviceId")) || device.optBoolean("stale")) continue;
+            JSONObject periods = device.optJSONObject("periods");
+            for (String period : new String[] {"today", "month"}) {
+                JSONObject snapshot = periods == null ? null : periods.optJSONObject(period);
+                JSONObject sessions = snapshot == null ? null : snapshot.optJSONObject("sessions");
+                if (sessions != null && sessions.optJSONObject(key) != null) found = true;
+            }
+        }
+        if (!found) {
+            JSONObject page = new JSONObject();
+            try { page.put("error", "device_offline"); } catch (Exception ignored) { }
+            sendConversation(deviceId, key, cursor, requestId, page);
+            return;
+        }
+        int epoch = generation;
+        int queryEpoch = conversationGeneration;
+        ConnectionSpec destination = spec;
+        HubClient request = new HubClient();
+        conversationClient = request;
+        conversationNetwork.execute(() -> {
+            JSONObject result;
+            try { result = request.conversation(destination, deviceId, key, cursor); }
+            catch (Exception error) {
+                result = new JSONObject();
+                try { result.put("error", error instanceof HubClient.HubError && ((HubClient.HubError) error).status == 404
+                        ? "unsupported_hub" : error instanceof HubClient.HubError && (((HubClient.HubError) error).status == 401 || ((HubClient.HubError) error).status == 403)
+                        ? "unauthorized" : "read_failed"); } catch (Exception ignored) { }
+            }
+            JSONObject payload = result;
+            main.post(() -> {
+                if (epoch != generation || queryEpoch != conversationGeneration || !foreground) return;
+                conversationClient = null;
+                sendConversation(deviceId, key, cursor, requestId, payload);
+            });
+        });
+    }
+
+    private void sendConversation(String deviceId, String key, String cursor, String requestId, JSONObject page) {
+        try { emit(event("conversation").put("deviceId", deviceId).put("key", key).put("cursor", cursor)
+                .put("requestId", requestId).put("page", page)); } catch (Exception ignored) { }
     }
 
     private void readQuotaHistory(String key) {
@@ -478,6 +545,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         cancel();
         network.shutdownNow();
+        conversationNetwork.shutdownNow();
         if (updates != null) updates.close();
         if (downloads != null) downloads.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }

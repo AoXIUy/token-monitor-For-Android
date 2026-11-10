@@ -735,6 +735,79 @@ public final class StartupTest {
         assertEquals("true", evaluate("document.querySelector('.session-toggle').getAttribute('aria-expanded') === 'true'"));
     }
 
+    @Test public void conversationIsRequestedOnClickPagedAndRenderedAsText() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
+        String revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            if (first.contains("/api/session-conversations?") && header.startsWith("Authorization: ")) authorizations.add(header);
+                        }
+                        String body;
+                        if (first.contains("/api/session-conversations?")) {
+                            boolean next = first.contains("cursor=" + revision + "%3A2");
+                            org.json.JSONArray messages = new org.json.JSONArray();
+                            if (next) {
+                                messages.put(new org.json.JSONObject().put("id", "2").put("role", "tool").put("kind", "tool_result")
+                                        .put("text", "native tool output").put("timestamp", "").put("continued", false));
+                            } else {
+                                messages.put(new org.json.JSONObject().put("id", "0").put("role", "user").put("kind", "message")
+                                        .put("text", "native conversation question").put("timestamp", "").put("continued", false));
+                                messages.put(new org.json.JSONObject().put("id", "1").put("role", "assistant").put("kind", "message")
+                                        .put("text", "<img id=unsafe-conversation src=x onerror=alert(1)>native reply").put("timestamp", "").put("continued", false));
+                            }
+                            body = new org.json.JSONObject().put("revision", revision).put("nextCursor", next ? "" : revision + ":2")
+                                    .put("incomplete", false).put("messages", messages).toString();
+                        } else body = first.contains("/api/subscriptions ") ? "{\"subscriptions\":[],\"updatedAt\":\"\"}" : testStats(false);
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (Exception error) { if (!server.isClosed()) throw new RuntimeException(error); }
+                }
+            }, "conversation-test-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'conversation-test-secret', true)");
+                awaitScript("document.querySelector('.token-total')");
+                evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+                awaitScript("document.querySelector('.session-toggle')");
+                evaluate("document.querySelector('.session-toggle').click()");
+                awaitScript("document.querySelector('[data-session-detail]')");
+                evaluate("document.querySelector('[data-session-detail]').click()");
+                awaitScript("document.querySelector('[data-read-conversation]:not(:disabled)')");
+                assertEquals(0, requests.stream().filter(value -> value.contains("/api/session-conversations?")).count());
+                evaluate("document.querySelector('[data-read-conversation]').click()");
+                awaitScript("document.querySelector('[data-conversation-messages]').textContent.includes('native conversation question')");
+                assertEquals("true", evaluate("document.querySelector('[data-conversation-messages]').textContent.includes('<img id=unsafe-conversation') && !document.getElementById('unsafe-conversation')"));
+                assertEquals("true", evaluate("document.querySelectorAll('[data-message-role=\"user\"]').length === 1 && document.querySelectorAll('[data-message-role=\"assistant\"]').length === 1"));
+                evaluate("document.querySelector('[data-more-conversation]').click()");
+                awaitScript("document.querySelector('[data-message-role=\"tool\"]') && !document.querySelector('[data-more-conversation]')");
+                evaluate("document.querySelector('[data-message-role=\"tool\"]').open = true");
+                assertEquals("true", evaluate("document.querySelector('[data-message-role=\"tool\"]').textContent.includes('native tool output')"));
+                assertEquals(2, requests.stream().filter(value -> value.contains("/api/session-conversations?")).count());
+                assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer conversation-test-secret")));
+                evaluate("document.querySelector('[data-back-sessions]').click()");
+                awaitScript("document.querySelector('.session') && !document.querySelector('[data-conversation-messages]')");
+            } finally {
+                scenario.close();
+                scenario = null;
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
     @Test public void nativeBridgeConnectsAndDisplaysAuthenticatedHubStats() throws Exception {
         awaitConnectionPage();
         List<String> requests = Collections.synchronizedList(new ArrayList<>());

@@ -24,8 +24,16 @@ final class HubClient {
     }
 
     JSONObject get(ConnectionSpec spec, String path) throws Exception {
+        return getUrl(spec, spec.endpoint(path), 16 * 1024 * 1024);
+    }
+
+    JSONObject conversation(ConnectionSpec spec, String deviceId, String key, String cursor) throws Exception {
+        return getUrl(spec, spec.conversationEndpoint(deviceId, key, cursor), 384 * 1024);
+    }
+
+    private JSONObject getUrl(ConnectionSpec spec, String url, int maxBytes) throws Exception {
         if (cancelled) throw new IOException("Cancelled");
-        HttpURLConnection connection = (HttpURLConnection) new URL(spec.endpoint(path)).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         active = connection;
         try {
             if (cancelled) throw new IOException("Cancelled");
@@ -50,7 +58,7 @@ final class HubClient {
                 int count;
                 while ((count = input.read(buffer)) != -1) {
                     if (cancelled) throw new IOException("Cancelled");
-                    if (output.size() + count > 16 * 1024 * 1024) throw new HubError(status, "Hub 响应超过 16 MiB 限制");
+                    if (output.size() + count > maxBytes) throw new HubError(status, "Hub 响应超过大小限制");
                     output.write(buffer, 0, count);
                 }
                 return new JSONObject(output.toString(StandardCharsets.UTF_8.name()));

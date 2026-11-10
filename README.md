@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.7.0](https://img.shields.io/badge/version-1.7.0-38BDF8)
+![Version 1.8.0](https://img.shields.io/badge/version-1.8.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -51,6 +51,8 @@
 1.5.0 增量适配 [上游 v0.87 主线](docs/upstream-0.87.md)，包含 MiniMax 产品分离、已验证账户分组、现金消费周期、视频次数及无限额展示，更新内容见 [发布说明](docs/releases/1.5.0.md)。
 
 1.6.0 适配 [主线 v0.88 / `eb8cf9d`](docs/upstream-0.88.md)：新增 Gemini CLI、Mistral Vibe、Prime Agent、Jcode 的工具展示，Mistral 额度、MiMo 余额组成，以及兼容来源反复接管后的额度历史，更新内容见 [发布说明](docs/releases/1.6.0.md)。
+
+1.8.0 新增 [Antigravity / Codex 在线对话与上下文](docs/SESSION_CONVERSATIONS.md)：点击时从在线来源设备分页查询，Hub 不持久化正文。需要同步更新本分支的 Node Hub 与采集端，开启方式见该指南；[发布说明](docs/releases/1.8.0.md)。
 
 1.7.0 适配 [主线 v0.89 / v0.90 / `82e0051`](docs/upstream-0.90.md)：Hark 额度、Qoder 个人 / 团队积分、最近模型、输入缓存命中率与会话缓存明细，以及累计活跃天数的完整性校验，更新内容见 [发布说明](docs/releases/1.7.0.md)。
 

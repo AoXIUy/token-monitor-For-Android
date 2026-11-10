@@ -45,6 +45,20 @@ final class ConnectionSpec {
         return url + path;
     }
 
+    String conversationEndpoint(String deviceId, String key, String cursor) {
+        if (deviceId == null || deviceId.isEmpty() || deviceId.length() > 256 || key == null || key.length() > 512
+                || !key.matches("(codex|antigravity):[^\\s\\\\/\\x00-\\x1f]+")
+                || key.endsWith(":.") || key.endsWith(":..") || cursor == null
+                || !(cursor.isEmpty() || cursor.matches("[a-f0-9]{24}:[0-9]{1,7}"))) {
+            throw new IllegalArgumentException("Invalid conversation query");
+        }
+        try {
+            return url + "/api/session-conversations?deviceId=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
+                    + "&key=" + java.net.URLEncoder.encode(key, "UTF-8")
+                    + "&cursor=" + java.net.URLEncoder.encode(cursor, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException error) { throw new IllegalStateException(error); }
+    }
+
     String fingerprint() {
         return digest(url + "\u0000" + secret + "\u0000" + allowHttp);
     }
