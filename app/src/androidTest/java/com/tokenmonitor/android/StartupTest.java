@@ -792,7 +792,9 @@ public final class StartupTest {
                 assertEquals("true", evaluate("document.querySelector('[data-conversation-messages]').textContent.includes('<img id=unsafe-conversation') && !document.getElementById('unsafe-conversation')"));
                 assertEquals("true", evaluate("document.querySelectorAll('[data-message-role=\"user\"]').length === 1 && document.querySelectorAll('[data-message-role=\"assistant\"]').length === 1"));
                 evaluate("document.querySelector('[data-more-conversation]').click()");
-                awaitScript("document.querySelector('[data-message-role=\"tool\"]') && !document.querySelector('[data-more-conversation]')");
+                awaitScript("document.querySelector('[data-event-group-toggle]') && !document.querySelector('[data-message-role=\"tool\"]') && !document.querySelector('[data-more-conversation]')");
+                evaluate("document.querySelector('[data-event-group-toggle]').click()");
+                awaitScript("document.querySelector('[data-message-role=\"tool\"]')");
                 evaluate("document.querySelector('[data-message-role=\"tool\"]').open = true");
                 assertEquals("true", evaluate("document.querySelector('[data-message-role=\"tool\"]').textContent.includes('native tool output')"));
                 assertEquals(2, requests.stream().filter(value -> value.contains("/api/session-conversations?")).count());

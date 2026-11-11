@@ -329,6 +329,52 @@ export interface SessionConversationMessage {
   continued: boolean;
 }
 
+export interface SessionConversationItem extends SessionConversationMessage {
+  parts: number;
+}
+
+export interface SessionConversationItemDescriptor {
+  isEvent: boolean;
+  category: 'user' | 'assistant' | 'thinking' | 'tool_call' | 'tool_result' | 'context' | 'event';
+  badge: string;
+  title: string;
+  detail: string;
+  preview: string;
+}
+
+export interface SessionConversationEventCounts {
+  total: number;
+  thinking: number;
+  tool: number;
+  context: number;
+}
+
+export type SessionConversationBlock =
+  | {
+      type: 'dialogue';
+      id: string;
+      item: SessionConversationItem;
+      meta: SessionConversationItemDescriptor;
+    }
+  | {
+      type: 'events';
+      id: string;
+      events: Array<{
+        item: SessionConversationItem;
+        meta: SessionConversationItemDescriptor;
+      }>;
+      counts: SessionConversationEventCounts;
+      summaryLabel: string;
+    };
+
+export interface SessionConversationGroupedView {
+  blocks: SessionConversationBlock[];
+  dialogueCount: number;
+  eventCount: number;
+  matchedDialogueCount: number;
+  matchedEventCount: number;
+}
+
 export interface SessionConversationState {
   deviceId: string;
   key: string;

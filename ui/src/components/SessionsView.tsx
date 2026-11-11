@@ -37,6 +37,7 @@ interface SessionsViewProps {
 }
 
 type StatusFilterId = 'all' | 'running' | 'waiting' | 'ended';
+type SessionSortId = 'recent' | 'tokens' | 'cost';
 
 export function renderStatusText(status: SessionStatusResult) {
   const inferred = status.source === 'inferred';
@@ -93,6 +94,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   now,
 }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>('all');
+  const [sortBy, setSortBy] = useState<SessionSortId>('recent');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyTimer = useRef<number | null>(null);
 
@@ -104,6 +106,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
   useEffect(() => {
     setStatusFilter('all');
+    setSortBy('recent');
   }, [period, deviceId]);
 
   const handleCopy = async (text: string, keyId: string) => {
@@ -165,6 +168,21 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
   const { counts, indices: filteredIndices } = MonitorModel.filterSessionStatuses(allStatuses, statusFilter);
   const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
+
+  const sortedIndices = useMemo(() => {
+    if (sortBy === 'recent') return filteredIndices;
+    return [...filteredIndices].sort((a, b) => {
+      const rowA = allRows[a];
+      const rowB = allRows[b];
+      if (sortBy === 'tokens') {
+        const diff = MonitorModel.count(rowB.totalTokens) - MonitorModel.count(rowA.totalTokens);
+        return diff !== 0 ? diff : a - b;
+      }
+      const costA = MonitorModel.numeric(rowA.costUsd) ?? -1;
+      const costB = MonitorModel.numeric(rowB.costUsd) ?? -1;
+      return costB !== costA ? costB - costA : a - b;
+    });
+  }, [filteredIndices, allRows, sortBy]);
 
   return (
     <div className="space-y-3.5">
@@ -295,13 +313,45 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               <span className="text-slate-600">·</span>
               <span className="text-amber-300 font-medium">等待 {waitingCount}</span>
             </div>
-            <span className="text-[11px] text-slate-400">
-              前台实时跟踪 · 以采集端上报为准
-            </span>
+
+            <div
+              role="group"
+              aria-label="会话排序方式"
+              className="inline-flex items-center rounded-xl glass-inset p-0.5"
+            >
+              {(
+                [
+                  ['recent', '最近'],
+                  ['tokens', '用量'],
+                  ['cost', '费用'],
+                ] as Array<[SessionSortId, string]>
+              ).map(([sId, sLabel]) => {
+                const active = sortBy === sId;
+                return (
+                  <button
+                    key={sId}
+                    type="button"
+                    data-session-sort={sId}
+                    aria-pressed={active}
+                    onClick={() => {
+                      setSortBy(sId);
+                      onResetLimit?.();
+                    }}
+                    className={`min-h-[28px] px-2.5 rounded-lg text-[10px] font-semibold transition-colors ${
+                      active
+                        ? 'bg-sky-400/20 text-sky-200 border border-sky-400/35'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {sLabel}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-2.5">
-            {filteredIndices.slice(0, sessionLimit).map((rowIndex) => {
+            {sortedIndices.slice(0, sessionLimit).map((rowIndex) => {
               const row = allRows[rowIndex];
               const status = allStatuses[rowIndex];
               const encodedKey = encodeURIComponent(row.key);
@@ -310,6 +360,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const modelNames = MonitorModel.sessionModelLabel(row);
               const latestModel = MonitorModel.sessionLatestModel(row);
               const isCopied = copiedKey === row.key;
+              const supportsConversation =
+                row.client === 'codex' || row.client === 'antigravity';
 
               const inTok = MonitorModel.count(row.inputTokens);
               const outTok = MonitorModel.count(row.outputTokens);
@@ -340,6 +392,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                           ·
                         </span>
                         {renderStatusText(status)}
+                        {supportsConversation && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-sky-500/12 border border-sky-400/25 text-[10px] font-medium text-sky-300">
+                            对话
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-baseline gap-1.5 shrink-0 font-mono-tabular">
@@ -391,6 +448,33 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       />
                     </div>
                   </button>
+
+                  {!isOpen && (
+                    <div className="px-4 py-2 border-t border-white/6 bg-white/[0.01] flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onToggleOpen(encodedKey)}
+                        className="min-h-[30px] text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                      >
+                        展开用量速览
+                      </button>
+                      <button
+                        type="button"
+                        data-session-quick-detail={encodeURIComponent(row.detailKey || row.key)}
+                        onClick={() => onOpenSessionDetail(row.detailKey || row.key)}
+                        className="min-h-[30px] px-2.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/18 border border-sky-400/20 text-[11px] font-semibold text-sky-300 inline-flex items-center gap-1 transition-colors"
+                      >
+                        <span>
+                          {supportsConversation
+                            ? '对话与详情'
+                            : row.groupRows
+                            ? '主会话详情'
+                            : '查看详情'}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
                   {isOpen && (
                     <div className="px-4 pb-4 pt-2.5 border-t border-white/8">

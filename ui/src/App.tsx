@@ -585,6 +585,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                 notifications={notifications}
                 monitorPending={monitorPending}
                 connected={Boolean(connection)}
+                compact={true}
                 onToggleMonitor={handleToggleMonitor}
                 onTestNotification={handleTestNotification}
                 onOpenSystemSettings={handleOpenNotificationSettings}

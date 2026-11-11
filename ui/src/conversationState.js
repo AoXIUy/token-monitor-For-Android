@@ -55,3 +55,186 @@ export function conversationError(error) {
   };
   return labels[error] || '对话读取失败，请检查网络并重试。';
 }
+
+/** @param {Pick<import('./types/monitor').SessionConversationMessage, 'role' | 'kind'>} message */
+export function isConversationEvent(message) {
+  if (!message) return true;
+  return message.role === 'tool' || message.role === 'system' || message.kind !== 'message';
+}
+
+/** @param {string} id */
+function baseMessageId(id) {
+  const text = String(id || '');
+  const dot = text.lastIndexOf('.');
+  return dot > 0 && /^\d+$/.test(text.slice(dot + 1)) ? text.slice(0, dot) : text;
+}
+
+/** @param {import('./types/monitor').SessionConversationMessage[]} messages
+ * @returns {import('./types/monitor').SessionConversationItem[]} */
+export function mergeConversationContinuations(messages) {
+  /** @type {import('./types/monitor').SessionConversationItem[]} */
+  const merged = [];
+  for (const item of messages || []) {
+    if (!item) continue;
+    const prev = merged[merged.length - 1];
+    if (
+      item.continued === true &&
+      prev &&
+      prev.role === item.role &&
+      prev.kind === item.kind &&
+      baseMessageId(prev.id) === baseMessageId(item.id)
+    ) {
+      prev.text = `${prev.text}${item.text}`;
+      prev.parts += 1;
+      continue;
+    }
+    merged.push({ ...item, parts: 1 });
+  }
+  return merged;
+}
+
+/** @param {string} text */
+function previewText(text, maxLength = 72) {
+  const collapsed = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!collapsed) return '（空内容）';
+  return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength)}…` : collapsed;
+}
+
+/** @param {import('./types/monitor').SessionConversationMessage} message
+ * @returns {import('./types/monitor').SessionConversationItemDescriptor} */
+export function describeConversationItem(message) {
+  const isEvent = isConversationEvent(message);
+  const preview = previewText(message?.text || '');
+  if (!isEvent) {
+    const isUser = message.role === 'user';
+    return {
+      isEvent: false,
+      category: isUser ? 'user' : 'assistant',
+      badge: isUser ? '你' : '助手',
+      title: isUser ? '你' : '助手',
+      detail: '',
+      preview,
+    };
+  }
+  const kind = String(message?.kind || '').trim();
+  if (kind === 'reasoning_summary') {
+    return {
+      isEvent: true,
+      category: 'thinking',
+      badge: '思考摘要',
+      title: '已记录的思考摘要',
+      detail: 'reasoning_summary',
+      preview,
+    };
+  }
+  if (message?.role === 'system' || kind === 'context' || kind === 'compaction') {
+    const isCompaction = kind === 'compaction';
+    return {
+      isEvent: true,
+      category: 'context',
+      badge: isCompaction ? '上下文压缩' : '系统上下文',
+      title: isCompaction ? '上下文压缩摘要' : '上下文 / 事件',
+      detail: kind || 'system',
+      preview,
+    };
+  }
+  if (message?.role === 'tool') {
+    const isResult = kind === 'tool_result';
+    return {
+      isEvent: true,
+      category: isResult ? 'tool_result' : 'tool_call',
+      badge: isResult ? '工具输出' : '工具调用',
+      title: isResult ? '工具输出 · tool_result' : `工具调用 · ${kind || 'tool'}`,
+      detail: kind || 'tool',
+      preview,
+    };
+  }
+  return {
+    isEvent: true,
+    category: 'event',
+    badge: '事件记录',
+    title: `上下文 / 事件 · ${kind || message?.role || 'event'}`,
+    detail: kind || message?.role || 'event',
+    preview,
+  };
+}
+
+/** @param {import('./types/monitor').SessionConversationEventCounts} counts */
+function formatEventSummaryLabel(counts) {
+  const parts = [];
+  if (counts.thinking > 0) parts.push(`思考 ${counts.thinking}`);
+  if (counts.tool > 0) parts.push(`工具 ${counts.tool}`);
+  if (counts.context > 0) parts.push(`上下文 ${counts.context}`);
+  return parts.length ? parts.join(' · ') : `事件 ${counts.total}`;
+}
+
+/** @param {import('./types/monitor').SessionConversationMessage[]} messages
+ * @param {string} [query]
+ * @returns {import('./types/monitor').SessionConversationGroupedView} */
+export function groupConversationBlocks(messages, query = '') {
+  const merged = mergeConversationContinuations(messages);
+  const needle = String(query || '').trim().toLocaleLowerCase();
+  let dialogueCount = 0;
+  let eventCount = 0;
+  let matchedDialogueCount = 0;
+  let matchedEventCount = 0;
+  /** @type {import('./types/monitor').SessionConversationBlock[]} */
+  const blocks = [];
+
+  for (const item of merged) {
+    const meta = describeConversationItem(item);
+    if (meta.isEvent) eventCount += 1;
+    else dialogueCount += 1;
+
+    if (needle) {
+      const haystack = `${item.text}\n${item.kind}\n${meta.badge}\n${meta.title}\n${item.role}`.toLocaleLowerCase();
+      if (!haystack.includes(needle)) continue;
+    }
+
+    if (meta.isEvent) {
+      matchedEventCount += 1;
+      const last = blocks[blocks.length - 1];
+      const isThinking = meta.category === 'thinking';
+      const isTool = meta.category === 'tool_call' || meta.category === 'tool_result';
+      if (last && last.type === 'events') {
+        last.events.push({ item, meta });
+        last.counts.total += 1;
+        if (isThinking) last.counts.thinking += 1;
+        else if (isTool) last.counts.tool += 1;
+        else last.counts.context += 1;
+        last.summaryLabel = formatEventSummaryLabel(last.counts);
+      } else {
+        /** @type {import('./types/monitor').SessionConversationEventCounts} */
+        const counts = {
+          total: 1,
+          thinking: isThinking ? 1 : 0,
+          tool: isTool ? 1 : 0,
+          context: !isThinking && !isTool ? 1 : 0,
+        };
+        blocks.push({
+          type: 'events',
+          id: `events-${item.id}`,
+          events: [{ item, meta }],
+          counts,
+          summaryLabel: formatEventSummaryLabel(counts),
+        });
+      }
+    } else {
+      matchedDialogueCount += 1;
+      blocks.push({
+        type: 'dialogue',
+        id: `dialogue-${item.id}`,
+        item,
+        meta,
+      });
+    }
+  }
+
+  return {
+    blocks,
+    dialogueCount,
+    eventCount,
+    matchedDialogueCount,
+    matchedEventCount,
+  };
+}
