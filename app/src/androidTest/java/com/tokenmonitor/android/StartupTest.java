@@ -75,6 +75,10 @@ public final class StartupTest {
     }
 
     private String evaluate(String script) throws Exception {
+        return evaluate(script, 5000);
+    }
+
+    private String evaluate(String script, long timeoutMs) throws Exception {
         AtomicReference<String> result = new AtomicReference<>();
         CountDownLatch callback = new CountDownLatch(1);
         scenario.onActivity(activity -> {
@@ -82,18 +86,20 @@ public final class StartupTest {
             assertNotNull("Activity must contain its WebView", view);
             view.evaluateJavascript(script, value -> { result.set(value); callback.countDown(); });
         });
-        assertTrue("WebView JS callback timed out", callback.await(5, TimeUnit.SECONDS));
+        assertTrue("WebView JS callback timed out", callback.await(timeoutMs, TimeUnit.MILLISECONDS));
         return result.get();
     }
 
     private void awaitScript(String expression) throws Exception {
-        long deadline = System.currentTimeMillis() + 20000;
+        long deadline = android.os.SystemClock.elapsedRealtime() + 20000;
         String last;
         do {
-            last = evaluate("Boolean(" + expression + ")");
+            // Page readiness owns one 20-second budget, including a cold renderer's callback.
+            last = evaluate("Boolean(" + expression + ")",
+                    Math.max(1, deadline - android.os.SystemClock.elapsedRealtime()));
             if ("true".equals(last)) return;
             Thread.sleep(100);
-        } while (System.currentTimeMillis() < deadline);
+        } while (android.os.SystemClock.elapsedRealtime() < deadline);
         fail("WebView did not reach expected state: " + expression + "; result=" + last);
     }
 
@@ -638,6 +644,32 @@ public final class StartupTest {
         String expired = new org.json.JSONObject().put("type", "stats").put("data", stats).put("fetchedAt", now - 30000).toString();
         evaluate("window.receiveNative(" + org.json.JSONObject.quote(expired) + ")");
         awaitScript("document.querySelectorAll('[data-session-state=\"unknown\"]').length === 3 && document.querySelector('[data-session-status-filter=\"ended\"]').textContent.replace(/\\s/g,'') === '已结束0'");
+    }
+
+    @Test public void overviewDevicesKeepUnavailablePeriodsSeparateFromZero() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
+        String now = java.time.Instant.now().toString();
+        stats.getJSONArray("devices")
+                .put(new org.json.JSONObject().put("deviceId", "zero").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("totalTokens", 0).put("costUsd", 0))))
+                .put(new org.json.JSONObject().put("deviceId", "missing").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject()))
+                .put(new org.json.JSONObject().put("deviceId", "expired").put("updatedAt", now)
+                        .put("periods", stats.getJSONObject("periods"))
+                        .put("periodWindows", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("endsAt", java.time.Instant.now().minusSeconds(60).toString()))));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        awaitScript("document.querySelectorAll('[data-overview-device]').length === 4");
+        assertEquals("true", evaluate("document.querySelector('[data-overview-device=\"missing\"]').textContent.includes('暂无读数') && document.querySelector('[data-overview-device=\"missing\"]').textContent.includes('—')"));
+        assertEquals("true", evaluate("document.querySelector('[data-overview-device=\"expired\"]').textContent.includes('周期已结束') && document.querySelector('[data-overview-device=\"expired\"]').textContent.includes('—')"));
+        assertEquals("true", evaluate("document.querySelector('[data-overview-device=\"zero\"]').textContent.includes('$0.00') && !document.querySelector('[data-overview-device=\"zero\"]').textContent.includes('—')"));
+        evaluate("document.querySelector('[data-overview-device=\"zero\"]').click()");
+        awaitScript("document.querySelector('[data-clear-device]') && document.querySelector('.token-total').textContent.trim() === '0'");
+        evaluate("document.querySelector('[data-clear-device]').click()");
+        awaitScript("document.querySelectorAll('[data-overview-device]').length === 4 && document.querySelector('.token-total').textContent.trim() === window.MonitorModel.compact(1234)");
     }
 
     @Test public void dailyTrendKeepsRealDatesAndSelectionAcrossRefresh() throws Exception {

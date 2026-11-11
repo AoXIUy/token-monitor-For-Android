@@ -121,7 +121,12 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   }, []);
 
   useEffect(() => {
-    if (!stats || !foreground || document.hidden || !['sessions', 'sessionDetail'].includes(page))
+    if (
+      !stats ||
+      !foreground ||
+      document.hidden ||
+      !['overview', 'sessions', 'sessionDetail'].includes(page)
+    )
       return;
     const now = Date.now();
     const detail =
@@ -133,7 +138,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
         ? detail
           ? [detail.row]
           : []
-        : MonitorModel.sessions(selected.period, search);
+        : MonitorModel.sessions(selected.period, page === 'overview' ? '' : search);
     let nearest = Infinity;
     for (const row of rows) {
       const reading = MonitorModel.sessionStatus(row, {
@@ -662,6 +667,28 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                   deviceId={device}
                   breakdownKind={breakdownKind}
                   onBreakdownChange={setBreakdownKind}
+                  statusHealthy={statusHealthy}
+                  foreground={foreground}
+                  fetchedAt={fetchedAt}
+                  now={nowTick}
+                  onSelectDevice={(devId) => {
+                    setDevice(devId);
+                    setOpenSessions(new Set());
+                    window.scrollTo(0, 0);
+                  }}
+                  onNavigate={(targetPage) => {
+                    if (targetPage === 'sessions') {
+                      setSearch('');
+                      setSessionTool('');
+                    }
+                    setPage(targetPage);
+                  }}
+                  onOpenSessionDetail={openSession}
+                  onSelectToolSessions={(toolId) => {
+                    setSearch('');
+                    setPage('sessions');
+                    setSessionTool(toolId);
+                  }}
                 />
               )}
 
