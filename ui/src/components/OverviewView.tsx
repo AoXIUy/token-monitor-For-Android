@@ -70,10 +70,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const [breakdownSort, setBreakdownSort] = useState<BreakdownSortBy>('tokens');
   const [breakdownSearch, setBreakdownSearch] = useState('');
   const [showAllBreakdown, setShowAllBreakdown] = useState(false);
+  const [showAllLimits, setShowAllLimits] = useState(false);
 
   useEffect(() => {
     setShowAllBreakdown(false);
   }, [period, deviceId, breakdownKind]);
+
+  useEffect(() => {
+    setShowAllLimits(false);
+  }, [deviceId]);
 
   const p = selected.period;
 
@@ -115,19 +120,71 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const limitsPulse = useMemo(() => {
     const providers = selected.providers || [];
     if (!providers.length) return null;
+    const hasValidReading = (val?: string | null) =>
+      Boolean(val) && val !== '暂无读数' && !String(val).startsWith('—');
+
     const items = providers.map((provider, index) => {
       const account = MonitorModel.limitAccount(provider, stats, deviceId);
       const windows = MonitorModel.limitWindows(provider);
       const quotas = windows.map((win) => ({ win, q: MonitorModel.quota(provider, win) }));
-      const metered = quotas.filter((item) => item.q.percent !== null);
-      const primary =
-        metered.sort((a, b) => {
+      const validQuotas = quotas.filter(
+        (item) => item.q.percent !== null || hasValidReading(item.q.value)
+      );
+      const metered = validQuotas
+        .filter((item) => item.q.percent !== null)
+        .slice()
+        .sort((a, b) => {
           const usedA = a.q.remaining ? 100 - (a.q.percent ?? 100) : (a.q.percent ?? 0);
           const usedB = b.q.remaining ? 100 - (b.q.percent ?? 100) : (b.q.percent ?? 0);
           return usedB - usedA;
-        })[0] ||
-        quotas[0] ||
-        null;
+        });
+      const spend = MonitorModel.limitSpend(provider).filter((row) => hasValidReading(row.value));
+      const balanceDetails = MonitorModel.limitBalanceDetails(provider).filter((row) =>
+        hasValidReading(row.value)
+      );
+
+      const primary =
+        metered[0] ||
+        validQuotas[0] ||
+        (spend[0]
+          ? {
+              win: null,
+              q: {
+                label: `${spend[0].label}消费`,
+                value: spend[0].value,
+                percent: null,
+                remaining: false,
+              },
+            }
+          : null) ||
+        (balanceDetails[0]
+          ? {
+              win: null,
+              q: {
+                label: balanceDetails[0].label,
+                value: balanceDetails[0].value,
+                percent: null,
+                remaining: true,
+              },
+            }
+          : null);
+
+      const secondaryQuotas = validQuotas
+        .filter((item) => item !== primary)
+        .slice(0, 2)
+        .map((item) => item.q);
+
+      const dataTier =
+        metered.length > 0
+          ? 3
+          : validQuotas.length > 0
+          ? 2
+          : spend.length > 0 || balanceDetails.length > 0
+          ? 1
+          : 0;
+      const hasCollectedData = dataTier > 0;
+      const isFresh = (!provider.status || provider.status === 'ok') && !provider.stale;
+
       const usedScore =
         primary && primary.q.percent !== null
           ? primary.q.remaining
@@ -136,15 +193,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           : -1;
       const isAbnormal = Boolean(provider.stale || (provider.status && provider.status !== 'ok'));
       const isWarn =
-        isAbnormal ||
-        (primary?.q.percent !== null &&
-          primary !== null &&
-          (primary.q.remaining ? primary.q.percent < 15 : primary.q.percent > 85));
+        hasCollectedData &&
+        primary !== null &&
+        primary.q.percent !== null &&
+        (primary.q.remaining ? primary.q.percent < 15 : primary.q.percent > 85);
+
       return {
         key: `${account.key}:${index}`,
         provider,
         account,
         primary,
+        secondaryQuotas,
+        dataTier,
+        hasCollectedData,
+        isFresh,
         usedScore,
         isAbnormal,
         isWarn,
@@ -152,21 +214,34 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       };
     });
 
-    const warnCount = items.filter((item) => item.isWarn).length;
-    const topItems = items
-      .slice()
-      .sort(
-        (a, b) =>
-          Number(b.isWarn) - Number(a.isWarn) ||
-          b.usedScore - a.usedScore ||
-          a.index - b.index
-      )
-      .slice(0, 3);
+    const sortedItems = items.slice().sort((a, b) => {
+      if (a.hasCollectedData !== b.hasCollectedData) {
+        return Number(b.hasCollectedData) - Number(a.hasCollectedData);
+      }
+      if (a.isFresh !== b.isFresh) {
+        return Number(b.isFresh) - Number(a.isFresh);
+      }
+      if (a.dataTier !== b.dataTier) {
+        return b.dataTier - a.dataTier;
+      }
+      if (a.isWarn !== b.isWarn) {
+        return Number(b.isWarn) - Number(a.isWarn);
+      }
+      if (b.usedScore !== a.usedScore) {
+        return b.usedScore - a.usedScore;
+      }
+      return a.index - b.index;
+    });
+
+    const collectedItems = sortedItems.filter((item) => item.hasCollectedData);
+    const warnCount = collectedItems.filter((item) => item.isWarn).length;
 
     return {
       totalCount: items.length,
+      collectedCount: collectedItems.length,
       warnCount,
-      topItems,
+      collectedItems,
+      fallbackItems: sortedItems.slice(0, 3),
     };
   }, [selected.providers, stats, deviceId]);
 
@@ -654,13 +729,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                   <Gauge className="w-4 h-4 text-sky-400 shrink-0" />
                   <h3 className="text-xs font-semibold text-slate-100 truncate">核心额度速览</h3>
-                  {limitsPulse.warnCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/12 border border-amber-400/25 text-[10px] font-mono-tabular text-amber-300">
-                      {limitsPulse.warnCount} 项需关注
-                    </span>
+                  {limitsPulse.collectedCount > 0 ? (
+                    limitsPulse.warnCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/12 border border-amber-400/25 text-[10px] font-mono-tabular text-amber-300">
+                        已采集 {limitsPulse.collectedCount} · {limitsPulse.warnCount} 项预警
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/20 text-[10px] font-mono-tabular text-emerald-300">
+                        已采集 {limitsPulse.collectedCount} 个账户
+                      </span>
+                    )
                   ) : (
-                    <span className="text-[10px] font-mono-tabular text-emerald-300/90">
-                      {limitsPulse.totalCount} 个账户
+                    <span className="text-[10px] font-mono-tabular text-slate-400">
+                      共 {limitsPulse.totalCount} 个账户
                     </span>
                   )}
                 </div>
@@ -676,69 +757,132 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 )}
               </div>
 
-              <div className="space-y-2">
-                {limitsPulse.topItems.map(({ key, provider, account, primary, isWarn, isAbnormal }) => {
-                  const tone = clientTone(provider.provider);
-                  const displayTitle = account.productLabel || providerName(provider.provider);
-                  const subLabel =
-                    provider.accountName ||
-                    provider.accountEmail ||
-                    provider.planLabel ||
-                    account.regionLabel ||
-                    '';
-                  const q = primary?.q || null;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      data-overview-limit={account.key}
-                      onClick={() => onNavigate?.('limits')}
-                      className="w-full text-left px-3 py-2.5 rounded-2xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.06] transition-colors space-y-1.5"
-                    >
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <i className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
-                          <span className="font-medium text-slate-100 truncate">
-                            {displayTitle}
-                          </span>
-                          {subLabel && (
-                            <span className="text-[10px] text-slate-400 truncate">
-                              · {subLabel}
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className={`text-[11px] font-mono-tabular font-semibold shrink-0 ${
-                            isWarn ? 'text-amber-300' : 'text-sky-300'
-                          }`}
-                        >
-                          {isAbnormal && !q
-                            ? '状态异常'
-                            : q
-                            ? `${q.label}: ${q.remaining ? `剩余 ${q.value}` : q.value}`
-                            : '查看详情'}
-                        </span>
-                      </div>
+              {limitsPulse.collectedCount === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('limits')}
+                  className="w-full text-left px-3 py-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] text-xs text-slate-400 flex items-center justify-between gap-2 transition-colors"
+                >
+                  <span>当前尚无已采集到有效读数的额度账户，点击查看账户配置状态</span>
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {(showAllLimits
+                      ? limitsPulse.collectedItems
+                      : limitsPulse.collectedItems.slice(0, 4)
+                    ).map(
+                      ({
+                        key,
+                        provider,
+                        account,
+                        primary,
+                        secondaryQuotas,
+                        isWarn,
+                        isFresh,
+                      }) => {
+                        const tone = clientTone(provider.provider);
+                        const displayTitle = account.productLabel || providerName(provider.provider);
+                        const subLabel =
+                          provider.accountName ||
+                          provider.accountEmail ||
+                          provider.planLabel ||
+                          account.regionLabel ||
+                          '';
+                        const q = primary?.q || null;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            data-overview-limit={account.key}
+                            onClick={() => onNavigate?.('limits')}
+                            className="w-full text-left px-3 py-2.5 rounded-2xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.06] transition-colors space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <i
+                                  className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`}
+                                  aria-hidden="true"
+                                />
+                                <span className="font-medium text-slate-100 truncate">
+                                  {displayTitle}
+                                </span>
+                                {subLabel && (
+                                  <span className="text-[10px] text-slate-400 truncate">
+                                    · {subLabel}
+                                  </span>
+                                )}
+                                {!isFresh && (
+                                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500/10 border border-amber-400/20 text-[9px] text-amber-300 shrink-0">
+                                    历史读数
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={`text-[11px] font-mono-tabular font-semibold shrink-0 ${
+                                  isWarn ? 'text-amber-300' : 'text-sky-300'
+                                }`}
+                              >
+                                {q
+                                  ? `${q.label}: ${q.remaining ? `剩余 ${q.value}` : q.value}`
+                                  : '查看详情'}
+                              </span>
+                            </div>
 
-                      {q && q.percent !== null && (
-                        <div
-                          className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden"
-                          aria-hidden="true"
-                        >
-                          <div
-                            style={{ width: `${Math.max(1.5, Math.min(100, q.percent))}%` }}
-                            className={`h-full rounded-full ${
-                              isWarn
-                                ? 'bg-gradient-to-r from-amber-400 to-rose-400'
-                                : 'bg-gradient-to-r from-sky-400 to-emerald-400'
-                            }`}
-                          />
-                        </div>
-                      )}
+                            {q && q.percent !== null && (
+                              <div
+                                className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden"
+                                aria-hidden="true"
+                              >
+                                <div
+                                  style={{ width: `${Math.max(1.5, Math.min(100, q.percent))}%` }}
+                                  className={`h-full rounded-full ${
+                                    isWarn
+                                      ? 'bg-gradient-to-r from-amber-400 to-rose-400'
+                                      : 'bg-gradient-to-r from-sky-400 to-emerald-400'
+                                  }`}
+                                />
+                              </div>
+                            )}
+
+                            {(q?.detail || secondaryQuotas.length > 0) && (
+                              <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-mono-tabular pt-0.5">
+                                <span className="truncate">{q?.detail || ''}</span>
+                                {secondaryQuotas.length > 0 && (
+                                  <span className="truncate text-right text-slate-300/85">
+                                    {secondaryQuotas
+                                      .map(
+                                        (sq) =>
+                                          `${sq.label}: ${
+                                            sq.remaining ? `剩余 ${sq.value}` : sq.value
+                                          }`
+                                      )
+                                      .join(' · ')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+
+                  {limitsPulse.collectedCount > 4 && (
+                    <button
+                      type="button"
+                      data-overview-limits-expand="true"
+                      onClick={() => setShowAllLimits((prev) => !prev)}
+                      className="w-full py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] text-[11px] font-medium text-sky-300 transition-colors"
+                    >
+                      {showAllLimits
+                        ? '收起至前 4 项已采集账户'
+                        : `展开全部已采集账户 (${limitsPulse.collectedCount})`}
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                </>
+              )}
             </section>
           )}
 
