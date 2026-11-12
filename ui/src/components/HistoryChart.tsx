@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Activity } from 'lucide-react';
 import type { DailyHistoryRow } from '../types/monitor';
 import { MonitorModel } from '../model/monitorModel';
@@ -17,6 +17,7 @@ export function HistoryChart({
   embedded = false,
 }: HistoryChartProps) {
   const [mode, setMode] = useState<'daily' | 'cumulative'>('daily');
+  const gradientId = useId().replace(/:/g, '');
   if (!trend.length) return null;
   let cumulative = 0;
   const values = trend.map((row) => {
@@ -88,7 +89,7 @@ export function HistoryChart({
           .join('；')}`}
       >
         <defs>
-          <linearGradient id="history-fill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`history-fill-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="currentColor" stopOpacity="0.32" />
             <stop offset="100%" stopColor="currentColor" stopOpacity="0.0" />
           </linearGradient>
@@ -100,7 +101,7 @@ export function HistoryChart({
           strokeOpacity="0.07"
           strokeDasharray="3 5"
         />
-        <path d={area} fill="url(#history-fill)" />
+        <path d={area} fill={`url(#history-fill-${gradientId})`} />
         {activePoint && (
           <line
             x1={activePoint.x}
@@ -122,11 +123,22 @@ export function HistoryChart({
         />
         {points.map((point, index) => {
           const isSelected = index === resolvedIndex;
+          const row = trend[index];
           return (
             <g
-              key={trend[index].date}
-              onClick={onSelectDate ? () => onSelectDate(trend[index].date) : undefined}
-              className={onSelectDate ? 'cursor-pointer' : undefined}
+              key={row.date}
+              role={onSelectDate ? 'button' : undefined}
+              tabIndex={onSelectDate ? 0 : undefined}
+              aria-label={onSelectDate ? `${row.date} · ${MonitorModel.compact(values[index])} tokens` : undefined}
+              aria-pressed={onSelectDate ? isSelected : undefined}
+              onClick={onSelectDate ? () => onSelectDate(row.date) : undefined}
+              onKeyDown={onSelectDate ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectDate(row.date);
+                }
+              } : undefined}
+              className={onSelectDate ? 'cursor-pointer focus:outline-none' : undefined}
             >
               {onSelectDate && (
                 <circle cx={point.x} cy={point.y} r="10" fill="transparent" />

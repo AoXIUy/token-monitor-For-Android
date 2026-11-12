@@ -58,8 +58,9 @@ public final class StartupTest {
     }
 
     private void clearConnection() {
-        InstrumentationRegistry.getInstrumentation().getTargetContext()
-                .getSharedPreferences("hub-connection", 0).edit().clear().commit();
+        android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        context.getSharedPreferences("hub-connection", 0).edit().clear().commit();
+        context.getSharedPreferences("limits-prefs", 0).edit().clear().commit();
     }
 
     private static WebView web(View view) {
@@ -1012,6 +1013,52 @@ public final class StartupTest {
                 responder.join(5000);
             }
         }
+    }
+
+    @Test public void auditedUiStateTransitionsAndNativeLimitsPreferences() throws Exception {
+        awaitConnectionPage();
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        evaluate("window.receiveNative({type:'status',state:'online'})");
+        evaluate("window.receiveNative({type:'stats',fetchedAt:Date.now(),data:" + testStats(false) + "})");
+        awaitScript("document.getElementById('device-picker-trigger')");
+
+        // 1. SessionsView must survive toggling to allTime and back without hook crashes.
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelector('[data-session=\"codex%3Atest\"]')");
+        evaluate("document.querySelector('[data-period=\"allTime\"]').click()");
+        awaitScript("document.body.innerText.includes('累计会话明细不通过 Hub 同步')");
+        evaluate("document.querySelector('[data-period=\"today\"]').click()");
+        awaitScript("document.querySelector('[data-session=\"codex%3Atest\"]')");
+
+        // 2. DevicePickerDialog opened before openSession must not reopen when navigating back.
+        evaluate("document.getElementById('device-picker-trigger').click()");
+        awaitScript("document.querySelector('#device-picker-dialog[open]')");
+        evaluate("window.receiveNative({type:'openSession',key:'codex:test'})");
+        awaitScript("document.getElementById('page-title').textContent === '会话详情'");
+        assertEquals("true", evaluate("!document.querySelector('#device-picker-dialog[open]')"));
+        assertEquals("true", evaluate("window.handleBackNavigation()"));
+        awaitScript("document.getElementById('page-title').textContent === '会话与状态'");
+        assertEquals("true", evaluate("!document.querySelector('#device-picker-dialog[open]')"));
+
+        // 3. LimitsView preferences persist via native SharedPreferences across Activity recreation.
+        String statsWithLimits = new org.json.JSONObject(testStats(false))
+                .put("limits", new org.json.JSONObject().put("providers", new org.json.JSONArray().put(
+                        new org.json.JSONObject().put("provider", "codex").put("status", "ok")
+                                .put("windows", new org.json.JSONArray().put(
+                                        new org.json.JSONObject().put("kind", "session").put("usedPercent", 20))))))
+                .toString();
+        evaluate("window.receiveNative({type:'stats',fetchedAt:Date.now(),data:" + statsWithLimits + "})");
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelector('[data-limits-mode-toggle]')");
+        evaluate("document.querySelector('[data-limits-mode-toggle]').click()");
+        awaitScript("document.querySelector('[data-limits-mode-toggle]').getAttribute('aria-pressed') === 'true'");
+        scenario.recreate();
+        awaitConnectionPage();
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        evaluate("window.receiveNative({type:'stats',fetchedAt:Date.now(),data:" + statsWithLimits + "})");
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelector('[data-limits-mode-toggle]')");
+        assertEquals("true", evaluate("document.querySelector('[data-limits-mode-toggle]').getAttribute('aria-pressed') === 'true'"));
     }
 
     private static String testStats(boolean completed) throws Exception {

@@ -67,7 +67,6 @@ export function clientTone(client?: string): {
   text: string;
   dot: string;
   bar: string;
-  tint: string;
 } {
   switch (client) {
     case 'claude':
@@ -75,28 +74,24 @@ export function clientTone(client?: string): {
         text: 'text-violet-300',
         dot: 'bg-violet-400',
         bar: 'from-violet-400 to-fuchsia-400',
-        tint: 'bg-violet-500/12 border-violet-400/25 text-violet-300',
       };
     case 'cursor':
       return {
         text: 'text-sky-300',
         dot: 'bg-sky-400',
         bar: 'from-sky-400 to-cyan-300',
-        tint: 'bg-sky-500/12 border-sky-400/25 text-sky-300',
       };
     case 'codex':
       return {
         text: 'text-emerald-300',
         dot: 'bg-emerald-400',
         bar: 'from-emerald-400 to-teal-300',
-        tint: 'bg-emerald-500/12 border-emerald-400/25 text-emerald-300',
       };
     case 'antigravity':
       return {
         text: 'text-cyan-300',
         dot: 'bg-cyan-400',
         bar: 'from-cyan-400 to-sky-400',
-        tint: 'bg-cyan-500/14 border-cyan-400/30 text-cyan-200',
       };
     case 'copilot':
     case 'zed':
@@ -105,7 +100,6 @@ export function clientTone(client?: string): {
         text: 'text-indigo-300',
         dot: 'bg-indigo-400',
         bar: 'from-indigo-400 to-blue-400',
-        tint: 'bg-indigo-500/12 border-indigo-400/25 text-indigo-300',
       };
     case 'deepseek':
     case 'qoder':
@@ -114,7 +108,6 @@ export function clientTone(client?: string): {
         text: 'text-teal-300',
         dot: 'bg-teal-400',
         bar: 'from-teal-400 to-emerald-400',
-        tint: 'bg-teal-500/12 border-teal-400/25 text-teal-300',
       };
     case 'openrouter':
     case 'alibaba':
@@ -123,16 +116,15 @@ export function clientTone(client?: string): {
         text: 'text-amber-300',
         dot: 'bg-amber-400',
         bar: 'from-amber-400 to-orange-400',
-        tint: 'bg-amber-500/12 border-amber-400/25 text-amber-300',
       };
     case 'minimax':
+    case 'mcode':
     case 'kimi':
     case 'trae':
       return {
         text: 'text-rose-300',
         dot: 'bg-rose-400',
         bar: 'from-rose-400 to-pink-400',
-        tint: 'bg-rose-500/12 border-rose-400/25 text-rose-300',
       };
     case 'zai':
     case 'zaiteam':
@@ -143,7 +135,6 @@ export function clientTone(client?: string): {
         text: 'text-blue-300',
         dot: 'bg-blue-400',
         bar: 'from-blue-400 to-cyan-400',
-        tint: 'bg-blue-500/12 border-blue-400/25 text-blue-300',
       };
     case 'kiro':
     case 'cline':
@@ -154,14 +145,12 @@ export function clientTone(client?: string): {
         text: 'text-fuchsia-300',
         dot: 'bg-fuchsia-400',
         bar: 'from-fuchsia-400 to-violet-400',
-        tint: 'bg-fuchsia-500/12 border-fuchsia-400/25 text-fuchsia-300',
       };
     default:
       return {
         text: 'text-slate-300',
         dot: 'bg-slate-400',
         bar: 'from-sky-400 to-emerald-400',
-        tint: 'bg-white/6 border-white/12 text-slate-300',
       };
   }
 }

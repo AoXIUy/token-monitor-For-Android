@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
-import type { MonitorState } from '../types/monitor';
+import type { LimitsPrefs, MonitorState } from '../types/monitor';
 import { createDemoPayload } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
+import { loadBrowserLimitsPrefs, saveBrowserLimitsPrefs, sanitizeLimitsPrefs } from '../utils/limitsPrefs';
 
 export function useNativeMonitor() {
   const [state, setState] = useState<MonitorState>(createInitialState);
@@ -29,6 +30,16 @@ export function useNativeMonitor() {
     if (window.HubNative?.conversation) window.HubNative.conversation(deviceId, key, cursor, query.requestId);
     else update(previous => receiveNativeMessage(previous, { type: 'conversation', ...query,
       page: { error: window.HubNative ? 'unsupported_app' : 'preview_unavailable' } }));
+  }, [update]);
+
+  const saveLimitsPrefs = useCallback((prefs: LimitsPrefs) => {
+    const clean = sanitizeLimitsPrefs(prefs);
+    update(previous => ({ ...previous, limitsPrefs: clean }));
+    if (window.HubNative?.saveLimitsPrefs) {
+      window.HubNative.saveLimitsPrefs(JSON.stringify(clean));
+    } else {
+      saveBrowserLimitsPrefs(clean);
+    }
   }, [update]);
 
   const loadBrowserDemo = useCallback((customUrl?: string, allowHttpFlag?: boolean) => {
@@ -88,7 +99,9 @@ export function useNativeMonitor() {
     if (window.HubNative?.ready) {
       window.HubNative.ready();
     } else {
+      const savedPrefs = loadBrowserLimitsPrefs();
       loadBrowserDemo();
+      update(previous => receiveNativeMessage(previous, { type: 'limitsPrefs', ...savedPrefs }));
     }
     return () => {
       if (window.receiveNative === receive) delete window.receiveNative;
@@ -96,5 +109,5 @@ export function useNativeMonitor() {
     };
   }, [update, loadBrowserDemo]);
 
-  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation };
+  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs };
 }

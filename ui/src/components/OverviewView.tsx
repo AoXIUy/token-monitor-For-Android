@@ -23,7 +23,7 @@ import {
   PeriodData,
   PeriodId,
 } from '../types/monitor';
-import { clientTone, PERIOD_LABELS, clientName, providerName } from '../utils/formatters';
+import { clientTone, formatExact, PERIOD_LABELS, clientName, providerName } from '../utils/formatters';
 
 interface OverviewViewProps {
   stats: MonitorStats;
@@ -500,7 +500,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         )}
 
         <div className="pt-3 mt-1.5 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap text-xs text-slate-300/95 font-mono-tabular">
-          <span>精确累计: {Number(totalTokensCount).toLocaleString('en-US')}</span>
+          <span>精确累计: {formatExact(totalTokensCount)}</span>
           <div className="flex items-center gap-2.5">
             {unclassified > 0 && (
               <span className="text-[11px] text-slate-400">
@@ -814,7 +814,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                                   </span>
                                 )}
                                 {!isFresh && (
-                                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500/10 border border-amber-400/20 text-[9px] text-amber-300 shrink-0">
+                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-400/20 text-[9px] text-amber-300 shrink-0">
                                     历史读数
                                   </span>
                                 )}
@@ -1218,6 +1218,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <input
                 type="search"
                 data-breakdown-search="true"
+                aria-label={`筛选${
+                  breakdownKind === 'clients'
+                    ? '工具'
+                    : breakdownKind === 'models'
+                    ? '模型'
+                    : '项目'
+                }名称`}
                 value={breakdownSearch}
                 onChange={(e) => {
                   setBreakdownSearch(e.target.value);

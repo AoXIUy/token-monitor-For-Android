@@ -20,6 +20,7 @@ export function createInitialState() {
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
     notifications: { enabled: false, permission: false, message: '完成提醒未开启' },
     monitorPending: false, connectPending: false, formError: '', connectionEpoch: 0,
+    limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
   };
 }
 
@@ -70,8 +71,22 @@ export function receiveNativeMessage(state, message) {
       return {
         ...createInitialState(), connection, allowHttp: Boolean(message.allowHttp),
         appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion, dismissedUpdatePrompt: state.dismissedUpdatePrompt,
+        limitsPrefs: state.limitsPrefs,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
+      };
+    }
+    case 'limitsPrefs': {
+      const hashes = Array.isArray(message.hiddenAccountHashes)
+        ? Array.from(new Set(message.hiddenAccountHashes.filter(item => typeof item === 'string' && /^[a-f0-9]{64}$/.test(item)))).slice(0, 256)
+        : state.limitsPrefs.hiddenAccountHashes;
+      return {
+        ...state,
+        limitsPrefs: {
+          hideUncollected: typeof message.hideUncollected === 'boolean' ? message.hideUncollected : state.limitsPrefs.hideUncollected,
+          showRemaining: typeof message.showRemaining === 'boolean' ? message.showRemaining : state.limitsPrefs.showRemaining,
+          hiddenAccountHashes: hashes,
+        },
       };
     }
     case 'stats':

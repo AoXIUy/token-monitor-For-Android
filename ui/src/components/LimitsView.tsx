@@ -17,6 +17,7 @@ import {
 import { MonitorModel } from '../model/monitorModel';
 import {
   LimitProvider,
+  LimitsPrefs,
   MonitorStats,
   QuotaHistoryPayload,
   QuotaTabId,
@@ -29,6 +30,7 @@ import {
   formatShortTime,
   providerName,
 } from '../utils/formatters';
+import { sha256Hex } from '../utils/limitsPrefs';
 
 interface LimitsViewProps {
   providers: LimitProvider[];
@@ -41,54 +43,12 @@ interface LimitsViewProps {
   historyError: string;
   fetchedAt: number;
   foreground: boolean;
+  prefs: LimitsPrefs;
+  onChangePrefs: (next: LimitsPrefs) => void;
 }
 
 type StatusFilterId = 'all' | 'collected' | 'warn' | 'abnormal';
 type LimitSortId = 'default' | 'pressure' | 'updated';
-
-const STORAGE_HIDE_UNCOLLECTED = 'tm.limits.hideUncollected';
-const STORAGE_HIDDEN_ACCOUNTS = 'tm.limits.hiddenAccounts';
-const STORAGE_SHOW_REMAINING = 'tm.limits.showRemaining';
-
-function readBoolPref(key: string, fallback: boolean): boolean {
-  try {
-    const raw = window.localStorage?.getItem(key);
-    if (raw === '1' || raw === 'true') return true;
-    if (raw === '0' || raw === 'false') return false;
-  } catch {
-    // Ignore storage unavailability in restricted WebViews
-  }
-  return fallback;
-}
-
-function writeBoolPref(key: string, value: boolean): void {
-  try {
-    window.localStorage?.setItem(key, value ? '1' : '0');
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-function readHiddenAccounts(): string[] {
-  try {
-    const raw = window.localStorage?.getItem(STORAGE_HIDDEN_ACCOUNTS);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === 'string' && item.length > 0)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeHiddenAccounts(keys: string[]): void {
-  try {
-    window.localStorage?.setItem(STORAGE_HIDDEN_ACCOUNTS, JSON.stringify(keys));
-  } catch {
-    // Ignore storage errors
-  }
-}
 
 export const LimitsView: React.FC<LimitsViewProps> = ({
   providers,
@@ -101,39 +61,36 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   historyError,
   fetchedAt,
   foreground,
+  prefs,
+  onChangePrefs,
 }) => {
   const [openTopUps, setOpenTopUps] = useState<Record<string, boolean>>({});
   const [openHistory, setOpenHistory] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>('all');
   const [sortBy, setSortBy] = useState<LimitSortId>('default');
-  const [hideUncollected, setHideUncollected] = useState<boolean>(() =>
-    readBoolPref(STORAGE_HIDE_UNCOLLECTED, true)
-  );
-  const [hiddenAccounts, setHiddenAccounts] = useState<string[]>(() => readHiddenAccounts());
-  const [showRemaining, setShowRemaining] = useState<boolean>(() =>
-    readBoolPref(STORAGE_SHOW_REMAINING, false)
-  );
   const [showHiddenDrawer, setShowHiddenDrawer] = useState(false);
 
-  useEffect(() => {
-    writeBoolPref(STORAGE_HIDE_UNCOLLECTED, hideUncollected);
-  }, [hideUncollected]);
+  const hideUncollected = prefs.hideUncollected;
+  const showRemaining = prefs.showRemaining;
+  const hiddenHashes = prefs.hiddenAccountHashes;
 
-  useEffect(() => {
-    writeHiddenAccounts(hiddenAccounts);
-  }, [hiddenAccounts]);
+  const setHideUncollected = (updater: boolean | ((prev: boolean) => boolean)) => {
+    const nextValue = typeof updater === 'function' ? updater(hideUncollected) : updater;
+    onChangePrefs({ ...prefs, hideUncollected: nextValue });
+  };
 
-  useEffect(() => {
-    writeBoolPref(STORAGE_SHOW_REMAINING, showRemaining);
-  }, [showRemaining]);
+  const setShowRemaining = (updater: boolean | ((prev: boolean) => boolean)) => {
+    const nextValue = typeof updater === 'function' ? updater(showRemaining) : updater;
+    onChangePrefs({ ...prefs, showRemaining: nextValue });
+  };
 
   useEffect(() => {
     setStatusFilter('all');
     setOpenHistory('');
   }, [deviceId]);
 
-  const hiddenSet = useMemo(() => new Set(hiddenAccounts), [hiddenAccounts]);
+  const hiddenSet = useMemo(() => new Set(hiddenHashes), [hiddenHashes]);
 
   const groups = useMemo(
     () => MonitorModel.limitGroups(providers, stats, deviceId),
@@ -187,6 +144,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         return {
           provider,
           account,
+          accountHash: sha256Hex(account.key),
           windows,
           quotas,
           spend,
@@ -254,7 +212,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     const filteredGroups = enrichedGroups
       .map((group) => {
         const keptItems = group.items.filter((item) => {
-          const isManualHidden = hiddenSet.has(item.account.key);
+          const isManualHidden = hiddenSet.has(item.accountHash);
           const isAutoHidden = hideUncollected && !item.hasHistory;
           if (isManualHidden) {
             manualHidden.push(item);
@@ -510,12 +468,11 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     );
   }
 
-  const toggleManualHide = (accountKey: string) => {
-    setHiddenAccounts((prev) =>
-      prev.includes(accountKey)
-        ? prev.filter((item) => item !== accountKey)
-        : [...prev, accountKey]
-    );
+  const toggleManualHide = (accountHash: string) => {
+    const nextHashes = hiddenHashes.includes(accountHash)
+      ? hiddenHashes.filter((item) => item !== accountHash)
+      : [...hiddenHashes, accountHash];
+    onChangePrefs({ ...prefs, hiddenAccountHashes: nextHashes });
   };
 
   return (
@@ -632,6 +589,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               <input
                 type="search"
                 data-limits-search="true"
+                aria-label="搜索额度工具、账户或来源设备"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="搜索工具、账户、邮箱或来源设备…"
@@ -759,7 +717,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             {manualHiddenItems.length > 0 && (
               <button
                 type="button"
-                onClick={() => setHiddenAccounts([])}
+                onClick={() => onChangePrefs({ ...prefs, hiddenAccountHashes: [] })}
                 className="min-h-[38px] px-3.5 rounded-xl bg-white/[0.06] border border-white/12 text-xs font-medium text-slate-200"
               >
                 恢复手动隐藏 ({manualHiddenItems.length})
@@ -786,6 +744,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               ({
                 provider,
                 account,
+                accountHash,
                 quotas,
                 spend,
                 balanceDetails,
@@ -899,10 +858,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         <button
                           type="button"
                           data-limit-hide={account.key}
-                          onClick={() => toggleManualHide(account.key)}
+                          onClick={() => toggleManualHide(accountHash)}
                           aria-label={`隐藏 ${displayTitle}`}
                           title="隐藏此工具"
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-colors"
+                          className="min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-colors"
                         >
                           <EyeOff className="w-3.5 h-3.5" />
                         </button>
@@ -1157,8 +1116,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => toggleManualHide(item.account.key)}
-                    className="min-h-[30px] px-2.5 rounded-lg bg-sky-500/15 border border-sky-400/30 text-[11px] font-medium text-sky-200 shrink-0"
+                    onClick={() => toggleManualHide(item.accountHash)}
+                    className="min-h-[36px] px-3 rounded-lg bg-sky-500/15 border border-sky-400/30 text-[11px] font-medium text-sky-200 shrink-0"
                   >
                     恢复
                   </button>
@@ -1167,7 +1126,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setHiddenAccounts([]);
+                  onChangePrefs({ ...prefs, hiddenAccountHashes: [] });
                   setShowHiddenDrawer(false);
                 }}
                 className="w-full min-h-[34px] rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-slate-300 transition-colors"

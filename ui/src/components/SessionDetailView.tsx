@@ -209,7 +209,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </div>
 
         <h2 className="text-lg font-bold text-white leading-snug mt-2.5 mb-1.5 break-words">
-          {row.title || row.projectLabel || row.sessionId}
+          {row.title || row.projectLabel || row.sessionId || row.key}
         </h2>
 
         <p className="text-xs text-slate-300/80 font-mono-tabular break-all">

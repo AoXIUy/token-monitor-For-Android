@@ -171,6 +171,30 @@ public final class MainActivity extends Activity {
         try { emit(event("lifecycle").put("foreground", foreground)); } catch (Exception ignored) { }
     }
 
+    private void limitsPrefsChanged() {
+        try {
+            String raw = getSharedPreferences("limits-prefs", MODE_PRIVATE).getString("prefs", "");
+            JSONObject saved = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+            JSONObject payload = event("limitsPrefs")
+                    .put("hideUncollected", saved.optBoolean("hideUncollected", true))
+                    .put("showRemaining", saved.optBoolean("showRemaining", false))
+                    .put("hiddenAccountHashes", sanitizeHiddenAccountHashes(saved.optJSONArray("hiddenAccountHashes")));
+            emit(payload);
+        } catch (Exception ignored) { }
+    }
+
+    private static org.json.JSONArray sanitizeHiddenAccountHashes(org.json.JSONArray raw) {
+        org.json.JSONArray clean = new org.json.JSONArray();
+        if (raw == null) return clean;
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < raw.length() && seen.size() < 256; i++) {
+            String item = raw.optString(i, "");
+            if (item.matches("[a-f0-9]{64}")) seen.add(item);
+        }
+        for (String hash : seen) clean.put(hash);
+        return clean;
+    }
+
     private void notificationState() {
         try {
             emit(event("notifications").put("enabled", SessionMonitorService.running())
@@ -346,9 +370,22 @@ public final class MainActivity extends Activity {
     private final class Bridge {
         @JavascriptInterface public void ready() {
             main.post(() -> {
-                ready = true; foregroundChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
+                ready = true; foregroundChanged(); limitsPrefsChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
                 if (foreground) updates.resume(); else updates.send();
                 downloads.send();
+            });
+        }
+        @JavascriptInterface public void saveLimitsPrefs(String serialized) {
+            if (serialized == null || serialized.length() > 32768) return;
+            main.post(() -> {
+                try {
+                    JSONObject parsed = new JSONObject(serialized);
+                    JSONObject clean = new JSONObject()
+                            .put("hideUncollected", parsed.optBoolean("hideUncollected", true))
+                            .put("showRemaining", parsed.optBoolean("showRemaining", false))
+                            .put("hiddenAccountHashes", sanitizeHiddenAccountHashes(parsed.optJSONArray("hiddenAccountHashes")));
+                    getSharedPreferences("limits-prefs", MODE_PRIVATE).edit().putString("prefs", clean.toString()).commit();
+                } catch (Exception ignored) { }
             });
         }
         @JavascriptInterface public void connect(String address, String secret, boolean allowHttp) {

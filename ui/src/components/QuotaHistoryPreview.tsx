@@ -182,8 +182,18 @@ export function QuotaHistoryPreview({ provider, history, fetchedAt, foreground }
                       return (
                         <g
                           key={pIndex}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${formatShortTime(point.at)}：${value(remaining(point))}`}
+                          aria-pressed={isActive}
                           onClick={() => setActivePointKey(ptId)}
-                          className="cursor-pointer"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setActivePointKey(ptId);
+                            }
+                          }}
+                          className="cursor-pointer focus:outline-none"
                         >
                           <circle cx={cx} cy={cy} r="9" fill="transparent" />
                           {isActive && <circle cx={cx} cy={cy} r="5" fill="currentColor" fillOpacity="0.24" />}

@@ -149,6 +149,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
               <input
                 type="search"
                 data-device-search="true"
+                aria-label="搜索设备名称、ID 或系统"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="搜索设备名称、ID 或系统…"

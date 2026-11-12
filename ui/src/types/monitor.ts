@@ -257,6 +257,13 @@ export interface HubNativeBridge {
   installUpdate?: () => void;
   cancelUpdateDownload?: () => void;
   dismissAppUpdatePrompt?: () => void;
+  saveLimitsPrefs?: (serialized: string) => void;
+}
+
+export interface LimitsPrefs {
+  hideUncollected: boolean;
+  showRemaining: boolean;
+  hiddenAccountHashes: string[];
 }
 
 export interface UpdateDownloadState {
@@ -320,6 +327,7 @@ export interface MonitorState {
   connectPending: boolean;
   formError: string;
   connectionEpoch: number;
+  limitsPrefs: LimitsPrefs;
 }
 
 export interface SessionConversationMessage {

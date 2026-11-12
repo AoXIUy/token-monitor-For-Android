@@ -152,6 +152,30 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     [allRows, statusOptions]
   );
 
+  const { counts, indices: filteredIndices } = useMemo(
+    () =>
+      period === 'allTime'
+        ? { counts: { running: 0, waiting: 0, ended: 0 }, indices: [] as number[] }
+        : MonitorModel.filterSessionStatuses(allStatuses, statusFilter),
+    [period, allStatuses, statusFilter]
+  );
+  const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
+
+  const sortedIndices = useMemo(() => {
+    if (period === 'allTime' || sortBy === 'recent') return filteredIndices;
+    return [...filteredIndices].sort((a, b) => {
+      const rowA = allRows[a];
+      const rowB = allRows[b];
+      if (sortBy === 'tokens') {
+        const diff = MonitorModel.count(rowB.totalTokens) - MonitorModel.count(rowA.totalTokens);
+        return diff !== 0 ? diff : a - b;
+      }
+      const costA = MonitorModel.numeric(rowA.costUsd) ?? -1;
+      const costB = MonitorModel.numeric(rowB.costUsd) ?? -1;
+      return costB !== costA ? costB - costA : a - b;
+    });
+  }, [period, filteredIndices, allRows, sortBy]);
+
   if (period === 'allTime') {
     return (
       <div className="glass-panel rounded-3xl p-8 text-center my-4">
@@ -165,24 +189,6 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       </div>
     );
   }
-
-  const { counts, indices: filteredIndices } = MonitorModel.filterSessionStatuses(allStatuses, statusFilter);
-  const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
-
-  const sortedIndices = useMemo(() => {
-    if (sortBy === 'recent') return filteredIndices;
-    return [...filteredIndices].sort((a, b) => {
-      const rowA = allRows[a];
-      const rowB = allRows[b];
-      if (sortBy === 'tokens') {
-        const diff = MonitorModel.count(rowB.totalTokens) - MonitorModel.count(rowA.totalTokens);
-        return diff !== 0 ? diff : a - b;
-      }
-      const costA = MonitorModel.numeric(rowA.costUsd) ?? -1;
-      const costB = MonitorModel.numeric(rowB.costUsd) ?? -1;
-      return costB !== costA ? costB - costA : a - b;
-    });
-  }, [filteredIndices, allRows, sortBy]);
 
   return (
     <div className="space-y-3.5">

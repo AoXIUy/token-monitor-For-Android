@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -58,6 +58,7 @@ export function SessionConversation({
 }: Props) {
   const [selected, setSelected] = useState('');
   const [copied, setCopied] = useState('');
+  const copyTimer = useRef<number | null>(null);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [openEventGroups, setOpenEventGroups] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,9 +71,26 @@ export function SessionConversation({
   const supported = client === 'codex' || client === 'antigravity';
   const canRead = supported && available && Boolean(owner && !owner.stale);
   const current =
-    conversation?.key === detailKey && conversation.deviceId === target && canRead
+    conversation?.key === detailKey && conversation.deviceId === target
       ? conversation
       : null;
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  const handleCopyText = async (text: string, id: string) => {
+    const ok = await copyTextToClipboard(text);
+    if (!ok) return;
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    setCopied(id);
+    copyTimer.current = window.setTimeout(() => {
+      setCopied((prev) => (prev === id ? '' : prev));
+      copyTimer.current = null;
+    }, 1500);
+  };
 
   useEffect(() => {
     onClear();
@@ -81,7 +99,7 @@ export function SessionConversation({
     setOpenEventGroups(new Set());
     setSearchQuery('');
     return onClear;
-  }, [detailKey, target, canRead, onClear]);
+  }, [detailKey, target, onClear]);
 
   const grouped = useMemo(
     () => groupConversationBlocks(current?.messages || [], searchQuery),
@@ -325,9 +343,7 @@ export function SessionConversation({
                   <button
                     type="button"
                     aria-label={`复制${meta.badge}`}
-                    onClick={async () => {
-                      if (await copyTextToClipboard(item.text)) setCopied(item.id);
-                    }}
+                    onClick={() => handleCopyText(item.text, item.id)}
                     className="min-h-[32px] px-2.5 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-[11px] text-sky-300 flex items-center gap-1 shrink-0 transition-colors"
                   >
                     {isCopied ? (
@@ -451,9 +467,7 @@ export function SessionConversation({
                             <button
                               type="button"
                               aria-label={`复制${meta.badge}`}
-                              onClick={async () => {
-                                if (await copyTextToClipboard(item.text)) setCopied(item.id);
-                              }}
+                              onClick={() => handleCopyText(item.text, item.id)}
                               className="min-h-[30px] px-2 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-sky-300 flex items-center gap-1"
                             >
                               {isCopied ? (
@@ -488,7 +502,7 @@ export function SessionConversation({
         <button
           type="button"
           data-more-conversation="true"
-          disabled={current.loading || Boolean(current.error)}
+          disabled={!canRead || current.loading || Boolean(current.error)}
           onClick={() => onQuery(target, detailKey, current.nextCursor)}
           className="min-h-[44px] w-full rounded-xl bg-white/6 hover:bg-white/10 border border-white/10 text-xs font-semibold text-sky-300 disabled:opacity-40 transition-colors"
         >

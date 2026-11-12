@@ -133,3 +133,26 @@ test('Android React notification and form acknowledgements release pending contr
   assert.equal(receiveNativeMessage(state, { type: 'unrecognized' }), state);
   assert.equal(receiveNativeMessage(state, { type: 'status', state: 'fake-online' }), state);
 });
+
+test('limits display preferences sanitize hashes and survive Hub connection changes', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const validHash = 'a'.repeat(64);
+  const secondHash = 'b'.repeat(64);
+  let state = receiveNativeMessage(createInitialState(), {
+    type: 'limitsPrefs',
+    hideUncollected: false,
+    showRemaining: true,
+    hiddenAccountHashes: [validHash, 'not-a-hash', 'user@example.com', validHash, secondHash],
+  });
+  assert.deepEqual(state.limitsPrefs, {
+    hideUncollected: false,
+    showRemaining: true,
+    hiddenAccountHashes: [validHash, secondHash],
+  });
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.example.com' });
+  assert.deepEqual(state.limitsPrefs, {
+    hideUncollected: false,
+    showRemaining: true,
+    hiddenAccountHashes: [validHash, secondHash],
+  });
+});

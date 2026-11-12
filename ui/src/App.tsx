@@ -18,6 +18,7 @@ import { AppUpdateDialog } from './components/AppUpdateDialog';
 import { DeviceIcon } from './components/DeviceIcon';
 import { DevicePickerDialog } from './components/DevicePickerDialog';
 import { DevicesView } from './components/DevicesView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LimitsView } from './components/LimitsView';
 import { OverviewView } from './components/OverviewView';
 import { SessionDetailView } from './components/SessionDetailView';
@@ -42,17 +43,31 @@ export default function App() {
   const { state, update } = monitor;
   const showUpdate = state.foreground && state.appUpdate.available && Boolean(state.appUpdate.promptToken)
     && state.dismissedUpdatePrompt !== state.appUpdate.promptToken && state.appUpdate.download.phase !== 'installing';
-  return <>
-    <Dashboard key={state.connectionEpoch} {...monitor} />
-    <AppUpdateDialog state={state.appUpdate} open={showUpdate}
-      onDismiss={() => {
-        update(previous => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
-        window.HubNative?.dismissAppUpdatePrompt?.();
-      }} />
-  </>;
+  return (
+    <ErrorBoundary
+      onOpenSettings={() => update((previous) => ({ ...previous, page: 'settings' }))}
+    >
+      <Dashboard key={state.connectionEpoch} {...monitor} />
+      <AppUpdateDialog state={state.appUpdate} open={showUpdate}
+        onDismiss={() => {
+          update(previous => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
+          window.HubNative?.dismissAppUpdatePrompt?.();
+        }} />
+    </ErrorBoundary>
+  );
 }
 
-function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation }: Monitor) {
+function isTextEntryElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLTextAreaElement) return !target.readOnly && !target.disabled;
+  if (target instanceof HTMLInputElement) {
+    const nonText = ['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color'];
+    return !nonText.includes(target.type) && !target.readOnly && !target.disabled;
+  }
+  return target.isContentEditable;
+}
+
+function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs }: Monitor) {
   const {
     page,
     period,
@@ -82,6 +97,24 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   const [deadlineTick, setDeadlineTick] = useState(0);
   const [revealAppUpdate, setRevealAppUpdate] = useState(false);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      if (isTextEntryElement(event.target)) setInputFocused(true);
+    };
+    const onFocusOut = () => {
+      window.requestAnimationFrame(() => {
+        setInputFocused(isTextEntryElement(document.activeElement));
+      });
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     if (!revealAppUpdate || page !== 'settings') return;
@@ -113,6 +146,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     setSessionLimit(40);
   };
   const openSession = (key: string) => {
+    setDevicePickerOpen(false);
     update((previous) => ({ ...previous, page: 'sessionDetail', detailKey: key }));
     setOpenSessions(new Set());
     window.scrollTo(0, 0);
@@ -319,6 +353,10 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     page !== 'sessionDetail' &&
     !(page === 'limits' && quotaTab === 'subscriptions');
 
+  useEffect(() => {
+    if (!showFilters && devicePickerOpen) setDevicePickerOpen(false);
+  }, [showFilters, devicePickerOpen]);
+
   const showPeriods = page !== 'limits';
   const showRefresh = Boolean(connection) && page !== 'settings';
   const noticeVisible = status === 'offline' || Boolean(message);
@@ -356,7 +394,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
       />
 
       <div className="max-w-[440px] mx-auto min-h-screen flex flex-col relative z-10">
-        <header className="sticky top-0 z-30 h-14 px-4 flex items-center justify-between gap-4 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
+        <header className="sticky top-0 z-30 min-h-14 py-1.5 px-4 flex items-center justify-between gap-4 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
           <button
             type="button"
             onClick={() => setPage('overview')}
@@ -543,7 +581,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                         <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <span className="truncate">全部设备</span>
                         {devicesList.length > 0 && (
-                          <span className="px-1.5 py-0.2 rounded-full bg-white/[0.06] text-[10px] font-mono-tabular text-slate-300 shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-mono-tabular text-slate-300 shrink-0">
                             {activeDevicesCount}/{devicesList.length}
                           </span>
                         )}
@@ -757,6 +795,8 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                   historyError={state.historyError}
                   fetchedAt={fetchedAt}
                   foreground={foreground}
+                  prefs={state.limitsPrefs}
+                  onChangePrefs={saveLimitsPrefs}
                 />
               )}
 
@@ -830,7 +870,10 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
 
         <nav
           aria-label="主导航"
-          className="bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] z-40 bg-[#090C10]/88 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5"
+          aria-hidden={inputFocused || undefined}
+          className={`bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] z-40 bg-[#090C10]/88 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5 transition-all duration-150 ${
+            inputFocused ? 'opacity-0 pointer-events-none translate-y-full' : ''
+          }`}
         >
           <div className="grid grid-cols-5 gap-1">
             {(
@@ -850,6 +893,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                   type="button"
                   data-page={tabId}
                   aria-current={isActive ? 'page' : undefined}
+                  tabIndex={inputFocused ? -1 : undefined}
                   onClick={() => setPage(tabId)}
                   className={`min-h-[48px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-150 ${
                     isActive
