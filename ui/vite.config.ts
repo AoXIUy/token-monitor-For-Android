@@ -13,6 +13,7 @@ const sharedScripts = [
   'shared/deviceKind.js',
   'shared/sessionActivityProviders.js',
   'shared/sessionLive.js',
+  'shared/sessionRealtime.js',
   'shared/sessionGroups.js',
   'model.js',
 ];

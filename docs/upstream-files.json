@@ -50,6 +50,13 @@
       "sha256": "15fb522d7fc4da663658df3e6680cf6cf4dfa6978c7a17eba8cd2becb7dac064",
       "sourcePath": "src/shared/limits/windowText.js",
       "sourceCommit": "82e00510cf93fc61415571ccc04d4ab58e68202f"
+    },
+    {
+      "path": "src/shared/sessionRealtime.js",
+      "sha256": "1d74d2950c55d119d0900b06e4884db71c53916781deb1c113929e969e7ba14e",
+      "sourceProject": "https://github.com/AoXIUy/token-monitor",
+      "sourcePath": "src/shared/sessionRealtime.js",
+      "sourceCommit": "4361dd9234824bd7040adb653833fb4b8de397af"
     }
   ],
   "upstreamVersion": "0.90.0",

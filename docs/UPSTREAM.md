@@ -22,6 +22,8 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 更新共享模块时，从对应源版本一次同步必要的闭包，检查 CommonJS require 和浏览器全局依赖，更新校验记录，并运行 `npm run verify` 和 Android 构建 / 仪器测试。不要仅更新 APK 生成目录，也不要为通过测试复制 Hub 或 Electron 应用。
 
+会话实时速率模块 `sessionRealtime.js` 来自 [AoXIUy/token-monitor](https://github.com/AoXIUy/token-monitor) 分支，逐字节同步并在 `upstream-files.json` 中单独记录来源仓库、提交和 SHA-256；不代表主线已包含该功能。它保持浏览器全局 `TokenMonitorSessionRealtime` 与 CommonJS 双入口，不依赖 Electron 或第三方库。Android 和桌面使用相同的计数增量、时间、失效和曲线规则；安卓仅负责原生生命周期与界面适配。
+
 ## 独立工程的调整
 
 Android 工程提升至仓库根目录，修正 Gradle、Vite 和展示模型的相对路径；保留 Gradle Wrapper、前端锁文件、原生与仪器测试。GitHub CI 使用独立目录结构，Node 展示测试移除对整个 Hub / Electron 工程的依赖，具体范围见 [tests/README.md](../tests/README.md)。

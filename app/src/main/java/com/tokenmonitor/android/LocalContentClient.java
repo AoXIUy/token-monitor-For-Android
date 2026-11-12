@@ -24,7 +24,7 @@ final class LocalContentClient extends WebViewClient {
             "/assets/shared/limits/windowText.js",
             "/assets/shared/deviceKind.js",
             "/assets/shared/sessionActivityProviders.js", "/assets/shared/sessionLive.js",
-            "/assets/shared/sessionGroups.js"));
+            "/assets/shared/sessionGroups.js", "/assets/shared/sessionRealtime.js"));
     private final WebViewAssetLoader loader;
 
     LocalContentClient(Context context) {

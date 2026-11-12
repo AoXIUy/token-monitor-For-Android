@@ -842,6 +842,50 @@ public final class StartupTest {
         }
     }
 
+    @Test public void sessionRealtimeUsesSourceDeltasAndClearsOnBackground() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
+        org.json.JSONObject today = stats.getJSONObject("periods").getJSONObject("today");
+        org.json.JSONObject row = today.getJSONObject("sessions").getJSONObject("codex:test");
+        org.json.JSONObject device = stats.getJSONArray("devices").getJSONObject(0);
+        device.getJSONObject("periods").put("today", today);
+        row.put("totalTokens", 100000).put("timedOutputTokens", 33000).put("timedDurationMs", 1000000);
+        today.put("totalTokens", 100000);
+        evaluate("window.receiveNative({type:'connection',url:'https://realtime.example'})");
+        publishStats(stats);
+        awaitScript("document.querySelector('.token-total')");
+        evaluate("window.receiveNative({type:'status',state:'online'})");
+        awaitScript("document.querySelector('.token-total') && document.getElementById('status-label').textContent==='已连接'");
+        evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+        awaitScript("document.querySelector('.session-toggle')");
+        evaluate("document.querySelector('.session-toggle').click()");
+        awaitScript("document.querySelector('[data-session-detail]')");
+        evaluate("document.querySelector('[data-session-detail]').click()");
+        awaitScript("document.querySelector('[data-session-realtime]')");
+        assertEquals("true", evaluate("document.querySelector('[data-rate-output=\"second\"]').textContent==='—'"));
+
+        long end = System.currentTimeMillis();
+        String first = java.time.Instant.ofEpochMilli(end - 5000).toString();
+        String second = java.time.Instant.ofEpochMilli(end).toString();
+        device.put("periodWindows", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                .put("key", second.substring(0, 10)).put("endsAt", java.time.Instant.ofEpochMilli(end + 3600000).toString())));
+        row.put("outputTokens", 10000);
+        device.put("updatedAt", first).put("receivedAt", first);
+        evaluate("window.receiveNative({type:'stats',data:" + stats + ",fetchedAt:Date.now()})");
+        awaitScript("document.querySelector('[data-session-realtime]').dataset.realtimeState==='waiting'");
+        row.put("outputTokens", 10150);
+        device.put("updatedAt", second).put("receivedAt", second);
+        evaluate("window.receiveNative({type:'stats',data:" + stats + ",fetchedAt:Date.now()})");
+        awaitScript("document.querySelector('[data-rate-output=\"second\"]').textContent==='30'");
+        assertEquals("true", evaluate("Number(document.querySelector('[data-rate-output=\"minute\"]').textContent.replace(/,/g,''))===1800"));
+        assertEquals("true", evaluate("document.querySelectorAll('[data-realtime-chart] polyline').length===1"));
+        evaluate("window.receiveNative({type:'status',state:'offline'})");
+        awaitScript("document.querySelector('[data-session-realtime]').dataset.realtimeState==='unavailable'");
+        assertEquals("true", evaluate("document.querySelector('[data-rate-output=\"second\"]').textContent==='—'"));
+        evaluate("window.receiveNative({type:'lifecycle',foreground:false})");
+        awaitScript("!document.querySelector('[data-realtime-chart] polyline')");
+    }
+
     @Test public void nativeBridgeConnectsAndDisplaysAuthenticatedHubStats() throws Exception {
         awaitConnectionPage();
         List<String> requests = Collections.synchronizedList(new ArrayList<>());

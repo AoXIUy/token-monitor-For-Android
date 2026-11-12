@@ -49,6 +49,8 @@
 
 来源设备按当前周期的真实会话统计键查找，跨设备家族和多设备副本保留全部来源，同名设备通过 ID 区分。硬件图标仅使用 Hub 的 `deviceKind`，由可移植 `src/shared/deviceKind.js` 规范化；旧 Hub 或未知类型使用通用图标，不从操作系统推断硬件。新增脚本须同时进入 Gradle 打包、Vite 加载和 `LocalContentClient` 精确允许列表。
 
+Antigravity / Codex 会话详情的实时速率使用 `sessionRealtime.js`，仅从 `stats.devices[].periods.today/month.sessions` 读取所选来源的 `outputTokens` 与设备 `updatedAt`；不使用聚合计数、网页刷新时间或历史匹配均速。两次来源快照的输出增量除以来源时间差得到 tok/s，tok/min 为同一间隔乘 60。来源日志只在回复结束时更新时，这是批量观测速率，不能当作逐 Token 流速。重复或迟到快照不增加点，缺失读数和离线不补零，过长间隔重新建立基线；图表只保留打开详情之后的五分钟内存记录。监控沿用现有原生统计推送，未新增 Hub 请求或联网权限；后台清除监控并在恢复后重新观测。完整口径见[桌面端功能说明](https://github.com/AoXIUy/token-monitor/blob/main/docs/session-realtime.md)。
+
 用量工具名称来自共享 `clientCatalog.js`，与额度 provider 和模型名称分开：`gemini` 工具显示 Gemini CLI，`mistral` 工具显示 Mistral Vibe，额度 provider 仍显示 Mistral。Prime Agent、Jcode 等工具沿用 Hub 的 Token、费用及会话身份；没有逐消息数据时不补造消息归属，也不将最近使用时间升级为原生活动或完成通知。
 
 会话 `latestModel` 是上游提供的最近模型快照，与各模型的历史用量分开。组标题只使用最新主会话续接记录的字段，子代理不能覆盖它；缺失或显式 `null` 时回退到模型数量，不从最大用量或对象顺序推断。详情保留完整模型组成，最近模型可以尚无 Token 记录，归档会话也可以保留历史快照。输入缓存命中率使用已观测缓存读取 / 已观测总输入，缓存写入属于未命中；输出与 `unclassifiedTokens` 不参与。总览可展开全部有测量的会话明细，包含已结束会话，且不读取实时状态。会话零命中需要明确的 `cacheReported` 或真实缓存流量；没有读数不显示为零。原生微件原有“缓存读取占比”继续表示缓存读取 / 总 Token，与输入命中率分别命名。

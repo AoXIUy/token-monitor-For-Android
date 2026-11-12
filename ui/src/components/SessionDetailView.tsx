@@ -24,6 +24,7 @@ import {
 import { renderStatusText } from './SessionsView';
 import { DeviceIcon } from './DeviceIcon';
 import { SessionConversation } from './SessionConversation';
+import { SessionRealtime } from './SessionRealtime';
 
 interface SessionDetailViewProps {
   stats: MonitorStats;
@@ -354,9 +355,14 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           <h3 className="text-sm font-semibold text-slate-100">性能与上下文</h3>
         </div>
 
+        {['antigravity', 'codex'].includes(row.client || '') && <SessionRealtime
+          key={`${detailKey}:${deviceId}`} stats={stats} detailKey={detailKey} deviceId={deviceId}
+          available={foreground && statusHealthy && fetchedAt > 0 && now - fetchedAt < 30000 && now >= fetchedAt}
+          foreground={foreground} />}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="glass-inset rounded-2xl p-3.5">
-            <span className="text-[11px] text-slate-400 block">生成速率</span>
+            <span className="text-[11px] text-slate-400 block">历史匹配均速（非实时）</span>
             <div className="text-lg font-bold text-sky-300 font-mono-tabular mt-1">
               {MonitorModel.numeric(data.tokensPerSecond) !== null ? (
                 <>

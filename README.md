@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.11.0](https://img.shields.io/badge/version-1.11.0-38BDF8)
+![Version 1.12.0](https://img.shields.io/badge/version-1.12.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -22,6 +22,7 @@
 | 历史趋势 | 展示 Hub 提供的每日记录，支持每日 / 区间累计和单日数值查看 |
 | 会话与状态 | 搜索并按工具筛选，按最近、用量或费用排序，查看状态及所有来源设备；子代理保留完整分组和用量 |
 | 会话详情 | 查看最近使用模型、完整模型组成、输入缓存命中率、推理强度、费用、来源设备与父子会话关系 |
+| 会话实时速率 | Antigravity / Codex 的输出 tok/s、tok/min 与五分钟趋势；按来源快照增量计算，断线留空，累计均速单独标注 |
 | 额度与余额 | 查看 Hark、Mistral 额度与 Qoder 独立个人 / 团队积分；区分 Muse 网页 / CLI、MiniMax Code / API 和 MiMo 产品；账户仍在电脑端管理 |
 | 额度历史 | 点击展开本机观测的额度趋势和近 14 天净变化，支持 OpenDesign 工作区；缺失读数保持未知 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
