@@ -1,0 +1,532 @@
+{
+  "auditedAt": "2026-11-12T06:40:24.714Z",
+  "desktop": {
+    "repo": "AoXIUy/token-monitor",
+    "version": "0.92.0",
+    "commit": "67bfc951e1aa10382c3c7288c8c9703a989a3aff",
+    "tag": "v0.92.0"
+  },
+  "android": {
+    "repo": "AoXIUy/token-monitor-For-Android",
+    "version": "1.12.0",
+    "commit": "29d3e6737c46f26c1e8ec5464df2711d787cd13e",
+    "tag": "v1.12.0"
+  },
+  "sharedComparison": [
+    {
+      "path": "src/shared/clientCatalog.js",
+      "androidSha256": "34bb705e0daa4e5f4ea04ec25fc6f69ad6c1c35d951429646fe9df4b30e33986",
+      "desktopSha256": "34bb705e0daa4e5f4ea04ec25fc6f69ad6c1c35d951429646fe9df4b30e33986",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/compactTokens.js",
+      "androidSha256": "a61a1adf24b4124ab397210e84d77a9d5618dc32ecf02d9b53bba9d8feb56b27",
+      "desktopSha256": "a61a1adf24b4124ab397210e84d77a9d5618dc32ecf02d9b53bba9d8feb56b27",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/deviceKind.js",
+      "androidSha256": "8b2f9ed84b186977123841de46c5dd1c25dceb325bda900bf3bb791e0e25e2c8",
+      "desktopSha256": "8b2f9ed84b186977123841de46c5dd1c25dceb325bda900bf3bb791e0e25e2c8",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/limits/balanceDisplay.js",
+      "androidSha256": "2d6cd781bf8866cb5ccfbadb5c0e727c8ad44b7d8950633fbb9e711762421618",
+      "desktopSha256": "2d6cd781bf8866cb5ccfbadb5c0e727c8ad44b7d8950633fbb9e711762421618",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/limits/historyModel.js",
+      "androidSha256": "6dc2027391cb79628b2d32d973a8cf92e682f73a011cf957699db6ab41dc5fcf",
+      "desktopSha256": null,
+      "status": "android-only-or-rebased"
+    },
+    {
+      "path": "src/shared/limits/windowLabels.js",
+      "androidSha256": "9af7313e14aff954a9515a3c51149f9990ba4cc232d1c826d25eddfd673b9359",
+      "desktopSha256": "8b4f99d000f9511f1d17546ecf807bc7bc30119a06a99fd3b2980ec25558a7ad",
+      "status": "differs"
+    },
+    {
+      "path": "src/shared/limits/windowText.js",
+      "androidSha256": "15fb522d7fc4da663658df3e6680cf6cf4dfa6978c7a17eba8cd2becb7dac064",
+      "desktopSha256": "15fb522d7fc4da663658df3e6680cf6cf4dfa6978c7a17eba8cd2becb7dac064",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/sessionActivityProviders.js",
+      "androidSha256": "41a5ddf96d6115f04157d46865fa2aa0bafa601759c053418a867ffa2bf6759d",
+      "desktopSha256": "41a5ddf96d6115f04157d46865fa2aa0bafa601759c053418a867ffa2bf6759d",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/sessionGroups.js",
+      "androidSha256": "dbe1ef588755dbb7b76a045790646f7112f1dc7b257f0b6a9947372c7f389bb7",
+      "desktopSha256": null,
+      "status": "android-only-or-rebased"
+    },
+    {
+      "path": "src/shared/sessionLive.js",
+      "androidSha256": "6447a8240dc1cae255ff29fd264a4b0792c921679b08ead20c3760b2c13886a7",
+      "desktopSha256": "6447a8240dc1cae255ff29fd264a4b0792c921679b08ead20c3760b2c13886a7",
+      "status": "exact-match"
+    },
+    {
+      "path": "src/shared/sessionRealtime.js",
+      "androidSha256": "1d74d2950c55d119d0900b06e4884db71c53916781deb1c113929e969e7ba14e",
+      "desktopSha256": "1d74d2950c55d119d0900b06e4884db71c53916781deb1c113929e969e7ba14e",
+      "status": "exact-match"
+    }
+  ],
+  "clientSummary": {
+    "totalDesktopClients": 42,
+    "appMatched": 42,
+    "widgetDistinguished": 14,
+    "widgetOther": [
+      "hermes",
+      "openclaw",
+      "cline",
+      "amp",
+      "droid",
+      "kimi",
+      "qwen",
+      "grok",
+      "pi",
+      "omp",
+      "goose",
+      "zed",
+      "kilo",
+      "commandcode",
+      "zcode",
+      "kiro",
+      "codebuddy",
+      "workbuddy",
+      "proma",
+      "catpaw",
+      "qodercn",
+      "reasonix",
+      "dsh",
+      "cherrystudio",
+      "lmstudio",
+      "unsloth",
+      "devin",
+      "fx"
+    ],
+    "senpiWidgetLabel": {
+      "id": "senpi",
+      "desktopLabel": "OmO Native",
+      "androidAppLabel": "OmO Native",
+      "androidWidgetLabel": "Senpi",
+      "appMatch": true,
+      "widgetDistinguished": true
+    }
+  },
+  "providerSummary": {
+    "totalDesktopProviders": 35,
+    "androidFriendlyLabelsCount": 17,
+    "androidMissingFriendlyLabels": [
+      {
+        "id": "cline",
+        "desktopLabel": "Cline"
+      },
+      {
+        "id": "factory",
+        "desktopLabel": "Factory Droid"
+      },
+      {
+        "id": "kimi",
+        "desktopLabel": "Kimi"
+      },
+      {
+        "id": "grok",
+        "desktopLabel": "Grok"
+      },
+      {
+        "id": "zed",
+        "desktopLabel": "Zed"
+      },
+      {
+        "id": "commandcode",
+        "desktopLabel": "Command Code"
+      },
+      {
+        "id": "zai",
+        "desktopLabel": "GLM"
+      },
+      {
+        "id": "zaiteam",
+        "desktopLabel": "GLM Team"
+      },
+      {
+        "id": "kiro",
+        "desktopLabel": "Kiro"
+      },
+      {
+        "id": "workbuddy",
+        "desktopLabel": "WorkBuddy"
+      },
+      {
+        "id": "devin",
+        "desktopLabel": "Devin"
+      },
+      {
+        "id": "typesafe",
+        "desktopLabel": "TypeSafe"
+      },
+      {
+        "id": "volcengine",
+        "desktopLabel": "Volcengine"
+      },
+      {
+        "id": "trae",
+        "desktopLabel": "Trae CN"
+      },
+      {
+        "id": "alibaba",
+        "desktopLabel": "Alibaba Cloud"
+      },
+      {
+        "id": "stepfun",
+        "desktopLabel": "StepFun"
+      },
+      {
+        "id": "notion",
+        "desktopLabel": "Notion AI"
+      },
+      {
+        "id": "thirdparty",
+        "desktopLabel": "Third-party APIs"
+      }
+    ],
+    "allGeneric30PercentPass": true
+  },
+  "deltaV090ToV092Probes": {
+    "cursorLabelsProbe": {
+      "weekly": {
+        "desktopWindowLabel": "Weekly",
+        "androidWindowLabelsModule": "Included usage",
+        "androidMonitorModelQuotaLabel": "Included usage"
+      },
+      "billing": {
+        "desktopWindowLabel": "Monthly",
+        "androidWindowLabelsModule": "Included usage",
+        "androidMonitorModelQuotaLabel": "Included usage"
+      }
+    },
+    "currencyProbe": [
+      {
+        "code": "USD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "$20.00",
+        "androidSubText": "$20.00",
+        "androidBalanceText": "$20.00",
+        "desktopUsageFrom1234Usd": "$12.34",
+        "subTextMatches": true
+      },
+      {
+        "code": "AUD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "A$20.00",
+        "androidSubText": "AUD 20.00",
+        "androidBalanceText": "AUD 20.00",
+        "desktopUsageFrom1234Usd": "A$17.77",
+        "subTextMatches": false
+      },
+      {
+        "code": "BRL",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "R$20.00",
+        "androidSubText": "BRL 20.00",
+        "androidBalanceText": "BRL 20.00",
+        "desktopUsageFrom1234Usd": "R$67.99",
+        "subTextMatches": false
+      },
+      {
+        "code": "CAD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "CA$20.00",
+        "androidSubText": "CAD 20.00",
+        "androidBalanceText": "CAD 20.00",
+        "desktopUsageFrom1234Usd": "CA$17.40",
+        "subTextMatches": false
+      },
+      {
+        "code": "CHF",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "CHF 20.00",
+        "androidSubText": "CHF 20.00",
+        "androidBalanceText": "CHF 20.00",
+        "desktopUsageFrom1234Usd": "CHF 10.12",
+        "subTextMatches": true
+      },
+      {
+        "code": "CNY",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "¥20.00",
+        "androidSubText": "¥20.00",
+        "androidBalanceText": "¥20.00",
+        "desktopUsageFrom1234Usd": "¥83.91",
+        "subTextMatches": true
+      },
+      {
+        "code": "EUR",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "€20.00",
+        "androidSubText": "EUR 20.00",
+        "androidBalanceText": "EUR 20.00",
+        "desktopUsageFrom1234Usd": "€10.98",
+        "subTextMatches": false
+      },
+      {
+        "code": "GBP",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "£20.00",
+        "androidSubText": "GBP 20.00",
+        "androidBalanceText": "GBP 20.00",
+        "desktopUsageFrom1234Usd": "£9.13",
+        "subTextMatches": false
+      },
+      {
+        "code": "HKD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "HK$20.00",
+        "androidSubText": "HKD 20.00",
+        "androidBalanceText": "HKD 20.00",
+        "desktopUsageFrom1234Usd": "HK$96.25",
+        "subTextMatches": false
+      },
+      {
+        "code": "INR",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "₹20.00",
+        "androidSubText": "INR 20.00",
+        "androidBalanceText": "INR 20.00",
+        "desktopUsageFrom1234Usd": "₹1155.27",
+        "subTextMatches": false
+      },
+      {
+        "code": "JPY",
+        "desktopFractionDigits": 0,
+        "desktopSubText": "JP¥29000",
+        "androidSubText": "JPY 29000.00",
+        "androidBalanceText": "JPY 29000.00",
+        "desktopUsageFrom1234Usd": "JP¥1950",
+        "subTextMatches": false
+      },
+      {
+        "code": "KRW",
+        "desktopFractionDigits": 0,
+        "desktopSubText": "₩29000",
+        "androidSubText": "KRW 29000.00",
+        "androidBalanceText": "KRW 29000.00",
+        "desktopUsageFrom1234Usd": "₩17029",
+        "subTextMatches": false
+      },
+      {
+        "code": "SGD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "S$20.00",
+        "androidSubText": "SGD 20.00",
+        "androidBalanceText": "SGD 20.00",
+        "desktopUsageFrom1234Usd": "S$15.80",
+        "subTextMatches": false
+      },
+      {
+        "code": "TWD",
+        "desktopFractionDigits": 2,
+        "desktopSubText": "NT$20.00",
+        "androidSubText": "TWD 20.00",
+        "androidBalanceText": "TWD 20.00",
+        "desktopUsageFrom1234Usd": "NT$388.71",
+        "subTextMatches": false
+      }
+    ],
+    "deepseekProbe": {
+      "desktopNormalizedBalance": {
+        "amount": 50,
+        "currency": "CNY",
+        "monthSpend": 12.5,
+        "searchSpend": 1.25,
+        "fetchSpend": 0.45
+      },
+      "androidLimitSpend": [],
+      "androidLimitBalanceDetails": [],
+      "androidQuota": {
+        "label": "Balance",
+        "value": "¥50.00",
+        "percent": 80,
+        "remaining": true
+      }
+    },
+    "realtimeSessionProbe": {
+      "exactMatch": true,
+      "tokensPerSecond": 30,
+      "tokensPerMinute": 1800
+    },
+    "conversationBlockProbe": {
+      "blockTypes": [
+        "dialogue",
+        "events",
+        "dialogue"
+      ],
+      "dialogueCount": 2,
+      "eventCount": 2
+    }
+  },
+  "carryOverGProbes": [
+    {
+      "id": "G01",
+      "provider": "cursor",
+      "desktopText": {
+        "value": "$2.35 / $20.00",
+        "detail": "",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Spend",
+        "value": "$2.35",
+        "percent": null
+      }
+    },
+    {
+      "id": "G02",
+      "provider": "kiro",
+      "desktopText": {
+        "value": "14 credits · $0.56",
+        "detail": "",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Overage",
+        "value": "暂无读数",
+        "percent": null,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G03",
+      "provider": "kiro",
+      "desktopText": {
+        "value": null,
+        "detail": "120/500",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Monthly",
+        "value": "24% 已用",
+        "percent": 24,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G04",
+      "provider": "zed",
+      "desktopText": {
+        "value": null,
+        "detail": "120/500",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Edit predictions",
+        "value": "24% 已用",
+        "percent": 24,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G05",
+      "provider": "zai",
+      "desktopText": {
+        "value": null,
+        "detail": "400 / 1K",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Daily tokens",
+        "value": "40% 已用",
+        "percent": 40,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G06",
+      "provider": "zaiteam",
+      "desktopText": {
+        "value": null,
+        "detail": "400 / 1K",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Model pool",
+        "value": "40% 已用",
+        "percent": 40,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G07",
+      "provider": "kimi",
+      "desktopText": {
+        "value": null,
+        "detail": "Kimi 40% · Code 60%",
+        "percentLeads": false
+      },
+      "androidQuota": {
+        "label": "Membership",
+        "value": "70% 已用",
+        "percent": 70,
+        "remaining": false
+      }
+    },
+    {
+      "id": "G08",
+      "provider": "thirdparty",
+      "desktopNote": "windowsView.js renders todaySpend/weekSpend/monthSpend/allTimeSpend for thirdparty",
+      "androidLimitSpend": []
+    }
+  ],
+  "endpointChecks": [
+    {
+      "endpoint": "/api/stats",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": true
+    },
+    {
+      "endpoint": "/api/subscriptions",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": true
+    },
+    {
+      "endpoint": "/api/session-conversations",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": true
+    },
+    {
+      "endpoint": "/api/history",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": false
+    },
+    {
+      "endpoint": "/api/devices",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": false
+    },
+    {
+      "endpoint": "/api/stats/stream",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": false
+    },
+    {
+      "endpoint": "/api/sync/content",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": false
+    },
+    {
+      "endpoint": "/api/sync/settings/(modelAliases|customPricing)",
+      "desktopHubHasPath": true,
+      "androidConnectionSpecAllows": false
+    }
+  ]
+}

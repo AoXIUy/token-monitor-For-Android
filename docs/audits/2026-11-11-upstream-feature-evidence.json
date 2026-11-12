@@ -1,0 +1,3393 @@
+{
+  "date": "2026-11-11",
+  "upstreamCommit": "f2802979ee69930cd946e728db92bc981af0fc40",
+  "upstreamVersion": "0.90.0",
+  "androidSourceHead": "76972ee492b24c1e546ecf7494c093571586c420",
+  "androidBranch": "codex/android-upstream-20261110",
+  "sourceIncludesUncommitted090": false,
+  "publishedRelease": {
+    "tag": "v1.6.0",
+    "versionCode": 17,
+    "sourceCommit": "655bf27f7b3114a472afe5d503be951fc8950d81",
+    "ciRun": 42556373345,
+    "releaseRun": 42557080252,
+    "checkedAt": "2026-11-11T00:22:10+08:00"
+  },
+  "featureCounts": {
+    "已": 38,
+    "部分": 19,
+    "未": 44
+  },
+  "features": [
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U01",
+      "feature": "今日 / 本月 / 累计 Token、费用",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "对比同一 Hub 三个周期；总量、零费用、缺失费用与未定价小计不混淆。",
+      "refs": [
+        "UM",
+        "AM",
+        "OV",
+        "TM"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U02",
+      "feature": "全部设备 / 单设备筛选",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "两台同名不同 ID 设备分别筛选；删除所选设备不得回退成全设备总量。",
+      "refs": [
+        "UA",
+        "AM",
+        "DV",
+        "TM"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U03",
+      "feature": "输入、输出、缓存读写与推理 Token",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "输入已知、缺失及部分组件；未知保持未知，缓存与推理量不重复累加。",
+      "refs": [
+        "UM",
+        "AM",
+        "SD",
+        "TD"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U04",
+      "feature": "按工具 / 模型 / 项目汇总",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "三个维度与 Hub 汇总对应，项目不完整和未定价要有提示。",
+      "refs": [
+        "UM",
+        "AM",
+        "OV",
+        "TM"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U05",
+      "feature": "超过 30 个项目 / 模型 / 工具的完整列表",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "输入 31 项：当前仅列前 30 项并提示截断；完整浏览 / 分页入口尚无。",
+      "refs": [
+        "OV"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U06",
+      "feature": "工具 / 模型 / 项目下钻与专属详情",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "总览可切维度，session 可看模型组成；主线独立工具、模型、项目详情及范围分析未实现。",
+      "refs": [
+        "UM",
+        "OV",
+        "SD"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U07",
+      "feature": "模型厂商图标 / 厂商色与 Inkling 品牌识别",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "模型原始名字可显示；没有主线厂商图标体系、品牌色设置或品牌分类视图。",
+      "refs": [
+        "UM",
+        "VEND",
+        "OV"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U08",
+      "feature": "显示货币 USD / TWD / HKD / CNY、汇率",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "用量费用固定 USD；账户余额与订阅保持原币种；无自动汇率、手动覆盖或显示币种切换。",
+      "refs": [
+        "UC",
+        "OV",
+        "QV"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U09",
+      "feature": "实时生成速率 tok/s、消耗速率 tok/min",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "当前详情仅有累计匹配计时的平均 tok/s；无实时计数差分采样和 burn 模式。",
+      "refs": [
+        "UM",
+        "RATE",
+        "AM",
+        "SD"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U10",
+      "feature": "近五分钟速率趋势 / boost 显示",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "主线临时速率历史未移植；不得用累计均速补造实时曲线。",
+      "refs": [
+        "RATE",
+        "SD"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U11",
+      "feature": "累计匹配计时的平均输出速度",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "已知 timedOutputTokens / timedDurationMs 算均速；无耗时不估算。",
+      "refs": [
+        "AM",
+        "SD",
+        "TD"
+      ]
+    },
+    {
+      "group": "用量、模型、项目与费用",
+      "id": "U12",
+      "feature": "缺失 / 未定价 / 明细被省略提示",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "检查 unpricedTokens、projectsIncomplete 和 sessionDetailsOmitted，不能把完整总量当完整明细。",
+      "refs": [
+        "OV",
+        "SV",
+        "TD"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S01",
+      "feature": "今日 / 本月会话列表、搜索与加载更多",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "按标题、项目、工具、模型搜索；分页不得漏掉匹配家族。",
+      "refs": [
+        "UM",
+        "AM",
+        "SV",
+        "TG"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S02",
+      "feature": "按工具与运行 / 等待 / 结束状态筛选",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "unknown / idle / archived 不计为 ended；工具筛选保留整组用量。",
+      "refs": [
+        "AM",
+        "SV",
+        "TS",
+        "T85"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S03",
+      "feature": "父子代理、跨工具父链接、续接会话分组",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "跨工具父链接、16 子代理、同一原生线程续接；不得按同标题合并或重复计量。",
+      "refs": [
+        "AM",
+        "SV",
+        "TG"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S04",
+      "feature": "设备来源、硬件类型与同名机器区分",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "同名两台设备均列出 ID；未知 deviceKind 使用通用图标，不从 OS 猜硬件。",
+      "refs": [
+        "AM",
+        "DV",
+        "SV",
+        "T85"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S05",
+      "feature": "Token / 模型组成、费用、上下文、父子详情",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "详情采用该会话自己的快照，模型组件仅展示已观测覆盖，缺失显示未知。",
+      "refs": [
+        "AM",
+        "SD",
+        "TD"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S06",
+      "feature": "原生活动租约与推断活动的区分",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "30 秒租约边界、来源机器过期、未来时钟、断网与后台；不能借别台在线状态续租。",
+      "refs": [
+        "AM",
+        "TS"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S07",
+      "feature": "推理强度与推理 Token 分开显示",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "high 等设置与 reasoningTokens 分开；未知 / 清空不得继承老设置。",
+      "refs": [
+        "AM",
+        "SD",
+        "T84"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S08",
+      "feature": "Claude 提示缓存到期估计",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "Claude 有效租约可见；旧 Codex 同名字段不得当 Claude 缓存显示。",
+      "refs": [
+        "AM",
+        "SD",
+        "TD"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S09",
+      "feature": "最近使用模型 latestModel",
+      "workspace": "已",
+      "apk160": "未",
+      "validationClass": "R",
+      "acceptance": "最新主会话模型优先，不取最大用量或新子代理；null / 缺失回退数量；历史模型桶不被改写。",
+      "refs": [
+        "UA",
+        "AM",
+        "SV",
+        "SD",
+        "T90"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S10",
+      "feature": "逐提问 / 逐回复 Token、工具调用、正文",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "B",
+      "acceptance": "主线仅在本机按需读 transcript / DB；现有 Hub 不传这些数据，需先评审数据协议与隐私边界。",
+      "refs": [
+        "UM",
+        "UPR",
+        "UA",
+        "SD"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S11",
+      "feature": "在原工具打开 / 恢复会话、切本地账号",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "Android 不持有电脑端路径或登录状态；无本机工具跳转和 Codex 活跃账号切换。",
+      "refs": [
+        "UM",
+        "UC",
+        "SV"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S12",
+      "feature": "会话标题同步的显示与管理",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "可显示 Hub 允许发送的 title；不提供生产端同意开关、标题编辑或跨设备设置写入。",
+      "refs": [
+        "UA",
+        "AM",
+        "SV",
+        "CN"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "S13",
+      "feature": "累计会话 / 完整历史会话归档浏览",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "可读今日 / 本月中已上传归档标记；累计会话页明确不可用，无本机 transcript 归档器。",
+      "refs": [
+        "UM",
+        "SV",
+        "AM"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "C01",
+      "feature": "当前周期输入缓存命中率",
+      "workspace": "已",
+      "apk160": "部分",
+      "validationClass": "R",
+      "acceptance": "缓存读为命中，输入与缓存写为未命中；输出及未分类排除。公开 APK 只有缓存读 / 总 Token 占比。",
+      "refs": [
+        "AM",
+        "OV",
+        "T90"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "C02",
+      "feature": "全部已测量会话缓存明细",
+      "workspace": "已",
+      "apk160": "未",
+      "validationClass": "R",
+      "acceptance": "包含完成会话、零命中和超过 6 行；无遥测不显示伪 0%，不依赖活动租约。",
+      "refs": [
+        "AM",
+        "OV",
+        "T90"
+      ]
+    },
+    {
+      "group": "会话、状态与缓存",
+      "id": "C03",
+      "feature": "工具 / 模型维度缓存命中拆分",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "会话及其模型已有组件；总览工具 / 模型列表没有主线独立组件下钻。",
+      "refs": [
+        "UM",
+        "OV",
+        "SD"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H01",
+      "feature": "最近 14 个有记录日的趋势与数值表",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "真实日期排序，缺失日不补零；选中日期在刷新后保留。",
+      "refs": [
+        "AM",
+        "OV",
+        "HH",
+        "TM",
+        "ST"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H02",
+      "feature": "固定本周 / 近 7 天 / 近 30 天范围",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "页面仅 today / month / allTime；原生微件的近 7 日小计不等于页面完整日期范围功能。",
+      "refs": [
+        "UM",
+        "TY",
+        "CN"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H03",
+      "feature": "自定义历史范围 / 年份 / 完整历史读取",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "B",
+      "acceptance": "GET /api/history 被原生路径白名单拒绝；没有历史范围选择或 revision 缓存。",
+      "refs": [
+        "UA",
+        "CN",
+        "AM"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H04",
+      "feature": "活跃热力图、连续天数、年度仪表板",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "只有短期总量趋势；无 heatmap、streak 或独立年度 Dashboard。",
+      "refs": [
+        "UM",
+        "OV",
+        "HH"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H05",
+      "feature": "按工具 / 模型堆叠历史、K 线",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "短期图仅总 Token / 费用；未消费 perClient / perModel 的历史组件。",
+      "refs": [
+        "UM",
+        "HH",
+        "OV"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H06",
+      "feature": "单设备完整历史",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "支持单设备当前周期汇总；未访问设备历史端点，趋势不提供完整单设备历史。",
+      "refs": [
+        "UA",
+        "DV",
+        "CN"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H07",
+      "feature": "累计活跃天数完整性标记",
+      "workspace": "已",
+      "apk160": "未",
+      "validationClass": "R",
+      "acceptance": "只有 activeDaysComplete=true 才叫累计；混合版本 / 缺失标记时仅统计所示日期去重天数。",
+      "refs": [
+        "UA",
+        "AM",
+        "OV",
+        "T90"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H08",
+      "feature": "活跃时长 activeTimeMs 分析",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "Hub 可提供该字段；Android 无活跃时长图或汇总，不能用输出耗时替代。",
+      "refs": [
+        "UA",
+        "TY",
+        "OV"
+      ]
+    },
+    {
+      "group": "用量历史与仪表板",
+      "id": "H09",
+      "feature": "保留已删除 session 的用量",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "E",
+      "acceptance": "能显示生产端保留的累计统计；不在 Android 扫描、归档或重建已删的电脑日志。",
+      "refs": [
+        "UM",
+        "UARCH",
+        "AM"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L01",
+      "feature": "35 个 provider 的通用百分比 / 余额读取",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "P",
+      "acceptance": "所有注册 ID 可通过通用模型；专用文案、积分与附加字段须按后面的 35 行单独验收。",
+      "refs": [
+        "UPRO",
+        "AM",
+        "QV",
+        "TP"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L02",
+      "feature": "多账户 / 工作区 / 来源身份隔离",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "同邮箱不同 accountKey、匿名来源及不同工作区不混合；同账户镜像保持稳定身份。",
+      "refs": [
+        "AM",
+        "QV",
+        "TL",
+        "T86"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L03",
+      "feature": "百分比、现金、积分、未知与零余额",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "不把积分写成 USD；明确零与缺失不同；showMeter=false 无假进度条。",
+      "refs": [
+        "AM",
+        "BAL",
+        "TL",
+        "TM"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L04",
+      "feature": "Muse / MiniMax / MiMo 产品边界",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "Muse web/CLI、MiniMax Code/API/Token Plan、MiMo Console/Desktop 保持各自身份、读数与状态。",
+      "refs": [
+        "AM",
+        "QV",
+        "T84",
+        "T87",
+        "T88"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L05",
+      "feature": "MiniMax 已验证账户标题关联",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "只在同区且 relatedAccountKey 确认时分标题组；不合并额度、币种或历史。",
+      "refs": [
+        "AM",
+        "T87"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L06",
+      "feature": "MiniMax 现金周期、Video 与无限额",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "今日/近7天/月/累计现金保留零与未知；Video 无明确时长不推定周周期；无限额不造历史。",
+      "refs": [
+        "AM",
+        "T87",
+        "LH"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L07",
+      "feature": "MiMo 赠送 / 现金余额明细",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "总额直接采用快照；组成保留零，缺失不补零，不二次相加。",
+      "refs": [
+        "AM",
+        "QV",
+        "T88"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L08",
+      "feature": "Mistral 订阅额度与独立钱包",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "API / Vibe 金额及纯百分比各自保留；钱包无假比例，匿名读数按来源隔离。",
+      "refs": [
+        "AM",
+        "T88"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L09",
+      "feature": "Hark 日 / 月 / 功能额度与 Top-up",
+      "workspace": "已",
+      "apk160": "部分",
+      "validationClass": "R",
+      "acceptance": "源码绝对数量与美元消费分开；公开 APK 只有通用百分比 / spend 读取。",
+      "refs": [
+        "AM",
+        "T90"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L10",
+      "feature": "Qoder 个人 / 团队独立积分池",
+      "workspace": "已",
+      "apk160": "部分",
+      "validationClass": "R",
+      "acceptance": "Credits 与 Team credits 保留独立分母、重置时间和历史；公开 APK 缺绝对数量补充。",
+      "refs": [
+        "AM",
+        "T90",
+        "LH"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L11",
+      "feature": "消费预算上限与所有提供方现金周期",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "G",
+      "acceptance": "G01：spend 的 limit 丢失；G08：第三方 API 周期支出未展示，不能据现有钱包判定完整适配。",
+      "refs": [
+        "AM",
+        "QV",
+        "UW"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L12",
+      "feature": "Kiro / Zed / GLM / Kimi 专用读数",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "G",
+      "acceptance": "G02-G07：超额金额、绝对积分/次数/Token 与组成文案缺失，详见复现表。",
+      "refs": [
+        "AM",
+        "UW",
+        "TP"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L13",
+      "feature": "额度绝对重置时间与倒计时",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "日期 / expiry 标签已显示；没有主线完整倒计时与用户显示模式切换。",
+      "refs": [
+        "QV",
+        "UW"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L14",
+      "feature": "Claude / Codex 重置券及到期详情",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "Hub 的 resetCredits / grant 字段未由页面消费；应单独展示数量、到期，不计成可用额度。",
+      "refs": [
+        "UW",
+        "QV",
+        "TY"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L15",
+      "feature": "Codex 第三方重置预测",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "无 codex-resets.com 预测入口 / 预测信息页，不能以普通 resetsAt 冒充预测。",
+      "refs": [
+        "UM",
+        "UW",
+        "QV"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L16",
+      "feature": "TypeSafe / Claude 赠款 tranches、usageSummary",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "通用余额可读；赠款到期分层、请求数与详细 Token/费用补充未展示。",
+      "refs": [
+        "UW",
+        "TY",
+        "QV"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L17",
+      "feature": "本机 SQLite 额度趋势与日净变化",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "工作区隔离、重开持久化、采样空档、冲突、额度变化、跨日与未知读数；180/730 日保留规则。",
+      "refs": [
+        "ULH",
+        "LH",
+        "QH",
+        "T86"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L18",
+      "feature": "来源接管与冲突 guard",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "guard=2 兼容接管可续算，guard=1 保持真实冲突，旧数据不被重写或误当消费。",
+      "refs": [
+        "LH",
+        "LP",
+        "T88"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L19",
+      "feature": "额度历史跨 local / Hub / iCloud 模式迁移",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "Android 只保留连接指纹内历史；无桌面模式 / 旧源索引迁移，不应直接混并不同 Hub。",
+      "refs": [
+        "ULH",
+        "LH"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L20",
+      "feature": "额度账户搜索、排序、隐藏周期、显示已用/剩余开关",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "全部账户按现有页面显示；缺主线的搜索、可见项偏好、排序和统一显示模式设置。",
+      "refs": [
+        "UC",
+        "QV"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L21",
+      "feature": "provider 登录、多账号增删、凭据管理与主动采集",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "只在采集端管理；手机刷新读取已有 Hub 结果，不登录 provider、不读取电脑凭据。",
+      "refs": [
+        "UC",
+        "CN",
+        "MA"
+      ]
+    },
+    {
+      "group": "额度、账户与本地额度历史",
+      "id": "L22",
+      "feature": "可选 provider、固定 / 自适应额度采集刷新",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "手机轮询频率不代表 provider 采样配置；没有生产端启用列表和自适应探测器。",
+      "refs": [
+        "UC",
+        "MA"
+      ]
+    },
+    {
+      "group": "订阅与共享设置",
+      "id": "B01",
+      "feature": "读取共享订阅与充值账本",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "固定币种与 minor 单位转换，周期订阅和 top-up 记录分开；失败保留旧数据。",
+      "refs": [
+        "UA",
+        "QV",
+        "AM",
+        "TM"
+      ]
+    },
+    {
+      "group": "订阅与共享设置",
+      "id": "B02",
+      "feature": "新增 / 修改 / 删除订阅",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "只读客户端无 PUT；若未来扩大范围，必须实现 baseUpdatedAt 并发冲突保护。",
+      "refs": [
+        "UA",
+        "CN",
+        "HC"
+      ]
+    },
+    {
+      "group": "订阅与共享设置",
+      "id": "B03",
+      "feature": "续费日期、订阅时长、回本倍数 ROI",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "S",
+      "acceptance": "显示起止日、周期与手工 nextRenewalOverride；不计算主线完整续费/时长/回本指标。",
+      "refs": [
+        "UM",
+        "QV"
+      ]
+    },
+    {
+      "group": "订阅与共享设置",
+      "id": "B04",
+      "feature": "共享订阅更新发现",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "subscriptionsUpdatedAt 改变时重新 GET；失败提示与手动重试独立于用量。",
+      "refs": [
+        "UA",
+        "MA",
+        "NS"
+      ]
+    },
+    {
+      "group": "订阅与共享设置",
+      "id": "B05",
+      "feature": "模型别名 / 自定义定价编辑与共享同步",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "B",
+      "acceptance": "未访问 /api/sync/settings；可显示 Hub 已计算费用，但不等于拥有别名/定价管理功能。",
+      "refs": [
+        "UC",
+        "UA",
+        "CN",
+        "OV"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N01",
+      "feature": "连接 Node Hub / Worker Hub",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "HTTPS、显式 HTTP、路径前缀、Bearer、401/403/404、响应上限与重定向拒绝。",
+      "refs": [
+        "UA",
+        "CN",
+        "HC",
+        "ST"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N02",
+      "feature": "SSE 完整帧、freshness / 增量协议",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "B",
+      "acceptance": "仅 5 秒 GET 轮询，无 stream 连接或补丁基线；不能称为 SSE 同步。",
+      "refs": [
+        "UA",
+        "CN",
+        "MA"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N03",
+      "feature": "手机本机独立采集、不依赖 Hub",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "未包含 tokscale / 电脑日志扫描器，不能把已知 42 个名称等价于 42 种本地采集。",
+      "refs": [
+        "UC",
+        "AG",
+        "MA"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N04",
+      "feature": "Host Hub / Node CLI Hub / Cloudflare Worker 部署",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "Android 只消费已部署服务；无 Hub 监听端口、上传接收或 Worker 部署功能。",
+      "refs": [
+        "UM",
+        "UC",
+        "AG"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N05",
+      "feature": "Headless agent、SSH / Linux 服务器采集",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "生产端独立运行；手机显示其上传结果，不是手机运行 Agent。",
+      "refs": [
+        "UM",
+        "UAG",
+        "AG"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N06",
+      "feature": "WSL 扫描、扫描路径、重扫与收集开关",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "Android 无 Windows/WSL 路径；不提供本机扫描管理，主线修复由采集端升级生效。",
+      "refs": [
+        "UC",
+        "UAG",
+        "AG"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N07",
+      "feature": "iCloud Drive 同步",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "无 iCloud 模式和文件同步实现；当前连接指纹不能充当 iCloud 身份。",
+      "refs": [
+        "UM",
+        "UPR",
+        "CN"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N08",
+      "feature": "设备列表查看与状态",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "从 stats.devices 读取机器名/ID/硬件/近期上报；过期周期不作为当前数据。",
+      "refs": [
+        "UA",
+        "DV",
+        "AM",
+        "T85"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N09",
+      "feature": "删除远端设备 / 服务端维护",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "无 DELETE /api/devices；测试应确认只读边界，而不是把入口缺失当权限绕过任务。",
+      "refs": [
+        "UA",
+        "CN",
+        "HC"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N10",
+      "feature": "工具来源健康详情 / 重新探测",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "额度状态和机器新鲜度已有；未展示 clientHealth 的逐工具错误与主线重扫操作。",
+      "refs": [
+        "UC",
+        "UA",
+        "SV"
+      ]
+    },
+    {
+      "group": "连接、采集与服务端能力",
+      "id": "N11",
+      "feature": "本地代理配置 / Provider 网络传输设置",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "安卓使用系统网络及原生 Hub 连接；没有桌面 provider 代理、Cookie 或 RPC 管理。",
+      "refs": [
+        "UC",
+        "HC"
+      ]
+    },
+    {
+      "group": "导出、服务状态与诊断",
+      "id": "E01",
+      "feature": "手动导出 CSV + 完整 JSON",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "无 snapshot/daily/daily-models/export.json 保存入口；完整历史导出还受历史接口限制。",
+      "refs": [
+        "UE",
+        "CN",
+        "TY"
+      ]
+    },
+    {
+      "group": "导出、服务状态与诊断",
+      "id": "E02",
+      "feature": "自动导出到目录 / Obsidian / Grafana 文件工作流",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "无自动文件写入与周期导出任务；应用更新 APK 下载不属于使用数据导出。",
+      "refs": [
+        "UE",
+        "AG"
+      ]
+    },
+    {
+      "group": "导出、服务状态与诊断",
+      "id": "E03",
+      "feature": "Claude / OpenAI / Cursor / DeepSeek 服务状态视图",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "provider 额度状态不等于上游服务状态页；无独立服务状态读取与周期检查。",
+      "refs": [
+        "UM",
+        "USERVICE",
+        "TY"
+      ]
+    },
+    {
+      "group": "导出、服务状态与诊断",
+      "id": "E04",
+      "feature": "脱敏诊断报告 / 原始设置文件入口",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "无主线诊断导出面板；有连接错误提示不等于可附到 issue 的诊断文件。",
+      "refs": [
+        "UC",
+        "UDIAG",
+        "TY"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V01",
+      "feature": "macOS 刘海 / 胶囊面板",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "平台专用；Android 不存在刘海旁桌面窗口，原生微件另外评估。",
+      "refs": [
+        "UM",
+        "AG"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V02",
+      "feature": "Edge Dock 停靠 / 悬浮胶囊 / 多显示器位置",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "无侧边悬浮窗或系统覆盖层；不能把 App 底部导航称为 Edge Dock。",
+      "refs": [
+        "UM",
+        "UC",
+        "MAN"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V03",
+      "feature": "菜单栏 / 系统托盘与自定义布局",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "Android 无桌面托盘；不复制托盘字体、账号/周期选择和拖动排版。",
+      "refs": [
+        "UM",
+        "UC",
+        "MAN"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V04",
+      "feature": "浮窗模式、窗口置顶 / 贴桌面 / 隐藏 Dock 图标",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "没有对应的 Android overlay/window 模式；仅正常 Activity 和系统桌面微件。",
+      "refs": [
+        "UM",
+        "UC",
+        "MAN"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V05",
+      "feature": "原生系统小部件",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "R",
+      "acceptance": "Android 有四类 RemoteViews 与响应式尺寸；未复制 macOS 热力图、完整模型/额度细节和所有内容配置。",
+      "refs": [
+        "UM",
+        "WS",
+        "WG",
+        "TW"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V06",
+      "feature": "42 工具在原生微件中的名称区分",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "G",
+      "acceptance": "主界面 42/42 规范名称；原生白名单仅区分 14/42，28 个归其他；senpi 仍显示旧名 Senpi。",
+      "refs": [
+        "CAT",
+        "WP",
+        "WS"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V07",
+      "feature": "工具隐藏 / 置顶 / 拖动排序",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "没有主线工具列表偏好编辑；筛选某工具不是修改列表顺序或隐藏偏好。",
+      "refs": [
+        "UC",
+        "OV",
+        "SV"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V08",
+      "feature": "主页模块选择 / 顺序、自定义字体 / 厂商色",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "页面模块和字体样式固定，无自定义布局或颜色设置。",
+      "refs": [
+        "UC",
+        "CSS",
+        "TY"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V09",
+      "feature": "浅色主题 / 多主题 / 玻璃透明度",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "当前 CSS 固定深色；无系统浅色跟随、玻璃/透明窗口与主线外观面板。",
+      "refs": [
+        "UC",
+        "CSS"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V10",
+      "feature": "多语言（含新增西班牙语）",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "W",
+      "acceptance": "界面中文固定，工具/模型名可原样显示，但无主线语言包切换。",
+      "refs": [
+        "UC",
+        "TY"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V11",
+      "feature": "全局显示/隐藏快捷键",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "桌面全局键盘功能无 Android 对等实现。",
+      "refs": [
+        "UM",
+        "UC",
+        "MAN"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V12",
+      "feature": "Discord Rich Presence",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "不向 Discord 广播今日数据，无客户端/IPC 集成。",
+      "refs": [
+        "UM",
+        "UC",
+        "MAN"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "V13",
+      "feature": "macOS / Windows / Wayland 材质与位置修复",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "平台",
+      "acceptance": "最新 f280297 黑底修复属于 Electron 面板；Android 不包含这些窗口，不是漏移植 bug。",
+      "refs": [
+        "UM",
+        "UC",
+        "AG"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "P01",
+      "feature": "插件目录发现、安装 / 更新 / 卸载与信任管理",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "安卓无插件管理器；不加载社区或本地插件。",
+      "refs": [
+        "UPL",
+        "TY",
+        "AG"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "P02",
+      "feature": "插件自定义页面 / 设置 / 多桌面挂载",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "不存在插件 UI 容器、快捷卡片、主题或后台生命周期 API。",
+      "refs": [
+        "UPL",
+        "TY"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "P03",
+      "feature": "插件 Node 后端、资源 / 通知 / 数据接口",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "E",
+      "acceptance": "没有 Node 后端进程或 host.call 接口；Android 原生桥不能被当通用插件桥。",
+      "refs": [
+        "UPL",
+        "AG"
+      ]
+    },
+    {
+      "group": "界面、平台呈现与插件",
+      "id": "P04",
+      "feature": "插件原生额度与 OpenAI API credit 插件",
+      "workspace": "未",
+      "apk160": "未",
+      "validationClass": "B",
+      "acceptance": "主线插件额度仍不进入 DeviceRecord / Hub/Worker，先有协议才可能做远端只读展示。",
+      "refs": [
+        "UPQ",
+        "UA",
+        "CN"
+      ]
+    },
+    {
+      "group": "Android 等价能力与平台验收",
+      "id": "A01",
+      "feature": "GitHub 应用更新检查 / 提示",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "固定安卓仓库稳定版，自动/手动、关闭自动后手动、节流与迟到结果；与 Hub 凭据隔离。",
+      "refs": [
+        "UPDATES",
+        "UPOL",
+        "TUP"
+      ]
+    },
+    {
+      "group": "Android 等价能力与平台验收",
+      "id": "A02",
+      "feature": "应用内下载、哈希/签名校验与系统安装确认",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "错误包名、代码未增加、摘要/证书不符、取消/重建和系统授权均应检查；本轮不实际安装。",
+      "refs": [
+        "UPDATES",
+        "APK",
+        "TDL"
+      ]
+    },
+    {
+      "group": "Android 等价能力与平台验收",
+      "id": "A03",
+      "feature": "后台完成监控、去重与通知跳转",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "Android 扩展：先见活动再见明确结束；首次/推断/失联不补发，停止与点击跳转不串连接。",
+      "refs": [
+        "MON",
+        "COMPLETE",
+        "TC"
+      ]
+    },
+    {
+      "group": "Android 等价能力与平台验收",
+      "id": "A04",
+      "feature": "Keystore、只读网络、离线旧读数与资源隔离",
+      "workspace": "已",
+      "apk160": "已",
+      "validationClass": "R",
+      "acceptance": "secret 不回传网页，连接切换清旧状态，WebView 只读 APK 资源；留存旧页面不宣称冷启动离线档案。",
+      "refs": [
+        "STORE",
+        "CN",
+        "LOCAL",
+        "HC",
+        "NS"
+      ]
+    },
+    {
+      "group": "Android 等价能力与平台验收",
+      "id": "A05",
+      "feature": "旋转 / 刘海 / 键盘 Insets / 大字体可访问性",
+      "workspace": "部分",
+      "apk160": "部分",
+      "validationClass": "设备",
+      "acceptance": "有 Insets、图表文本替代和既有仪器用例；本次未验 200% 字体、TalkBack、不同启动器/系统。",
+      "refs": [
+        "MA",
+        "ST",
+        "TW",
+        "CSS"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "I01",
+      "name": "Claude Code",
+      "upstreamCapabilities": "✅ / ✅ / ✅",
+      "androidUsage": "可读 `claude`",
+      "androidQuota": "claude：部分",
+      "androidMessageDetail": "未",
+      "widgetLabel": "Claude"
+    },
+    {
+      "id": "I02",
+      "name": "Codex",
+      "upstreamCapabilities": "✅ / ✅ / ✅",
+      "androidUsage": "可读 `codex`",
+      "androidQuota": "codex：部分",
+      "androidMessageDetail": "未",
+      "widgetLabel": "Codex"
+    },
+    {
+      "id": "I03",
+      "name": "OpenCode",
+      "upstreamCapabilities": "✅ / ✅ / ✅",
+      "androidUsage": "可读 `opencode`",
+      "androidQuota": "opencode：已",
+      "androidMessageDetail": "未",
+      "widgetLabel": "OpenCode"
+    },
+    {
+      "id": "I04",
+      "name": "Hermes Agent",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `hermes`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I05",
+      "name": "OpenClaw",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `openclaw`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I06",
+      "name": "Cursor IDE / Cursor CLI / Grok Bot",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `cursor`",
+      "androidQuota": "cursor：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Cursor"
+    },
+    {
+      "id": "I07",
+      "name": "Antigravity",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `antigravity`",
+      "androidQuota": "antigravity：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Antigravity"
+    },
+    {
+      "id": "I08",
+      "name": "Gemini CLI",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `gemini`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Gemini CLI"
+    },
+    {
+      "id": "I09",
+      "name": "Cline",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `cline`",
+      "androidQuota": "cline：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I10",
+      "name": "Amp",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `amp`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I11",
+      "name": "Factory Droid",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `droid`",
+      "androidQuota": "factory：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I12",
+      "name": "Kimi CLI / Kimi Code / Kimi Work",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `kimi`",
+      "androidQuota": "kimi：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I13",
+      "name": "Qwen CLI",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `qwen`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I14",
+      "name": "Grok Build",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `grok`",
+      "androidQuota": "grok：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I15",
+      "name": "GitHub Copilot",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `copilot`",
+      "androidQuota": "copilot：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Copilot"
+    },
+    {
+      "id": "I16",
+      "name": "Pi",
+      "upstreamCapabilities": "✅ / — / ✅",
+      "androidUsage": "可读 `pi`",
+      "androidQuota": "—",
+      "androidMessageDetail": "未",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I17",
+      "name": "Oh My Pi",
+      "upstreamCapabilities": "✅ / — / ✅",
+      "androidUsage": "可读 `omp`",
+      "androidQuota": "—",
+      "androidMessageDetail": "未",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I18",
+      "name": "OmO Native",
+      "upstreamCapabilities": "✅ / — / ✅",
+      "androidUsage": "可读 `senpi`",
+      "androidQuota": "—",
+      "androidMessageDetail": "未",
+      "widgetLabel": "Senpi（旧名）"
+    },
+    {
+      "id": "I19",
+      "name": "Goose",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `goose`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I20",
+      "name": "Zed",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `zed`",
+      "androidQuota": "zed：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I21",
+      "name": "Kilo",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `kilo`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I22",
+      "name": "Command Code",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `commandcode`",
+      "androidQuota": "commandcode：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I23",
+      "name": "MiMo Code / MiMo Desktop",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `mimo`",
+      "androidQuota": "mimo：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "MiMo"
+    },
+    {
+      "id": "I24",
+      "name": "Muse / Muse Code",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `muse`",
+      "androidQuota": "muse：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Muse Code"
+    },
+    {
+      "id": "I25",
+      "name": "ZCode / GLM",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `zcode`",
+      "androidQuota": "zai：部分 / zaiteam：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I26",
+      "name": "Kiro",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `kiro`",
+      "androidQuota": "kiro：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I27",
+      "name": "CodeBuddy",
+      "upstreamCapabilities": "✅ / — / ✅",
+      "androidUsage": "可读 `codebuddy`",
+      "androidQuota": "—",
+      "androidMessageDetail": "未",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I28",
+      "name": "WorkBuddy",
+      "upstreamCapabilities": "✅ / ✅ / ✅",
+      "androidUsage": "可读 `workbuddy`",
+      "androidQuota": "workbuddy：部分",
+      "androidMessageDetail": "未",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I29",
+      "name": "Proma",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `proma`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I30",
+      "name": "CatPaw",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `catpaw`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I31",
+      "name": "Qoder",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `qodercn`",
+      "androidQuota": "qoder：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I32",
+      "name": "Reasonix",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `reasonix`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I33",
+      "name": "DeepSeek / DeepSeek Harness",
+      "upstreamCapabilities": "✅ / ✅ / ✅",
+      "androidUsage": "可读 `dsh`",
+      "androidQuota": "deepseek：已",
+      "androidMessageDetail": "未",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I34",
+      "name": "Cherry Studio",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `cherrystudio`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I35",
+      "name": "LM Studio",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `lmstudio`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I36",
+      "name": "Unsloth Studio",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `unsloth`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I37",
+      "name": "Devin CLI / Devin Desktop",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `devin`",
+      "androidQuota": "devin：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I38",
+      "name": "fx",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `fx`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "其他"
+    },
+    {
+      "id": "I39",
+      "name": "MiniMax / MiniMax Code",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `mcode`",
+      "androidQuota": "minimax：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "MiniMax Code"
+    },
+    {
+      "id": "I40",
+      "name": "Mistral Vibe",
+      "upstreamCapabilities": "✅ / ✅ / —",
+      "androidUsage": "可读 `mistral`",
+      "androidQuota": "mistral：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Mistral Vibe"
+    },
+    {
+      "id": "I41",
+      "name": "Prime Agent",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `prime-agent`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Prime Agent"
+    },
+    {
+      "id": "I42",
+      "name": "Jcode",
+      "upstreamCapabilities": "✅ / — / —",
+      "androidUsage": "可读 `jcode`",
+      "androidQuota": "—",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "Jcode"
+    },
+    {
+      "id": "I43",
+      "name": "TypeSafe",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "typesafe：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I44",
+      "name": "OpenRouter",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "openrouter：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I45",
+      "name": "Volcengine",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "volcengine：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I46",
+      "name": "Ollama",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "ollama：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I47",
+      "name": "Trae CN",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "trae：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I48",
+      "name": "Alibaba Cloud",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "alibaba：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I49",
+      "name": "StepFun",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "stepfun：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I50",
+      "name": "Notion AI",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "notion：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I51",
+      "name": "Manus",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "manus：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I52",
+      "name": "Hark",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "hark：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I53",
+      "name": "OpenDesign",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "opendesign：已",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    },
+    {
+      "id": "I54",
+      "name": "第三方 API",
+      "upstreamCapabilities": "— / ✅ / —",
+      "androidUsage": "—（主线无usage）",
+      "androidQuota": "thirdparty：部分",
+      "androidMessageDetail": "—（主线无此项）",
+      "widgetLabel": "—"
+    }
+  ],
+  "providers": [
+    {
+      "id": "Q01",
+      "provider": "claude",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "resetCredits、prepaid tranches 未展示",
+      "acceptance": "给重置券和赠款到期；须保留数量、币种、每笔到期。"
+    },
+    {
+      "id": "Q02",
+      "provider": "codex",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "重置券 / 第三方预测未适配",
+      "acceptance": "带 resetCredits 与预测资料；不能把它们写入普通额度读数。"
+    },
+    {
+      "id": "Q03",
+      "provider": "opencode",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Go / Zen 窗口与钱包可按身份显示",
+      "acceptance": "同工作区不同产品、不同 key、负/零钱包分别核对；旧键别名由 Hub 负责。"
+    },
+    {
+      "id": "Q04",
+      "provider": "cursor",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "有上限的 spend 丢掉上限（G01）",
+      "acceptance": "2.35/20 USD 必须保留分母；缺上限才只显示实际消费。"
+    },
+    {
+      "id": "Q05",
+      "provider": "antigravity",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "通用多窗口额度与来源",
+      "acceptance": "多账号 session/weekly 的已知百分比与过期状态不得互相覆盖。"
+    },
+    {
+      "id": "Q06",
+      "provider": "cline",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "通用百分比 / 余额",
+      "acceptance": "配额、余额、未知、零与失败旧快照分别验收。"
+    },
+    {
+      "id": "Q07",
+      "provider": "factory",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Standard / Core / Billing 窗口可逐行保留",
+      "acceptance": "同种类多个窗口、additional 标记与独立余额不得丢失或相加。"
+    },
+    {
+      "id": "Q08",
+      "provider": "kimi",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "Kimi/Code 组成 detail 缺失（G07）",
+      "acceptance": "同一会员池占用率及组成说明同时可读，不另造两个分母。"
+    },
+    {
+      "id": "Q09",
+      "provider": "grok",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Monthly 额度与稳定 accountKey 消费",
+      "acceptance": "换 token 后同一新稳定 key 续读；不从邮箱猜旧 key 的历史。"
+    },
+    {
+      "id": "Q10",
+      "provider": "copilot",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "多个 billing 池通用显示",
+      "acceptance": "不同额度桶、原始 label、零/缺失和 sourceRateLimited 独立。"
+    },
+    {
+      "id": "Q11",
+      "provider": "zed",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "绝对编辑预测次数缺失（G04）",
+      "acceptance": "120/500 次、美元消费、Unlimited 互不混淆。"
+    },
+    {
+      "id": "Q12",
+      "provider": "commandcode",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "月赠款 / Top-up / 5h / weekly 分离",
+      "acceptance": "赠款有明确 used/limit 时比例正确；47.42/70 与充值池不合计。"
+    },
+    {
+      "id": "Q13",
+      "provider": "mimo",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Console/Desktop 与余额组成",
+      "acceptance": "gift=0、cash=30、总额采用原值，套餐与产品名称分开。"
+    },
+    {
+      "id": "Q14",
+      "provider": "muse",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "web / CLI 与额外 Token",
+      "acceptance": "同设备 / 跨设备身份，钱包币种与 Token 文案分别显示。"
+    },
+    {
+      "id": "Q15",
+      "provider": "zai",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "Daily / 模型池绝对 Token 缺失（G05）",
+      "acceptance": "400/1000 Token 与 40% 同时展示；MCP 不冒充 Token 池。"
+    },
+    {
+      "id": "Q16",
+      "provider": "zaiteam",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "独立模型 Token 池绝对量缺失（G06）",
+      "acceptance": "limitId 窗口互不覆盖，补齐真实数量而非重算未知总量。"
+    },
+    {
+      "id": "Q17",
+      "provider": "kiro",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "Overage 变暂无读数、绝对积分缺失（G02/G03）",
+      "acceptance": "14 credits 与估价 $0.56 一并展示；Bonus 到期区别于 Reset。"
+    },
+    {
+      "id": "Q18",
+      "provider": "workbuddy",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "usageSummary 等专用明细未显示",
+      "acceptance": "账户池可读；完整月请求/Token/费用详情仍需补充用例与页面。"
+    },
+    {
+      "id": "Q19",
+      "provider": "qoder",
+      "workspace": "已",
+      "apk160": "部分",
+      "scope": "源码有个人 / 团队绝对积分；公开版仅通用显示",
+      "acceptance": "20/100 与 10/50 各自重置；服务部分失败不将一个池补进另一个池。"
+    },
+    {
+      "id": "Q20",
+      "provider": "deepseek",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "原币种余额",
+      "acceptance": "CNY/其他原币种保留；明确零与未配置不同。"
+    },
+    {
+      "id": "Q21",
+      "provider": "devin",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "日 / 周额度与额外余额",
+      "acceptance": "保留窗口标签和币种，原始余额不并入百分比额度。"
+    },
+    {
+      "id": "Q22",
+      "provider": "minimax",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Code / API / Token Plan 与现金周期",
+      "acceptance": "同区已验证标题关联、独立异常、Video / Unlimited、现金零和未知全部核对。"
+    },
+    {
+      "id": "Q23",
+      "provider": "mistral",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "API / Vibe 与独立钱包",
+      "acceptance": "纯百分比不补金额，负余额保留，匿名来源隔离。"
+    },
+    {
+      "id": "Q24",
+      "provider": "typesafe",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "钱包可见，usageSummary / tranches 不全",
+      "acceptance": "独立 billing 余额与 usage 估价不互代；逐笔到期和请求/Token 明细未适配。"
+    },
+    {
+      "id": "Q25",
+      "provider": "openrouter",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "余额可读，专用消费/额度补充不全",
+      "acceptance": "账户余额、key 限额、实际消费与无 meter 文案分别核对。"
+    },
+    {
+      "id": "Q26",
+      "provider": "volcengine",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "session / daily / weekly / billing 通用窗口",
+      "acceptance": "同类多个窗口与计划标签保留，不把产品积分当美元。"
+    },
+    {
+      "id": "Q27",
+      "provider": "ollama",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "included allowance / 钱包 / spend 分开",
+      "acceptance": "52.5/60 额度、18.25 独立钱包和 4.5 消费分别显示。"
+    },
+    {
+      "id": "Q28",
+      "provider": "trae",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "归一化额度窗口",
+      "acceptance": "quota 账户身份、原币种及已知/未知比例按归一化快照显示。"
+    },
+    {
+      "id": "Q29",
+      "provider": "alibaba",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "Token Plan / Team 等窗口",
+      "acceptance": "billing 与滚动窗口按各自标签 / 单位显示，不能跨产品加总。"
+    },
+    {
+      "id": "Q30",
+      "provider": "stepfun",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "归一化窗口和余额",
+      "acceptance": "余额与 Token Plan 窗口保持各自单位，无分母不制造占用率。"
+    },
+    {
+      "id": "Q31",
+      "provider": "notion",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "账户/工作区身份与额度",
+      "acceptance": "同 workspace 不同用户的已验证 key 不能因同名而合并。"
+    },
+    {
+      "id": "Q32",
+      "provider": "manus",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "CREDITS 积分",
+      "acceptance": "积分数值不加美元符号，未知与零值不混淆。"
+    },
+    {
+      "id": "Q33",
+      "provider": "hark",
+      "workspace": "已",
+      "apk160": "部分",
+      "scope": "源码有绝对日/月数量与 Top-up",
+      "acceptance": "125/100 超额数量保留，Top-up $1.25 无条；无用量工具/会话数据。"
+    },
+    {
+      "id": "Q34",
+      "provider": "opendesign",
+      "workspace": "已",
+      "apk160": "已",
+      "scope": "工作区额度与本机历史",
+      "acceptance": "不同 workspace、失败旧读数、真实零、五小时边界和历史保存。"
+    },
+    {
+      "id": "Q35",
+      "provider": "thirdparty",
+      "workspace": "部分",
+      "apk160": "部分",
+      "scope": "余额可读，New API 周期支出缺失（G08）",
+      "acceptance": "Today/Week/Month/All-time 零与未知保留；usage、group、tranches 需另补。"
+    }
+  ],
+  "probes": {
+    "upstreamCommit": "f2802979ee69930cd946e728db92bc981af0fc40",
+    "clientCount": 42,
+    "providerCount": 35,
+    "names": [
+      {
+        "id": "claude",
+        "label": "Claude Code",
+        "android": "Claude Code"
+      },
+      {
+        "id": "codex",
+        "label": "Codex",
+        "android": "Codex"
+      },
+      {
+        "id": "opencode",
+        "label": "OpenCode",
+        "android": "OpenCode"
+      },
+      {
+        "id": "hermes",
+        "label": "Hermes Agent",
+        "android": "Hermes Agent"
+      },
+      {
+        "id": "openclaw",
+        "label": "OpenClaw",
+        "android": "OpenClaw"
+      },
+      {
+        "id": "cursor",
+        "label": "Cursor",
+        "android": "Cursor"
+      },
+      {
+        "id": "antigravity",
+        "label": "Antigravity",
+        "android": "Antigravity"
+      },
+      {
+        "id": "gemini",
+        "label": "Gemini CLI",
+        "android": "Gemini CLI"
+      },
+      {
+        "id": "cline",
+        "label": "Cline",
+        "android": "Cline"
+      },
+      {
+        "id": "amp",
+        "label": "Amp",
+        "android": "Amp"
+      },
+      {
+        "id": "droid",
+        "label": "Factory Droid",
+        "android": "Factory Droid"
+      },
+      {
+        "id": "kimi",
+        "label": "Kimi",
+        "android": "Kimi"
+      },
+      {
+        "id": "qwen",
+        "label": "Qwen",
+        "android": "Qwen"
+      },
+      {
+        "id": "grok",
+        "label": "Grok Build",
+        "android": "Grok Build"
+      },
+      {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "android": "GitHub Copilot"
+      },
+      {
+        "id": "pi",
+        "label": "Pi",
+        "android": "Pi"
+      },
+      {
+        "id": "omp",
+        "label": "Oh My Pi",
+        "android": "Oh My Pi"
+      },
+      {
+        "id": "senpi",
+        "label": "OmO Native",
+        "android": "OmO Native"
+      },
+      {
+        "id": "goose",
+        "label": "Goose",
+        "android": "Goose"
+      },
+      {
+        "id": "zed",
+        "label": "Zed",
+        "android": "Zed"
+      },
+      {
+        "id": "kilo",
+        "label": "Kilo",
+        "android": "Kilo"
+      },
+      {
+        "id": "commandcode",
+        "label": "Command Code",
+        "android": "Command Code"
+      },
+      {
+        "id": "mimo",
+        "label": "Xiaomi MiMo",
+        "android": "Xiaomi MiMo"
+      },
+      {
+        "id": "muse",
+        "label": "Muse Code",
+        "android": "Muse Code"
+      },
+      {
+        "id": "zcode",
+        "label": "ZCode",
+        "android": "ZCode"
+      },
+      {
+        "id": "kiro",
+        "label": "Kiro",
+        "android": "Kiro"
+      },
+      {
+        "id": "codebuddy",
+        "label": "CodeBuddy",
+        "android": "CodeBuddy"
+      },
+      {
+        "id": "workbuddy",
+        "label": "WorkBuddy",
+        "android": "WorkBuddy"
+      },
+      {
+        "id": "proma",
+        "label": "Proma",
+        "android": "Proma"
+      },
+      {
+        "id": "catpaw",
+        "label": "CatPaw",
+        "android": "CatPaw"
+      },
+      {
+        "id": "qodercn",
+        "label": "Qoder CN",
+        "android": "Qoder CN"
+      },
+      {
+        "id": "reasonix",
+        "label": "Reasonix",
+        "android": "Reasonix"
+      },
+      {
+        "id": "dsh",
+        "label": "DeepSeek Harness",
+        "android": "DeepSeek Harness"
+      },
+      {
+        "id": "cherrystudio",
+        "label": "Cherry Studio",
+        "android": "Cherry Studio"
+      },
+      {
+        "id": "lmstudio",
+        "label": "LM Studio",
+        "android": "LM Studio"
+      },
+      {
+        "id": "unsloth",
+        "label": "Unsloth",
+        "android": "Unsloth"
+      },
+      {
+        "id": "devin",
+        "label": "Devin",
+        "android": "Devin"
+      },
+      {
+        "id": "fx",
+        "label": "fx",
+        "android": "fx"
+      },
+      {
+        "id": "mcode",
+        "label": "MiniMax Code",
+        "android": "MiniMax Code"
+      },
+      {
+        "id": "mistral",
+        "label": "Mistral Vibe",
+        "android": "Mistral Vibe"
+      },
+      {
+        "id": "prime-agent",
+        "label": "Prime Agent",
+        "android": "Prime Agent"
+      },
+      {
+        "id": "jcode",
+        "label": "Jcode",
+        "android": "Jcode"
+      }
+    ],
+    "genericProviders": [
+      {
+        "id": "claude",
+        "value": "30% 已用"
+      },
+      {
+        "id": "codex",
+        "value": "30% 已用"
+      },
+      {
+        "id": "opencode",
+        "value": "30% 已用"
+      },
+      {
+        "id": "cursor",
+        "value": "30% 已用"
+      },
+      {
+        "id": "antigravity",
+        "value": "30% 已用"
+      },
+      {
+        "id": "cline",
+        "value": "30% 已用"
+      },
+      {
+        "id": "factory",
+        "value": "30% 已用"
+      },
+      {
+        "id": "kimi",
+        "value": "30% 已用"
+      },
+      {
+        "id": "grok",
+        "value": "30% 已用"
+      },
+      {
+        "id": "copilot",
+        "value": "30% 已用"
+      },
+      {
+        "id": "zed",
+        "value": "30% 已用"
+      },
+      {
+        "id": "commandcode",
+        "value": "30% 已用"
+      },
+      {
+        "id": "mimo",
+        "value": "30% 已用"
+      },
+      {
+        "id": "muse",
+        "value": "30% 已用"
+      },
+      {
+        "id": "zai",
+        "value": "30% 已用"
+      },
+      {
+        "id": "zaiteam",
+        "value": "30% 已用"
+      },
+      {
+        "id": "kiro",
+        "value": "30% 已用"
+      },
+      {
+        "id": "workbuddy",
+        "value": "30% 已用"
+      },
+      {
+        "id": "qoder",
+        "value": "30% 已用"
+      },
+      {
+        "id": "deepseek",
+        "value": "30% 已用"
+      },
+      {
+        "id": "devin",
+        "value": "30% 已用"
+      },
+      {
+        "id": "minimax",
+        "value": "30% 已用"
+      },
+      {
+        "id": "mistral",
+        "value": "30% 已用"
+      },
+      {
+        "id": "typesafe",
+        "value": "30% 已用"
+      },
+      {
+        "id": "openrouter",
+        "value": "30% 已用"
+      },
+      {
+        "id": "volcengine",
+        "value": "30% 已用"
+      },
+      {
+        "id": "ollama",
+        "value": "30% 已用"
+      },
+      {
+        "id": "trae",
+        "value": "30% 已用"
+      },
+      {
+        "id": "alibaba",
+        "value": "30% 已用"
+      },
+      {
+        "id": "stepfun",
+        "value": "30% 已用"
+      },
+      {
+        "id": "notion",
+        "value": "30% 已用"
+      },
+      {
+        "id": "manus",
+        "value": "30% 已用"
+      },
+      {
+        "id": "hark",
+        "value": "30% 已用"
+      },
+      {
+        "id": "opendesign",
+        "value": "30% 已用"
+      },
+      {
+        "id": "thirdparty",
+        "value": "30% 已用"
+      }
+    ],
+    "quota": [
+      {
+        "id": "G01",
+        "provider": "cursor",
+        "input": {
+          "kind": "billing",
+          "metric": "spend",
+          "used": 2.35,
+          "limit": 20,
+          "currency": "USD"
+        },
+        "window": {
+          "kind": "billing",
+          "metric": "spend",
+          "label": "",
+          "used": 2.35,
+          "limit": 20,
+          "remaining": null,
+          "usedPercent": 11.75,
+          "remainingPercent": 88.25,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": "USD",
+          "showMeter": true
+        },
+        "note": "消费上限金额缺失",
+        "upstream": {
+          "value": "$2.35 / $20.00",
+          "detail": "",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "已用金额",
+          "value": "$2.35",
+          "percent": null
+        }
+      },
+      {
+        "id": "G02",
+        "provider": "kiro",
+        "input": {
+          "kind": "billing",
+          "label": "Overage",
+          "showMeter": false,
+          "used": 14,
+          "remaining": 0.56
+        },
+        "window": {
+          "kind": "billing",
+          "label": "Overage",
+          "used": 14,
+          "limit": null,
+          "remaining": 0.56,
+          "usedPercent": null,
+          "remainingPercent": null,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": false
+        },
+        "note": "超额积分与估价未显示",
+        "upstream": {
+          "value": "14 credits · $0.56",
+          "detail": "",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "Overage",
+          "value": "暂无读数",
+          "percent": null,
+          "remaining": false
+        }
+      },
+      {
+        "id": "G03",
+        "provider": "kiro",
+        "input": {
+          "kind": "billing",
+          "label": "Credits",
+          "used": 120,
+          "limit": 500,
+          "usedPercent": 24
+        },
+        "window": {
+          "kind": "billing",
+          "label": "Credits",
+          "used": 120,
+          "limit": 500,
+          "remaining": null,
+          "usedPercent": 24,
+          "remainingPercent": 76,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "绝对积分数量缺失",
+        "upstream": {
+          "value": null,
+          "detail": "120/500",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "Credits",
+          "value": "24% 已用",
+          "percent": 24,
+          "remaining": false
+        }
+      },
+      {
+        "id": "G04",
+        "provider": "zed",
+        "input": {
+          "kind": "billing",
+          "limitId": "zed.edit-predictions",
+          "used": 120,
+          "limit": 500,
+          "usedPercent": 24
+        },
+        "window": {
+          "kind": "billing",
+          "limitId": "zed.edit-predictions",
+          "label": "",
+          "used": 120,
+          "limit": 500,
+          "remaining": null,
+          "usedPercent": 24,
+          "remainingPercent": 76,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "编辑预测绝对次数缺失",
+        "upstream": {
+          "value": null,
+          "detail": "120/500",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "账期额度",
+          "value": "24% 已用",
+          "percent": 24,
+          "remaining": false
+        }
+      },
+      {
+        "id": "G05",
+        "provider": "zai",
+        "input": {
+          "kind": "daily",
+          "remaining": 600,
+          "limit": 1000,
+          "usedPercent": 40
+        },
+        "window": {
+          "kind": "daily",
+          "label": "",
+          "used": null,
+          "limit": 1000,
+          "remaining": 600,
+          "usedPercent": 40,
+          "remainingPercent": 60,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "每日 Token 池绝对数量缺失",
+        "upstream": {
+          "value": null,
+          "detail": "400 / 1K",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "每日额度",
+          "value": "40% 已用",
+          "percent": 40,
+          "remaining": false
+        }
+      },
+      {
+        "id": "G06",
+        "provider": "zaiteam",
+        "input": {
+          "kind": "billing",
+          "limitId": "zcode-model:x",
+          "remaining": 600,
+          "limit": 1000,
+          "usedPercent": 40
+        },
+        "window": {
+          "kind": "billing",
+          "limitId": "zcode-model:x",
+          "label": "",
+          "used": null,
+          "limit": 1000,
+          "remaining": 600,
+          "usedPercent": 40,
+          "remainingPercent": 60,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "模型独立 Token 池绝对数量缺失",
+        "upstream": {
+          "value": null,
+          "detail": "400 / 1K",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "账期额度",
+          "value": "40% 已用",
+          "percent": 40,
+          "remaining": false
+        }
+      },
+      {
+        "id": "G07",
+        "provider": "kimi",
+        "input": {
+          "kind": "billing",
+          "usedPercent": 70,
+          "detail": "Kimi 40% · Code 60%"
+        },
+        "window": {
+          "kind": "billing",
+          "label": "",
+          "used": null,
+          "limit": null,
+          "remaining": null,
+          "usedPercent": 70,
+          "remainingPercent": 30,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "Kimi 40% · Code 60%",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "Kimi 与 Code 组成说明缺失",
+        "upstream": {
+          "value": null,
+          "detail": "Kimi 40% · Code 60%",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "账期额度",
+          "value": "70% 已用",
+          "percent": 70,
+          "remaining": false
+        }
+      },
+      {
+        "id": "C01",
+        "provider": "qoder",
+        "input": {
+          "kind": "billing",
+          "label": "Team credits",
+          "used": 10,
+          "limit": 50,
+          "usedPercent": 20
+        },
+        "window": {
+          "kind": "billing",
+          "label": "Team credits",
+          "used": 10,
+          "limit": 50,
+          "remaining": null,
+          "usedPercent": 20,
+          "remainingPercent": 80,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "团队积分正向对照",
+        "upstream": {
+          "value": null,
+          "detail": "10/50",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "Team credits",
+          "value": "20% 已用",
+          "percent": 20,
+          "remaining": false,
+          "detail": "10/50"
+        }
+      },
+      {
+        "id": "C02",
+        "provider": "hark",
+        "input": {
+          "kind": "daily",
+          "used": 125,
+          "limit": 100,
+          "usedPercent": 125
+        },
+        "window": {
+          "kind": "daily",
+          "label": "",
+          "used": 125,
+          "limit": 100,
+          "remaining": null,
+          "usedPercent": 100,
+          "remainingPercent": 0,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": null,
+          "showMeter": true
+        },
+        "note": "Hark 计数正向对照",
+        "upstream": {
+          "value": null,
+          "detail": "125 / 100",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "每日额度",
+          "value": "100% 已用",
+          "percent": 100,
+          "remaining": false,
+          "detail": "125 / 100"
+        }
+      },
+      {
+        "id": "C03",
+        "provider": "mistral",
+        "input": {
+          "kind": "billing",
+          "used": 25,
+          "limit": 100,
+          "currency": "USD",
+          "usedPercent": 25
+        },
+        "window": {
+          "kind": "billing",
+          "label": "",
+          "used": 25,
+          "limit": 100,
+          "remaining": null,
+          "usedPercent": 25,
+          "remainingPercent": 75,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": "USD",
+          "showMeter": true
+        },
+        "note": "Mistral 金额正向对照",
+        "upstream": {
+          "value": null,
+          "detail": "$25.00 / $100.00",
+          "percentLeads": false
+        },
+        "android": {
+          "label": "账期额度",
+          "value": "25% 已用",
+          "percent": 25,
+          "remaining": false,
+          "detail": "$25.00 / $100.00"
+        }
+      },
+      {
+        "id": "C04",
+        "provider": "commandcode",
+        "input": {
+          "kind": "billing",
+          "metric": "credits",
+          "used": 22.58,
+          "remaining": 47.42,
+          "limit": 70,
+          "currency": "USD"
+        },
+        "window": {
+          "kind": "billing",
+          "metric": "credits",
+          "label": "",
+          "used": 22.58,
+          "limit": 70,
+          "remaining": 47.42,
+          "usedPercent": 32.25714285714286,
+          "remainingPercent": 67.743,
+          "resetsAt": null,
+          "windowMinutes": null,
+          "resetDescription": "",
+          "detail": "",
+          "currency": "USD",
+          "showMeter": true
+        },
+        "note": "Command Code 余额保留，不把布局差异误报为缺失",
+        "upstream": {
+          "value": null,
+          "detail": "$22.58 / $70.00",
+          "percentLeads": true
+        },
+        "android": {
+          "label": "账户余额",
+          "value": "$47.42",
+          "percent": 67.74285714285713,
+          "remaining": true,
+          "detail": "已用 $22.58 / 总额 $70.00"
+        }
+      },
+      {
+        "id": "G08",
+        "provider": "thirdparty",
+        "note": "第三方 API 现金周期未展示",
+        "input": {
+          "amount": 50,
+          "currency": "USD",
+          "todaySpend": 2,
+          "weekSpend": 6,
+          "monthSpend": 10,
+          "allTimeSpend": 20
+        },
+        "android": []
+      }
+    ]
+  },
+  "widgetLabels": {
+    "claude": "Claude",
+    "codex": "Codex",
+    "opencode": "OpenCode",
+    "hermes": "其他",
+    "openclaw": "其他",
+    "cursor": "Cursor",
+    "antigravity": "Antigravity",
+    "gemini": "Gemini CLI",
+    "cline": "其他",
+    "amp": "其他",
+    "droid": "其他",
+    "kimi": "其他",
+    "qwen": "其他",
+    "grok": "其他",
+    "copilot": "Copilot",
+    "pi": "其他",
+    "omp": "其他",
+    "senpi": "Senpi",
+    "goose": "其他",
+    "zed": "其他",
+    "kilo": "其他",
+    "commandcode": "其他",
+    "mimo": "MiMo",
+    "muse": "Muse Code",
+    "zcode": "其他",
+    "kiro": "其他",
+    "codebuddy": "其他",
+    "workbuddy": "其他",
+    "proma": "其他",
+    "catpaw": "其他",
+    "qodercn": "其他",
+    "reasonix": "其他",
+    "dsh": "其他",
+    "cherrystudio": "其他",
+    "lmstudio": "其他",
+    "unsloth": "其他",
+    "devin": "其他",
+    "fx": "其他",
+    "mcode": "MiniMax Code",
+    "mistral": "Mistral Vibe",
+    "prime-agent": "Prime Agent",
+    "jcode": "Jcode"
+  },
+  "endpoints": [
+    {
+      "path": "/api/stats",
+      "allowed": true
+    },
+    {
+      "path": "/api/subscriptions",
+      "allowed": true
+    },
+    {
+      "path": "/api/history",
+      "allowed": false
+    },
+    {
+      "path": "/api/devices",
+      "allowed": false
+    },
+    {
+      "path": "/api/stats/stream",
+      "allowed": false
+    },
+    {
+      "path": "/api/sync/content",
+      "allowed": false
+    },
+    {
+      "path": "/api/sync/settings/modelAliases",
+      "allowed": false
+    }
+  ],
+  "verification": {
+    "nodeTests": 107,
+    "javaChecks": 186,
+    "nativeThisAudit": "not_run",
+    "liveProviders": "not_run",
+    "currentDeviceAcceptance": "not_run",
+    "currentSourceCiRun": 42852101678,
+    "currentSourceCiNativeStep": "success"
+  },
+  "evidenceRefs": {
+    "UM": {
+      "title": "主线功能目录",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/README.zh-CN.md#L159"
+    },
+    "UC": {
+      "title": "主线配置目录",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/configuration.md#L12"
+    },
+    "UA": {
+      "title": "主线 API",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/API.md#L361"
+    },
+    "UPR": {
+      "title": "主线隐私与同步边界",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/privacy.md#L18"
+    },
+    "UE": {
+      "title": "主线导出",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/export.md#L8"
+    },
+    "ULH": {
+      "title": "主线额度历史",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/limits-history.md#L25"
+    },
+    "UPL": {
+      "title": "主线插件 API",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/plugins/README.md#L17"
+    },
+    "UPQ": {
+      "title": "插件额度未进入 Hub 的合同",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/plugins/author-limits.md#L147"
+    },
+    "UPRO": {
+      "title": "主线 provider 注册表",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/providers.js#L35"
+    },
+    "UARCH": {
+      "title": "主线 usage 归档",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/archive-replay.md#L1"
+    },
+    "UAG": {
+      "title": "主线 Headless Agent",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/docs/headless-agent.md#L5"
+    },
+    "RATE": {
+      "title": "主线实时速率",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/renderer/tokenRatePresentation.js#L91"
+    },
+    "VEND": {
+      "title": "主线厂商模型识别",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/renderer/usageCharts.js#L472"
+    },
+    "UW": {
+      "title": "主线专用额度展示",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/renderer/limits/windowsView.js#L764"
+    },
+    "USPN": {
+      "title": "主线消费金额与上限",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/windowText.js#L95"
+    },
+    "UKIRO": {
+      "title": "主线 Kiro 超额/积分",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/windowText.js#L161"
+    },
+    "UZED": {
+      "title": "主线 Zed 绝对数量",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/windowText.js#L170"
+    },
+    "UZAI": {
+      "title": "主线 GLM Token 池",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/windowText.js#L176"
+    },
+    "UKIMI": {
+      "title": "主线 Kimi 组成",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/shared/limits/windowText.js#L193"
+    },
+    "UTHIRD": {
+      "title": "主线第三方现金明细",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/renderer/limits/windowsView.js#L643"
+    },
+    "USERVICE": {
+      "title": "主线服务状态",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/serviceStatus.js#L1"
+    },
+    "UDIAG": {
+      "title": "主线诊断",
+      "url": "https://github.com/Javis603/token-monitor/blob/f2802979ee69930cd946e728db92bc981af0fc40/src/electron/diagnostics.js#L1"
+    },
+    "AG": {
+      "title": "Android 工程边界",
+      "url": "/home/cloud/code/token-monitor-For-Android/AGENTS.md:3"
+    },
+    "AM": {
+      "title": "Android 展示模型",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/assets/model.js:42"
+    },
+    "AQ": {
+      "title": "Android 额度具体计算入口",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/assets/model.js:315"
+    },
+    "ASP": {
+      "title": "Android 现金周期过滤入口",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/assets/model.js:275"
+    },
+    "OV": {
+      "title": "总览与截断提示",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/OverviewView.tsx:54"
+    },
+    "DV": {
+      "title": "设备视图",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/DevicesView.tsx:13"
+    },
+    "SV": {
+      "title": "会话视图",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/SessionsView.tsx:75"
+    },
+    "SD": {
+      "title": "会话详情",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/SessionDetailView.tsx:40"
+    },
+    "HH": {
+      "title": "短期历史图",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/HistoryChart.tsx:6"
+    },
+    "TY": {
+      "title": "页面和数据类型",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/types/monitor.ts:1"
+    },
+    "QV": {
+      "title": "额度与共享订阅页面",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/LimitsView.tsx:21"
+    },
+    "CN": {
+      "title": "只读接口白名单",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/ConnectionSpec.java:41"
+    },
+    "HC": {
+      "title": "Hub GET 客户端",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/HubClient.java:26"
+    },
+    "MA": {
+      "title": "原生轮询与生命周期",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/MainActivity.java:273"
+    },
+    "BAL": {
+      "title": "共享钱包与币种计算",
+      "url": "/home/cloud/code/token-monitor-For-Android/src/shared/limits/balanceDisplay.js:49"
+    },
+    "LH": {
+      "title": "本机额度 SQLite",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/LimitsHistoryStore.java:20"
+    },
+    "LP": {
+      "title": "历史接管策略",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/LimitsHistoryPolicy.java:7"
+    },
+    "QH": {
+      "title": "额度历史预览",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/QuotaHistoryPreview.tsx:11"
+    },
+    "CAT": {
+      "title": "42 工具名称目录",
+      "url": "/home/cloud/code/token-monitor-For-Android/src/shared/clientCatalog.js:50"
+    },
+    "WP": {
+      "title": "原生微件名称白名单",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/WidgetLayoutPolicy.java:54"
+    },
+    "WS": {
+      "title": "原生微件数据摘要",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/UsageWidgetSnapshot.java:15"
+    },
+    "WG": {
+      "title": "四类微件预览",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/components/WidgetGalleryCard.tsx:15"
+    },
+    "CSS": {
+      "title": "固定深色样式",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/index.css:5"
+    },
+    "MAN": {
+      "title": "Android Manifest",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/AndroidManifest.xml:2"
+    },
+    "UPDATES": {
+      "title": "Android 更新管理",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/AppUpdates.java:16"
+    },
+    "UPOL": {
+      "title": "更新版本策略",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/AppUpdatePolicy.java:4"
+    },
+    "APK": {
+      "title": "APK 校验策略",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/ApkUpdatePolicy.java:11"
+    },
+    "MON": {
+      "title": "Android 后台监控",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/SessionMonitorService.java:18"
+    },
+    "COMPLETE": {
+      "title": "完成信号策略",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/SessionCompletionTracker.java:11"
+    },
+    "STORE": {
+      "title": "Keystore 连接存储",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/ConnectionStore.java:16"
+    },
+    "LOCAL": {
+      "title": "WebView 资源白名单",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/main/java/com/tokenmonitor/android/LocalContentClient.java:16"
+    },
+    "NS": {
+      "title": "原生消息状态",
+      "url": "/home/cloud/code/token-monitor-For-Android/ui/src/nativeState.js:30"
+    },
+    "TM": {
+      "title": "基础模型回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/model.test.js:3"
+    },
+    "TD": {
+      "title": "会话详情回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/sessionDetail.test.js:3"
+    },
+    "TG": {
+      "title": "家族分组回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/sessionGroups.test.js:3"
+    },
+    "TS": {
+      "title": "活动状态回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/sessionStatus.test.js:3"
+    },
+    "TL": {
+      "title": "账户/钱包回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstreamLimits.test.js:3"
+    },
+    "T84": {
+      "title": "v0.84 回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream84.test.js:3"
+    },
+    "T85": {
+      "title": "v0.85 回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream85.test.js:3"
+    },
+    "T86": {
+      "title": "v0.86 历史回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream86.test.js:3"
+    },
+    "T87": {
+      "title": "MiniMax 回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream87.test.js:3"
+    },
+    "T88": {
+      "title": "v0.88 回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream88.test.js:3"
+    },
+    "T90": {
+      "title": "v0.90 回归",
+      "url": "/home/cloud/code/token-monitor-For-Android/tests/android/upstream90.test.js:3"
+    },
+    "TP": {
+      "title": "共享窗口文字规则",
+      "url": "/home/cloud/code/token-monitor-For-Android/src/shared/limits/windowText.js:127"
+    },
+    "ST": {
+      "title": "WebView/认证/界面仪器用例",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/androidTest/java/com/tokenmonitor/android/StartupTest.java:40"
+    },
+    "TW": {
+      "title": "微件仪器用例",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/androidTest/java/com/tokenmonitor/android/UsageWidgetTest.java:18"
+    },
+    "TUP": {
+      "title": "更新仪器用例",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/androidTest/java/com/tokenmonitor/android/AppUpdatesTest.java:22"
+    },
+    "TDL": {
+      "title": "下载与安装交接仪器用例",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/androidTest/java/com/tokenmonitor/android/AppUpdateDownloadsTest.java:28"
+    },
+    "TC": {
+      "title": "完成投影仪器用例",
+      "url": "/home/cloud/code/token-monitor-For-Android/app/src/androidTest/java/com/tokenmonitor/android/CompletionProjectionTest.java:13"
+    }
+  },
+  "androidVersion": "1.7.0",
+  "androidVersionCode": 18,
+  "currentSourceCiSnapshot": {
+    "checkedAt": "2026-11-11T00:22:10+08:00",
+    "run": 42852101678,
+    "sourceCommit": "76972ee492b24c1e546ecf7494c093571586c420",
+    "status": "completed",
+    "conclusion": "success",
+    "nativeWebViewStep": "success"
+  }
+}
