@@ -74,6 +74,10 @@ export function useNativeMonitor() {
         window.HubNative?.dismissAppUpdatePrompt?.();
         return true;
       }
+      if (document.querySelector('#device-picker-dialog[open]')) {
+        window.dispatchEvent(new CustomEvent('tm-close-device-picker'));
+        return true;
+      }
       if (current.current.page !== 'sessionDetail') return false;
       update(previous => ({ ...previous, page: 'sessions' }));
       window.scrollTo(0, 0);

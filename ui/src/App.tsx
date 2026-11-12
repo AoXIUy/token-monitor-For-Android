@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
 import { AppUpdateDialog } from './components/AppUpdateDialog';
+import { DeviceIcon } from './components/DeviceIcon';
+import { DevicePickerDialog } from './components/DevicePickerDialog';
 import { DevicesView } from './components/DevicesView';
 import { LimitsView } from './components/LimitsView';
 import { OverviewView } from './components/OverviewView';
@@ -79,6 +81,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   const [openSessions, setOpenSessions] = useState<Set<string>>(() => new Set());
   const [deadlineTick, setDeadlineTick] = useState(0);
   const [revealAppUpdate, setRevealAppUpdate] = useState(false);
+  const [devicePickerOpen, setDevicePickerOpen] = useState(false);
 
   useEffect(() => {
     if (!revealAppUpdate || page !== 'settings') return;
@@ -90,6 +93,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   const selected = MonitorModel.select(stats, device, period, nowTick);
 
   const setPage = (next: PageId) => {
+    setDevicePickerOpen(false);
     update((previous) => ({ ...previous, page: next }));
     setOpenSessions(new Set());
     setSessionLimit(40);
@@ -340,8 +344,9 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
       : 'bg-slate-500';
 
   const devicesList = stats?.devices || [];
-  const isSelectedDeviceRemoved =
-    Boolean(device) && !devicesList.some((d) => d.deviceId === device);
+  const activeDevicesCount = devicesList.filter((d) => !d.stale).length;
+  const selectedDeviceObj = device ? devicesList.find((d) => d.deviceId === device) || null : null;
+  const isSelectedDeviceRemoved = Boolean(device) && !selectedDeviceObj;
 
   return (
     <div className="min-h-screen bg-[#090C10] text-slate-100 relative overflow-x-hidden">
@@ -498,40 +503,78 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               )}
 
               <div className="flex items-center justify-between gap-2 text-xs">
-                <label className="inline-flex items-center gap-2 min-w-0">
-                  <Laptop className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                  <div className="relative inline-flex items-center">
-                    <select
-                      id="device"
-                      aria-label="选择统计设备"
-                      value={device}
-                      onChange={(e) => {
-                        setDevice(e.target.value);
-                        setOpenSessions(new Set());
-                      }}
-                      className="appearance-none min-h-[40px] pl-3.5 pr-8 py-1.5 rounded-full glass-pill-bar hover:border-white/20 text-xs font-medium text-slate-200 max-w-[min(210px,54vw)] truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 focus:border-sky-400/60 cursor-pointer transition-colors"
-                    >
-                      <option value="" className="bg-slate-900 text-slate-100">
-                        全部设备
+                <div className="inline-flex items-center gap-2 min-w-0">
+                  <button
+                    id="device-picker-trigger"
+                    type="button"
+                    aria-label="选择统计设备"
+                    aria-haspopup="dialog"
+                    aria-expanded={devicePickerOpen}
+                    onClick={() => setDevicePickerOpen(true)}
+                    className={`min-h-[40px] pl-3 pr-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-2 text-xs font-medium max-w-[min(240px,62vw)] transition-colors ${
+                      isSelectedDeviceRemoved
+                        ? 'border-amber-400/40 text-amber-200'
+                        : 'text-slate-200'
+                    }`}
+                  >
+                    {selectedDeviceObj ? (
+                      <>
+                        <DeviceIcon
+                          kind={selectedDeviceObj.deviceKind}
+                          className="w-3.5 h-3.5 text-sky-400 shrink-0"
+                        />
+                        <i
+                          aria-hidden="true"
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            selectedDeviceObj.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                          }`}
+                        />
+                        <span className="truncate">
+                          {selectedDeviceObj.hostname || selectedDeviceObj.deviceId}
+                        </span>
+                      </>
+                    ) : isSelectedDeviceRemoved ? (
+                      <>
+                        <Laptop className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="truncate">所选设备已移除</span>
+                      </>
+                    ) : (
+                      <>
+                        <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                        <span className="truncate">全部设备</span>
+                        {devicesList.length > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full bg-white/[0.06] text-[10px] font-mono-tabular text-slate-300 shrink-0">
+                            {activeDevicesCount}/{devicesList.length}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  </button>
+
+                  {/* Retained hidden select for programmatic test/automation compatibility */}
+                  <select
+                    id="device"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    value={device}
+                    onChange={(e) => {
+                      setDevice(e.target.value);
+                      setOpenSessions(new Set());
+                    }}
+                    className="sr-only"
+                  >
+                    <option value="">全部设备</option>
+                    {devicesList.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.hostname || d.deviceId} · {d.deviceId}
                       </option>
-                      {devicesList.map((d) => (
-                        <option
-                          key={d.deviceId}
-                          value={d.deviceId}
-                          className="bg-slate-900 text-slate-100"
-                        >
-                          {d.hostname || d.deviceId} · {d.deviceId}
-                        </option>
-                      ))}
-                      {isSelectedDeviceRemoved && (
-                        <option value={device} className="bg-slate-900 text-amber-300">
-                          所选设备已移除
-                        </option>
-                      )}
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
-                  </div>
-                </label>
+                    ))}
+                    {isSelectedDeviceRemoved && (
+                      <option value={device}>所选设备已移除</option>
+                    )}
+                  </select>
+                </div>
 
                 <span
                   id="freshness"
@@ -767,6 +810,23 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
             </div>
           )}
         </main>
+
+        <DevicePickerDialog
+          open={devicePickerOpen && showFilters}
+          stats={stats}
+          selectedDeviceId={device}
+          period={period}
+          page={page}
+          now={nowTick}
+          isSelectedDeviceRemoved={isSelectedDeviceRemoved}
+          onSelectDevice={(devId) => {
+            setDevice(devId);
+            setOpenSessions(new Set());
+            window.scrollTo(0, 0);
+          }}
+          onOpenDevicesPage={() => setPage('devices')}
+          onClose={() => setDevicePickerOpen(false)}
+        />
 
         <nav
           aria-label="主导航"

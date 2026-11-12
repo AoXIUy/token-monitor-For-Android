@@ -674,6 +674,31 @@ public final class StartupTest {
         awaitScript("document.querySelectorAll('[data-overview-device]').length === 4 && document.querySelector('.token-total').textContent.trim() === window.MonitorModel.compact(1234)");
     }
 
+    @Test public void devicePickerDialogSelectsDevicesAndHandlesBackNavigation() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
+        String now = java.time.Instant.now().toString();
+        stats.getJSONArray("devices")
+                .put(new org.json.JSONObject().put("deviceId", "lab-server").put("hostname", "Lab-Server")
+                        .put("deviceKind", "server").put("stale", true).put("updatedAt", now));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        awaitScript("document.getElementById('device-picker-trigger') && document.getElementById('device-picker-trigger').textContent.includes('全部设备')");
+        evaluate("document.getElementById('device-picker-trigger').click()");
+        awaitScript("document.querySelector('#device-picker-dialog[open]') && document.querySelector('[data-device-option=\"lab-server\"]')");
+        assertEquals("true", evaluate("document.querySelector('[data-device-option=\"lab-server\"] [data-device-kind=\"server\"]') !== null && document.querySelector('[data-device-option=\"lab-server\"]').textContent.includes('过期')"));
+        assertEquals("true", evaluate("window.handleBackNavigation()"));
+        awaitScript("!document.querySelector('#device-picker-dialog[open]')");
+        evaluate("document.getElementById('device-picker-trigger').click()");
+        awaitScript("document.querySelector('#device-picker-dialog[open]')");
+        evaluate("document.querySelector('[data-device-option=\"test-pc\"]').click()");
+        awaitScript("!document.querySelector('#device-picker-dialog[open]') && document.getElementById('device').value === 'test-pc' && !document.querySelector('.history-chart')");
+        evaluate("document.getElementById('device-picker-trigger').click()");
+        awaitScript("document.querySelector('#device-picker-dialog[open]')");
+        evaluate("document.querySelector('[data-device-option=\"\"]').click()");
+        awaitScript("!document.querySelector('#device-picker-dialog[open]') && document.getElementById('device').value === '' && Boolean(document.querySelector('.history-chart'))");
+    }
+
     @Test public void dailyTrendKeepsRealDatesAndSelectionAcrossRefresh() throws Exception {
         awaitConnectionPage();
         org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
