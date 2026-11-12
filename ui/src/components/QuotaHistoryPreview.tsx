@@ -1,5 +1,4 @@
 import { useEffect, useId, useState } from 'react';
-import { Activity, Clock } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import type { LimitProvider, QuotaHistoryPayload, QuotaHistoryPoint } from '../types/monitor';
 import { formatShortTime } from '../utils/formatters';
@@ -57,7 +56,7 @@ export function QuotaHistoryPreview({ provider, history, fetchedAt, foreground }
     <div data-quota-history={key || 'preview'} className="mt-3 pt-3 border-t border-white/8 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-200">
-          <Activity className="w-3.5 h-3.5 text-sky-400" />
+          <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-sky-400" />
           <span>本机观测记录</span>
         </span>
         <span className="text-[10px] text-slate-400">打开预览仅读取本地 SQLite</span>
@@ -117,7 +116,6 @@ export function QuotaHistoryPreview({ provider, history, fetchedAt, foreground }
                 {percent ? '剩余额度趋势' : entry.balance ? '余额趋势' : '累计消费趋势'}
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[10px] text-slate-300">
-                <Clock className="w-2.5 h-2.5 text-sky-400" />
                 <span>{bounds.cycle ? '当前额度周期' : '近 14 天'}</span>
               </span>
             </div>
