@@ -28,9 +28,15 @@
     },
     {
       "path": "src/shared/limits/windowLabels.js",
-      "sha256": "9af7313e14aff954a9515a3c51149f9990ba4cc232d1c826d25eddfd673b9359",
+      "sha256": "8b4f99d000f9511f1d17546ecf807bc7bc30119a06a99fd3b2980ec25558a7ad",
       "sourcePath": "src/shared/limits/windowLabels.js",
-      "sourceCommit": "8b22ae85502ba2fa9c9cf49d4cf99d3dabe99845"
+      "sourceCommit": "67bfc951e1aa10382c3c7288c8c9703a989a3aff"
+    },
+    {
+      "path": "src/shared/currency.js",
+      "sha256": "510326f5985e515e1026c4615134be400e953a6bebdf7db4fe93acd99d68a500",
+      "sourcePath": "src/shared/currency.js",
+      "sourceCommit": "67bfc951e1aa10382c3c7288c8c9703a989a3aff"
     },
     {
       "path": "src/shared/limits/historyModel.js",

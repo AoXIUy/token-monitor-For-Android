@@ -134,6 +134,8 @@ export interface LimitProvider {
     todaySpend?: number | null;
     weekSpend?: number | null;
     allTimeSpend?: number | null;
+    searchSpend?: number | null;
+    fetchSpend?: number | null;
     giftBalance?: number | null;
     cashBalance?: number | null;
     currency?: string;

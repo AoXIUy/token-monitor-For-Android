@@ -10,11 +10,12 @@
     node ? require('../../../../src/shared/limits/windowText') : root.TokenMonitorLimitWindowText,
     node ? require('../../../../src/shared/limits/historyModel') : root.TokenMonitorLimitsHistoryModel,
     node ? require('../../../../src/shared/clientCatalog') : root.TokenMonitorClientCatalog,
-    node ? require('../../../../src/shared/limits/windowLabels') : root.TokenMonitorLimitWindowLabels
+    node ? require('../../../../src/shared/limits/windowLabels') : root.TokenMonitorLimitWindowLabels,
+    node ? require('../../../../src/shared/currency') : root.TokenMonitorCurrency
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.MonitorModel = api;
-})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels) {
+})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels, currencyApi) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
   function numeric(value) {
     return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -25,7 +26,13 @@
     return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(count(value));
   }
   function money(value, currency = 'USD') {
-    return numeric(value) === null ? '—' : balance.formatMoney(Number(value), currency);
+    const number = numeric(value);
+    if (number === null) return '—';
+    const code = String(currency || 'USD').trim().toUpperCase();
+    if (code === 'CREDITS') return balance.formatMoney(number, code);
+    const meta = currencyApi?.CURRENCY_RATES?.[code];
+    if (meta) return `${meta.symbol}${number.toFixed(meta.fractionDigits)}`;
+    return balance.formatMoney(number, currency);
   }
   function escape(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -273,12 +280,24 @@
     }));
   }
   function limitSpend(provider) {
-    if (provider.provider !== 'minimax' || provider.source !== 'api' || provider.accountLabel !== 'Pay-as-you-go') return [];
-    const currency = provider.balance?.currency;
-    if (!['CNY', 'USD'].includes(currency)) return [];
+    const bal = provider?.balance;
+    if (!bal || typeof bal !== 'object') return [];
+    const currency = bal.currency;
+    if (provider.provider === 'minimax') {
+      if (provider.source !== 'api' || provider.accountLabel !== 'Pay-as-you-go') return [];
+      if (!['CNY', 'USD'].includes(currency)) return [];
+      const fields = [['todaySpend', '今日'], ['weekSpend', '近7天'], ['monthSpend', '本月'], ['allTimeSpend', '累计']];
+      if (!fields.some(([key]) => Object.prototype.hasOwnProperty.call(bal, key))) return [];
+      return fields.map(([key, label]) => ({ key, label, value: money(numeric(bal[key]), currency) }));
+    }
+    if (!currency || currency === 'CREDITS') return [];
     const fields = [['todaySpend', '今日'], ['weekSpend', '近7天'], ['monthSpend', '本月'], ['allTimeSpend', '累计']];
-    if (!fields.some(([key]) => Object.prototype.hasOwnProperty.call(provider.balance, key))) return [];
-    return fields.map(([key, label]) => ({ key, label, value: money(numeric(provider.balance[key]), currency) }));
+    const rows = fields
+      .filter(([key]) => numeric(bal[key]) !== null)
+      .map(([key, label]) => ({ key, label, value: money(numeric(bal[key]), currency) }));
+    if (numeric(bal.searchSpend) > 0) rows.push({ key: 'searchSpend', label: 'Search 搜索', value: money(numeric(bal.searchSpend), currency) });
+    if (numeric(bal.fetchSpend) > 0) rows.push({ key: 'fetchSpend', label: 'Fetch 抓取', value: money(numeric(bal.fetchSpend), currency) });
+    return rows;
   }
   function limitBalanceDetails(provider) {
     if (provider.provider !== 'mimo') return [];
@@ -312,9 +331,15 @@
     }
     return models.length > 1 ? `${models.length} 个模型` : models[0] || '模型未知';
   }
-  function quota(provider, window) {
+  function quota(provider, window, options = {}) {
+    const showUsed = options.showUsed !== false;
+    const rawLabel = String(window?.label || '').trim();
+    const resolvedWindowLabel = rawLabel
+      ? (windowLabels?.limitWindowLabel ? windowLabels.limitWindowLabel(provider?.provider, window) : rawLabel)
+      : (({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window?.kind] || window?.kind || '额度');
+
     if (String(window.detail || '').trim().toLowerCase() === 'unlimited') {
-      return { label: window.label || '额度', value: '无限额', percent: null, remaining: false };
+      return { label: resolvedWindowLabel || '额度', value: '无限额', percent: null, remaining: false };
     }
     if (balance.isCreditsWindow(window)) {
       if (provider.provider === 'muse' && provider.source === 'web' && window.resetDescription?.endsWith(' tokens left')) {
@@ -326,7 +351,7 @@
       const used = numeric(window.used);
       const amount = balance.creditsAmount(provider, window);
       return {
-        label: window.label || '账户余额',
+        label: rawLabel ? resolvedWindowLabel : '账户余额',
         value: amount !== null && currency === 'CREDITS' ? `${money(amount, currency)} 积分` : money(amount, currency),
         percent: window.showMeter === false ? null : balance.creditsMeterPercent(provider, window),
         remaining: true,
@@ -334,18 +359,28 @@
       };
     }
     if (window.metric === 'spend' || (!window.metric && window.kind === 'billing' && window.label === 'Usage credits')) {
-      return { label: window.label || '已用金额', value: money(window.used, window.currency || provider.balance?.currency), percent: null };
+      const curr = window.currency || provider.balance?.currency;
+      const usedText = money(window.used, curr);
+      const limit = numeric(window.limit);
+      return {
+        label: rawLabel ? resolvedWindowLabel : '已用金额',
+        value: limit > 0 && numeric(window.used) !== null ? `${usedText} / ${money(limit, curr)}` : usedText,
+        percent: null,
+      };
     }
     const used = numeric(window.usedPercent);
     const remaining = numeric(window.remainingPercent);
-    const percent = used ?? (remaining === null ? null : 100 - remaining);
-    const detail = ['minimax', 'mistral', 'qoder', 'hark'].includes(provider.provider)
-      ? windowText?.limitWindowText(provider, window, { showLimitUsed: true, formatCompact: compact }).detail : '';
+    const usedPercent = used ?? (remaining === null ? null : 100 - remaining);
+    const remainingPercent = remaining ?? (used === null ? null : 100 - used);
+    const shownPercent = showUsed ? usedPercent : remainingPercent;
+    const wt = windowText?.limitWindowText(provider, window, { showLimitUsed: showUsed, formatCompact: compact });
+    const detail = wt?.detail || '';
+    const overrideValue = shownPercent === null && wt?.value ? wt.value : null;
     return {
-      label: window.label || ({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window.kind] || window.kind || '额度',
-      value: percent === null ? '暂无读数' : `${Math.round(percent * 10) / 10}% 已用`,
-      percent: percent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, percent)),
-      remaining: false,
+      label: resolvedWindowLabel,
+      value: overrideValue || (shownPercent === null ? '暂无读数' : `${Math.round(shownPercent * 10) / 10}% ${showUsed ? '已用' : '剩余'}`),
+      percent: shownPercent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, shownPercent)),
+      remaining: !showUsed && shownPercent !== null,
       ...(detail ? { detail: provider.provider === 'minimax' ? `${detail} 次` : detail } : {}),
     };
   }
@@ -356,6 +391,17 @@
     if (numeric(provider.balance?.amount) === null || windows.some(window => balance.isCreditsWindow(window))) return windows;
     return [...windows, { kind: 'credits', metric: 'credits', label: '账户余额', remaining: numeric(provider.balance.amount),
       currency: provider.balance.currency, showMeter: false }];
+  }
+  function limitHasHistory(provider) {
+    if (!provider || typeof provider !== 'object') return false;
+    const hasValidReading = (val) => Boolean(val) && val !== '暂无读数' && !String(val).startsWith('—');
+    for (const win of limitWindows(provider)) {
+      const q = quota(provider, win);
+      if (q.percent !== null || hasValidReading(q.value)) return true;
+    }
+    if (limitSpend(provider).length > 0) return true;
+    if (limitBalanceDetails(provider).length > 0) return true;
+    return provider.status === 'ok';
   }
   function daily(stats) {
     return (stats?.historyPreview?.daily || []).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
@@ -432,5 +478,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });

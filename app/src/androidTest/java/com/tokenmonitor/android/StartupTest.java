@@ -507,6 +507,8 @@ public final class StartupTest {
         evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
         publishStats(stats);
         evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 4 && Boolean(document.querySelector('[data-limits-show-hidden]'))");
+        evaluate("document.querySelector('[data-limits-show-hidden]').click()");
         awaitScript("document.querySelectorAll('[data-limit-account]').length === 5");
         assertEquals("true", evaluate("new Set(Array.from(document.querySelectorAll('[data-limit-account]'), row => row.dataset.limitAccount)).size === 5"));
         assertEquals("true", evaluate("document.body.innerText.includes('Development · workstation') && document.body.innerText.includes('Development · laptop') && document.body.innerText.includes('未配置')"));

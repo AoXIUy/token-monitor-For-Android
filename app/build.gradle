@@ -63,7 +63,7 @@ dependencies {
 
 tasks.register('syncDisplayAssets', Sync) {
     from('../src/shared') {
-        include 'compactTokens.js', 'clientCatalog.js', 'limits/balanceDisplay.js', 'limits/windowLabels.js', 'limits/windowText.js', 'limits/historyModel.js', 'sessionLive.js', 'sessionActivityProviders.js', 'sessionGroups.js', 'deviceKind.js', 'sessionRealtime.js'
+        include 'compactTokens.js', 'clientCatalog.js', 'currency.js', 'limits/balanceDisplay.js', 'limits/windowLabels.js', 'limits/windowText.js', 'limits/historyModel.js', 'sessionLive.js', 'sessionActivityProviders.js', 'sessionGroups.js', 'deviceKind.js', 'sessionRealtime.js'
     }
     into layout.buildDirectory.dir('generated/assets/shared')
 }

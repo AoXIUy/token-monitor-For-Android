@@ -481,6 +481,48 @@ export function createDemoPayload(nowMs: number = Date.now()): {
         },
       ],
     },
+    {
+      provider: 'deepseek',
+      accountKey: 'sha256:demo-deepseek-api',
+      accountName: 'DeepSeek Platform',
+      source: 'api',
+      sourceDeviceId: 'mbp-m4-max',
+      status: 'ok',
+      updatedAt: nowIso,
+      balance: {
+        amount: 68.4,
+        currency: 'CNY',
+        monthSpend: 14.2,
+        searchSpend: 1.25,
+        fetchSpend: 0.45,
+      },
+      windows: [
+        {
+          kind: 'billing',
+          metric: 'credits',
+          label: '账户余额',
+          remaining: 68.4,
+          currency: 'CNY',
+          showMeter: false,
+        },
+      ],
+    },
+    {
+      provider: 'cline',
+      accountKey: 'sha256:demo-cline-unconfigured',
+      source: 'local',
+      sourceDeviceId: 'thinkpad-x1',
+      status: 'notConfigured',
+      windows: [],
+    },
+    {
+      provider: 'trae',
+      accountKey: 'sha256:demo-trae-disabled',
+      source: 'web',
+      sourceDeviceId: 'linux-ws-01',
+      status: 'disabled',
+      windows: [],
+    },
   ];
 
   const stats: MonitorStats = {

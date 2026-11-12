@@ -66,8 +66,9 @@ export interface MonitorModelApi {
   limitSpend(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
   limitBalanceDetails(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
   quotaTrendBounds(provider: LimitProvider, window: QuotaWindow, now: number): { start: number; end: number; cycle: boolean };
-  quota(provider: LimitProvider, window: QuotaWindow): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
+  quota(provider: LimitProvider, window: QuotaWindow, options?: { showUsed?: boolean }): { label: string; value: string; percent: number | null; remaining?: boolean; detail?: string; description?: string };
   limitWindows(provider: LimitProvider): QuotaWindow[];
+  limitHasHistory(provider: LimitProvider): boolean;
   subscriptionAmount(row: SubscriptionRow): number | null;
 }
 

@@ -64,3 +64,54 @@ test('Android consumes normalized v0.80.0 account identities and device-scoped l
   assert.equal(M.limitAccount(laptop.providers.find(row => row.provider === 'muse'), stats, 'laptop').sourceLabel, 'Development · laptop');
   assert.equal(JSON.stringify(stats), before);
 });
+
+test('Android limitHasHistory identifies uncollected tools separately from stale cached accounts', () => {
+  assert.equal(M.limitHasHistory({ provider: 'cline', status: 'notConfigured', windows: [], updatedAt: '2026-11-12T00:00:00Z' }), false);
+  assert.equal(M.limitHasHistory({ provider: 'trae', status: 'disabled', windows: [] }), false);
+  assert.equal(M.limitHasHistory({ provider: 'qoder', status: 'unavailable', windows: [{ kind: 'billing', label: 'Credits' }] }), false);
+  assert.equal(M.limitHasHistory({ provider: 'qoder', status: 'unavailable', stale: true, windows: [{ kind: 'billing', label: 'Credits', used: 10, limit: 50, usedPercent: 20 }] }), true);
+  assert.equal(M.limitHasHistory({ provider: 'mimo', status: 'error', balance: { amount: 30, currency: 'CNY', cashBalance: 30 } }), true);
+  assert.equal(M.limitHasHistory({ provider: 'claude', status: 'ok', windows: [] }), true);
+});
+
+test('Android quota supports used/remaining toggle, Cursor labels, v0.92 windowText and multi-currency formatting', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+
+  assert.equal(M.quota({ provider: 'cursor' }, { kind: 'weekly', label: 'Included usage', usedPercent: 12 }).label, 'Weekly');
+  assert.equal(M.quota({ provider: 'cursor' }, { kind: 'billing', label: 'Included usage', usedPercent: 34 }).label, 'Monthly');
+  assert.equal(M.quota({ provider: 'cursor' }, { kind: 'billing', label: 'On-demand', metric: 'spend', used: 2.35, limit: 20, currency: 'USD' }).value, '$2.35 / $20.00');
+
+  assert.deepEqual(M.quota({ provider: 'claude' }, { kind: 'session', usedPercent: 24 }, { showUsed: false }), {
+    label: '当前会话', value: '76% 剩余', percent: 76, remaining: true,
+  });
+
+  assert.equal(M.quota({ provider: 'kiro' }, { kind: 'billing', showMeter: false, used: 14, remaining: 0.56 }).value, '14 credits · $0.56');
+  assert.equal(M.quota({ provider: 'kiro' }, { kind: 'billing', used: 120, limit: 500, usedPercent: 24 }).detail, '120/500');
+  assert.equal(M.quota({ provider: 'zed' }, { kind: 'billing', limitId: 'zed.edit-predictions', used: 120, limit: 500, usedPercent: 24 }).detail, '120/500');
+  assert.equal(M.quota({ provider: 'zai' }, { kind: 'daily', remaining: 400, limit: 1000, usedPercent: 60 }).detail, '600 / 1K');
+  assert.equal(M.quota({ provider: 'kimi' }, { kind: 'billing', usedPercent: 70, detail: 'Kimi 40% · Code 60%' }).detail, 'Kimi 40% · Code 60%');
+
+  assert.equal(M.money(29000, 'KRW'), '₩29000');
+  assert.equal(M.money(29000, 'JPY'), 'JP¥29000');
+  assert.equal(M.money(20, 'EUR'), '€20.00');
+  assert.deepEqual(M.limitSpend({ provider: 'deepseek', balance: { currency: 'CNY', monthSpend: 10, searchSpend: 1.25, fetchSpend: 0.45 } }), [
+    { key: 'monthSpend', label: '本月', value: '¥10.00' },
+    { key: 'searchSpend', label: 'Search 搜索', value: '¥1.25' },
+    { key: 'fetchSpend', label: 'Fetch 抓取', value: '¥0.45' },
+  ]);
+  assert.deepEqual(M.limitSpend({ provider: 'thirdparty', balance: { currency: 'USD', todaySpend: 1.2, weekSpend: 5.4, monthSpend: 18.9, allTimeSpend: 120.5 } }).map(r => r.key), [
+    'todaySpend', 'weekSpend', 'monthSpend', 'allTimeSpend',
+  ]);
+
+  const browser = vm.createContext({ window: {} });
+  for (const file of ['compactTokens.js', 'clientCatalog.js', 'currency.js', 'limits/balanceDisplay.js', 'limits/windowText.js',
+    'limits/windowLabels.js', 'limits/historyModel.js', 'deviceKind.js', 'sessionActivityProviders.js', 'sessionLive.js', 'sessionGroups.js']) {
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/shared', file), 'utf8'), browser, { filename: file });
+  }
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../app/src/main/assets/model.js'), 'utf8'), browser);
+  assert.equal(browser.window.MonitorModel.money(29000, 'KRW'), '₩29000');
+  assert.equal(browser.window.MonitorModel.quota({ provider: 'cursor' }, { kind: 'weekly', label: 'Included usage', usedPercent: 10 }).label, 'Weekly');
+  assert.equal(browser.window.MonitorModel.limitHasHistory({ provider: 'cline', status: 'notConfigured', windows: [] }), false);
+});

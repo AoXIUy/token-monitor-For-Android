@@ -19,24 +19,41 @@ export const PERIOD_LABELS: Record<PeriodId, string> = {
 export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
-  cursor: 'Cursor',
-  copilot: 'GitHub Copilot',
-  deepseek: 'DeepSeek',
   opencode: 'OpenCode',
+  cursor: 'Cursor',
   antigravity: 'Antigravity',
-  openrouter: 'OpenRouter',
+  cline: 'Cline',
+  factory: 'Factory Droid',
+  kimi: 'Kimi',
+  grok: 'Grok',
+  copilot: 'GitHub Copilot',
+  zed: 'Zed',
+  commandcode: 'Command Code',
+  mimo: 'MiMo',
   muse: 'Muse Code',
-  ollama: 'Ollama',
-  manus: 'Manus',
+  zai: 'GLM',
+  zaiteam: 'GLM Team',
+  kiro: 'Kiro',
+  workbuddy: 'WorkBuddy',
+  qoder: 'Qoder',
+  deepseek: 'DeepSeek',
+  devin: 'Devin',
   minimax: 'MiniMax',
   mcode: 'MiniMax Code',
-  opendesign: 'OpenDesign',
   mistral: 'Mistral',
-  gemini: 'Gemini',
-  mimo: 'MiMo',
+  typesafe: 'TypeSafe',
+  openrouter: 'OpenRouter',
+  volcengine: 'Volcengine',
+  ollama: 'Ollama',
+  trae: 'Trae CN',
+  alibaba: 'Alibaba Cloud',
+  stepfun: 'StepFun',
+  notion: 'Notion AI',
+  manus: 'Manus',
   hark: 'Hark',
-  qoder: 'Qoder',
-  senpi: 'Senpi',
+  opendesign: 'OpenDesign',
+  thirdparty: 'Third-party APIs',
+  gemini: 'Gemini',
 };
 
 export function providerName(id?: string): string {
@@ -82,6 +99,8 @@ export function clientTone(client?: string): {
         tint: 'bg-cyan-500/14 border-cyan-400/30 text-cyan-200',
       };
     case 'copilot':
+    case 'zed':
+    case 'opencode':
       return {
         text: 'text-indigo-300',
         dot: 'bg-indigo-400',
@@ -89,6 +108,8 @@ export function clientTone(client?: string): {
         tint: 'bg-indigo-500/12 border-indigo-400/25 text-indigo-300',
       };
     case 'deepseek':
+    case 'qoder':
+    case 'mimo':
       return {
         text: 'text-teal-300',
         dot: 'bg-teal-400',
@@ -96,11 +117,44 @@ export function clientTone(client?: string): {
         tint: 'bg-teal-500/12 border-teal-400/25 text-teal-300',
       };
     case 'openrouter':
+    case 'alibaba':
+    case 'mistral':
       return {
         text: 'text-amber-300',
         dot: 'bg-amber-400',
         bar: 'from-amber-400 to-orange-400',
         tint: 'bg-amber-500/12 border-amber-400/25 text-amber-300',
+      };
+    case 'minimax':
+    case 'kimi':
+    case 'trae':
+      return {
+        text: 'text-rose-300',
+        dot: 'bg-rose-400',
+        bar: 'from-rose-400 to-pink-400',
+        tint: 'bg-rose-500/12 border-rose-400/25 text-rose-300',
+      };
+    case 'zai':
+    case 'zaiteam':
+    case 'volcengine':
+    case 'commandcode':
+    case 'hark':
+      return {
+        text: 'text-blue-300',
+        dot: 'bg-blue-400',
+        bar: 'from-blue-400 to-cyan-400',
+        tint: 'bg-blue-500/12 border-blue-400/25 text-blue-300',
+      };
+    case 'kiro':
+    case 'cline':
+    case 'factory':
+    case 'opendesign':
+    case 'muse':
+      return {
+        text: 'text-fuchsia-300',
+        dot: 'bg-fuchsia-400',
+        bar: 'from-fuchsia-400 to-violet-400',
+        tint: 'bg-fuchsia-500/12 border-fuchsia-400/25 text-fuchsia-300',
       };
     default:
       return {
@@ -110,6 +164,23 @@ export function clientTone(client?: string): {
         tint: 'bg-white/6 border-white/12 text-slate-300',
       };
   }
+}
+
+export function formatRelativeCountdown(value?: string | number | null, nowMs: number = Date.now()): string {
+  if (value === undefined || value === null || value === '') return '';
+  const target = typeof value === 'number' ? value : Date.parse(String(value));
+  if (!Number.isFinite(target)) return '';
+  const diffMs = target - nowMs;
+  if (diffMs <= 0) return '即将重置';
+  const totalMinutes = Math.floor(diffMs / 60000);
+  if (totalMinutes < 1) return '不到 1 分钟';
+  if (totalMinutes < 60) return `${totalMinutes} 分钟后`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours < 24) return mins > 0 ? `${hours} 小时 ${mins} 分后` : `${hours} 小时后`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days} 天 ${remHours} 小时后` : `${days} 天后`;
 }
 
 export function formatShortTime(value?: string | number | null): string {
