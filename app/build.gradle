@@ -24,8 +24,8 @@ android {
         applicationId 'com.tokenmonitor.android'
         minSdk 26
         targetSdk 36
-        versionCode 25
-        versionName '1.13.1'
+        versionCode 26
+        versionName '1.14.0'
         buildConfigField 'String', 'RELEASE_CERTIFICATE_SHA256', '"' + releaseCertificate + '"'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
