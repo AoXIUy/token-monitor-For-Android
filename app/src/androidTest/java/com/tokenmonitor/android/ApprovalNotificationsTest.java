@@ -1,11 +1,14 @@
 package com.tokenmonitor.android;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.os.Build;
 import android.service.notification.StatusBarNotification;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.After;
@@ -32,16 +35,20 @@ public final class ApprovalNotificationsTest {
     private static final String DEMO_ID = "11111111-1111-4111-8111-111111111111";
     private Context context;
 
-    @Before public void setUp() {
+    @Before public void setUp() throws Exception {
         context = ApplicationProvider.getApplicationContext();
         SessionNotifications.channels(context);
         ApprovalNotifications.cancelAll(context);
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager != null) awaitNoApprovalTags(manager, 5_000L);
         new ConnectionStore(context).clear();
         new ApprovalStore(context).clear();
     }
 
-    @After public void tearDown() {
+    @After public void tearDown() throws Exception {
         ApprovalNotifications.cancelAll(context);
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager != null) awaitNoApprovalTags(manager, 5_000L);
         new ConnectionStore(context).clear();
         new ApprovalStore(context).clear();
     }
@@ -65,10 +72,16 @@ public final class ApprovalNotificationsTest {
 
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         assertNotNull(manager);
+        if (Build.VERSION.SDK_INT >= 33) {
+            InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(
+                    context.getPackageName(), Manifest.permission.POST_NOTIFICATIONS);
+        }
 
+        String tag = ApprovalNotifications.tag(destination, DEMO_ID);
         if (SessionNotifications.approvalsAllowed(context)) {
             ApprovalNotifications.notifyNew(context, destination, alerts, now, store);
-            StatusBarNotification found = findTag(manager, ApprovalNotifications.tag(destination, DEMO_ID));
+            // NotificationManager posts and cancels asynchronously via NotificationManagerService.
+            StatusBarNotification found = awaitTag(manager, tag, true, 10_000L);
             assertNotNull("Expected read-only approval alert notification when channel is allowed", found);
             Notification n = found.getNotification();
             assertNotNull(n.publicVersion);
@@ -76,11 +89,12 @@ public final class ApprovalNotificationsTest {
             assertTrue((n.flags & Notification.FLAG_AUTO_CANCEL) != 0);
 
             ApprovalNotifications.cancelAll(context);
-            assertNull(findTag(manager, ApprovalNotifications.tag(destination, DEMO_ID)));
+            assertNull("Expected approval alert notification to clear after cancelAll",
+                    awaitTag(manager, tag, false, 10_000L));
 
             ApprovalNotifications.notifyNew(context, destination, alerts, now + 1000L, store);
-            assertNull("Single-shot claim must not re-notify same alert ID",
-                    findTag(manager, ApprovalNotifications.tag(destination, DEMO_ID)));
+            Thread.sleep(300L);
+            assertNull("Single-shot claim must not re-notify same alert ID", findTag(manager, tag));
         } else {
             assertTrue(store.claim(destination, DEMO_ID));
         }
@@ -133,6 +147,35 @@ public final class ApprovalNotificationsTest {
         } finally {
             server.close();
             serverThread.join(3000);
+        }
+    }
+
+    private static StatusBarNotification awaitTag(NotificationManager manager, String tag, boolean expectedPresent, long timeoutMs)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        StatusBarNotification current = findTag(manager, tag);
+        while ((current != null) != expectedPresent && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100L);
+            current = findTag(manager, tag);
+        }
+        return current;
+    }
+
+    private static void awaitNoApprovalTags(NotificationManager manager, long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            boolean anyLeft = false;
+            StatusBarNotification[] active = manager.getActiveNotifications();
+            if (active != null) {
+                for (StatusBarNotification sbn : active) {
+                    if (sbn.getTag() != null && sbn.getTag().startsWith(ApprovalNotifications.TAG_PREFIX)) {
+                        anyLeft = true;
+                        break;
+                    }
+                }
+            }
+            if (!anyLeft) return;
+            Thread.sleep(100L);
         }
     }
 

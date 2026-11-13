@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.15.0](https://img.shields.io/badge/version-1.15.0-38BDF8)
+![Version 1.15.1](https://img.shields.io/badge/version-1.15.1-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
