@@ -160,13 +160,15 @@ public final class SessionMonitorService extends Service {
         client = request;
         network.execute(() -> {
             try {
-                long now = System.currentTimeMillis();
                 List<SessionCompletionTracker.Observation> completed = null;
                 if (wantCompletions) {
                     JSONObject stats = request.get(destination, "/api/stats");
                     if (stats.optJSONArray("devices") == null || stats.optJSONObject("periods") == null) {
                         throw new IllegalStateException("Invalid stats");
                     }
+                    // The Hub can observe activity while the request is in flight.
+                    // Validate against receipt time so those records are not future data.
+                    long now = System.currentTimeMillis();
                     completed = detector.accept(CompletionObservations.fromStats(stats, now), now);
                 }
 
@@ -213,6 +215,7 @@ public final class SessionMonitorService extends Service {
                 final JSONArray finalApprovals = approvalsArray;
                 final String finalApprovalStatus = nextApprovalStatus;
                 final String finalApprovalMessage = nextApprovalMessage;
+                final long readAt = System.currentTimeMillis();
 
                 main.post(() -> {
                     if (epoch != generation || !running) return;
@@ -242,7 +245,7 @@ public final class SessionMonitorService extends Service {
                             return;
                         }
                         failures = 0;
-                        lastReadAt = now;
+                        lastReadAt = readAt;
                         refreshOngoingText(stillCompletions, stillApprovals, null);
                         if (stillCompletions && finalCompleted != null) {
                             for (SessionCompletionTracker.Observation row : finalCompleted) {

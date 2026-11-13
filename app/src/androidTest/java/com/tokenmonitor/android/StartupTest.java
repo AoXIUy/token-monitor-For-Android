@@ -38,6 +38,7 @@ import static org.junit.Assert.*;
 /** Runs against Android's actual WebView and native bridge on a test emulator. */
 @RunWith(AndroidJUnit4.class)
 public final class StartupTest {
+    private static final long WEBVIEW_TIMEOUT_MS = 20_000;
     private ActivityScenario<MainActivity> scenario;
 
     @Before public void launchFreshViewer() {
@@ -76,7 +77,7 @@ public final class StartupTest {
     }
 
     private String evaluate(String script) throws Exception {
-        return evaluate(script, 5000);
+        return evaluate(script, WEBVIEW_TIMEOUT_MS);
     }
 
     private String evaluate(String script, long timeoutMs) throws Exception {
@@ -92,7 +93,7 @@ public final class StartupTest {
     }
 
     private void awaitScript(String expression) throws Exception {
-        long deadline = android.os.SystemClock.elapsedRealtime() + 20000;
+        long deadline = android.os.SystemClock.elapsedRealtime() + WEBVIEW_TIMEOUT_MS;
         String last;
         do {
             // Page readiness owns one 20-second budget, including a cold renderer's callback.
@@ -918,7 +919,7 @@ public final class StartupTest {
         awaitConnectionPage();
         List<String> requests = Collections.synchronizedList(new ArrayList<>());
         List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
-        java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean();
+        AtomicReference<String> completedStats = new AtomicReference<>();
         try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
             Thread responder = new Thread(() -> {
                 while (!server.isClosed()) {
@@ -932,12 +933,22 @@ public final class StartupTest {
                         while ((header = reader.readLine()) != null && !header.isEmpty()) {
                             if (header.startsWith("Authorization: ")) authorizations.add(header);
                         }
-                        String body = first.contains("/api/subscriptions ")
-                                ? "{\"subscriptions\":[],\"updatedAt\":\"\"}"
-                                : testStats(completed.get());
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else {
+                            // Generate active evidence after the client's request began.
+                            // A request-start clock would discard every active baseline.
+                            Thread.sleep(100L);
+                            String ended = completedStats.get();
+                            body = ended == null ? testStats(false) : ended;
+                        }
                         byte[] payload = body.getBytes(StandardCharsets.UTF_8);
                         socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                         socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException canceled) {
+                        // Moving the viewer to the background cancels its in-flight
+                        // foreground read; the fixture must keep serving the monitor.
                     } catch (Exception error) {
                         if (!server.isClosed()) throw new RuntimeException(error);
                     }
@@ -965,7 +976,8 @@ public final class StartupTest {
                 while ((!SessionMonitorService.running() || SessionMonitorService.lastReadAt() == 0) && System.currentTimeMillis() < deadline) Thread.sleep(100);
                 assertTrue("Background monitor must establish an active baseline", SessionMonitorService.running() && SessionMonitorService.lastReadAt() > 0);
                 scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);
-                completed.set(true);
+                // Reuse one end event to verify that repeated snapshots stay single-shot.
+                completedStats.set(testStats(true));
                 android.app.NotificationManager manager = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(android.app.NotificationManager.class);
                 android.service.notification.StatusBarNotification completion = null;
                 deadline = System.currentTimeMillis() + 20000;
