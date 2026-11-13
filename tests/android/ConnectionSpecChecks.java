@@ -39,6 +39,14 @@ public final class ConnectionSpecChecks {
         catch (IllegalArgumentException expected) { checks++; }
         try { prefixed.endpoint("/api/devices/device"); throw new AssertionError("Allowed mutation endpoint"); }
         catch (IllegalArgumentException expected) { checks++; }
+        if (!prefixed.approvalAlertsEndpoint().equals("https://monitor.example.com/proxy/api/approval-alerts")) {
+            throw new AssertionError("Invalid approval alerts endpoint: " + prefixed.approvalAlertsEndpoint());
+        }
+        checks++;
+        if (!local.approvalAlertsEndpoint().equals("http://[::1]:17321/api/approval-alerts")) {
+            throw new AssertionError("Invalid local approval alerts endpoint: " + local.approvalAlertsEndpoint());
+        }
+        checks++;
         System.out.println(checks + " connection checks passed");
     }
 }

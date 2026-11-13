@@ -31,6 +31,10 @@ final class HubClient {
         return getUrl(spec, spec.conversationEndpoint(deviceId, key, cursor), 384 * 1024);
     }
 
+    JSONObject approvalAlerts(ConnectionSpec spec) throws Exception {
+        return getUrl(spec, spec.approvalAlertsEndpoint(), 128 * 1024);
+    }
+
     private JSONObject getUrl(ConnectionSpec spec, String url, int maxBytes) throws Exception {
         if (cancelled) throw new IOException("Cancelled");
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();

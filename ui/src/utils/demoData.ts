@@ -1,10 +1,11 @@
-import type { AppUpdateState, MonitorStats, NotificationState, SubscriptionsPayload, QuotaHistoryPayload } from '../types/monitor';
+import type { AppUpdateState, ApprovalsState, MonitorStats, NotificationState, SubscriptionsPayload, QuotaHistoryPayload } from '../types/monitor';
 
 export function createDemoPayload(nowMs: number = Date.now()): {
   connectionUrl: string;
   stats: MonitorStats;
   subscriptions: SubscriptionsPayload;
   notifications: NotificationState;
+  approvals: Pick<ApprovalsState, 'enabled' | 'permission' | 'status' | 'message' | 'items'>;
   appUpdate: AppUpdateState;
   quotaHistory: QuotaHistoryPayload;
 } {
@@ -745,6 +746,27 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       permission: true,
       message: '后台完成提醒运行中 · 实时监听 3 台设备',
       lastReadAt: nowMs,
+    },
+    approvals: {
+      enabled: true,
+      permission: true,
+      status: 'ok',
+      message: '待电脑端确认 1 条',
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          deviceId: 'mbp-m4-max',
+          deviceName: 'MacBook Pro M4 Max',
+          client: 'codex',
+          sessionId: 'demo-codex-1',
+          tool: 'Bash',
+          command: 'git status && npm run verify',
+          description: '运行本地检查以验证本次改动',
+          projectLabel: 'token-monitor-android',
+          createdAt: nowMs - 25_000,
+          expiresAt: nowMs + 95_000,
+        },
+      ],
     },
     appUpdate: {
       currentVersion: '1.0.8',

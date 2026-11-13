@@ -230,6 +230,28 @@ export interface NotificationState {
   lastReadAt?: string | number;
 }
 
+export interface ApprovalItem {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  client: 'codex' | 'antigravity' | string;
+  sessionId?: string;
+  tool: string;
+  command: string;
+  description?: string;
+  projectLabel?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface ApprovalsState {
+  enabled: boolean;
+  permission: boolean;
+  status: 'off' | 'ok' | 'disabled' | 'unsupported' | 'error' | string;
+  message: string;
+  items: ApprovalItem[];
+}
+
 export interface SessionStatusResult {
   state: 'running' | 'waiting' | 'ended' | 'idle' | 'archived' | 'unknown';
   label: string;
@@ -249,6 +271,7 @@ export interface HubNativeBridge {
   refresh?: () => void;
   subscriptions?: () => void;
   monitor?: (enabled: boolean) => void;
+  approvalAlerts?: (enabled: boolean) => void;
   testNotification?: () => void;
   notificationSettings?: () => void;
   checkForUpdates?: () => void;
@@ -324,6 +347,8 @@ export interface MonitorState {
   detailKey: string;
   notifications: NotificationState;
   monitorPending: boolean;
+  approvals: ApprovalsState;
+  approvalsPending: boolean;
   connectPending: boolean;
   formError: string;
   connectionEpoch: number;

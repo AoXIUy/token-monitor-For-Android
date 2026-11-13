@@ -156,3 +156,34 @@ test('limits display preferences sanitize hashes and survive Hub connection chan
     hiddenAccountHashes: [validHash, secondHash],
   });
 });
+
+test('approval alerts sanitize items, open overview on tap and reset on reconnect', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const id = '11111111-2222-4333-8444-555555555555';
+  let state = { ...createInitialState(), page: 'sessions', approvalsPending: true };
+  state = receiveNativeMessage(state, {
+    type: 'approvalAlerts',
+    enabled: true,
+    permission: true,
+    status: 'ok',
+    message: '待电脑端确认 1 条',
+    items: [
+      { id: ` ${id.toUpperCase()} `, deviceId: 'pc', deviceName: 'Workstation', client: 'codex', tool: 'Bash', command: 'ls -la', createdAt: 1000, expiresAt: 121000 },
+      { id }, // duplicate
+      { id: '' }, // invalid
+    ],
+  });
+  assert.equal(state.approvalsPending, false);
+  assert.equal(state.approvals.enabled, true);
+  assert.equal(state.approvals.items.length, 1);
+  assert.equal(state.approvals.items[0].id, id);
+  assert.equal('pendingIds' in state.approvals, false);
+  assert.equal('lastError' in state.approvals, false);
+
+  state = receiveNativeMessage(state, { type: 'openApprovalAlerts' });
+  assert.equal(state.page, 'overview');
+
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://other-hub.test' });
+  assert.equal(state.approvals.enabled, false);
+  assert.equal(state.approvals.items.length, 0);
+});

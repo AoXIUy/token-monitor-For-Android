@@ -19,7 +19,13 @@ export function createInitialState() {
     subscriptionError: '', connection: '', allowHttp: false, status: 'disconnected',
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
     notifications: { enabled: false, permission: false, message: '完成提醒未开启' },
-    monitorPending: false, connectPending: false, formError: '', connectionEpoch: 0,
+    monitorPending: false,
+    approvals: {
+      enabled: false, permission: false, status: 'off', message: '审批提醒未开启',
+      items: [],
+    },
+    approvalsPending: false,
+    connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
   };
 }
@@ -130,6 +136,47 @@ export function receiveNativeMessage(state, message) {
       };
     case 'openSession':
       return { ...state, page: 'sessionDetail', device: '', period: 'month', detailKey: String(message.key || ''), statusHealthy: false };
+    case 'openApprovalAlerts':
+      return { ...state, page: 'overview' };
+    case 'approvalAlerts': {
+      const enabled = Boolean(message.enabled);
+      const rawItems = enabled && Array.isArray(message.items) ? message.items : [];
+      /** @type {import('./types/monitor').ApprovalItem[]} */
+      const items = [];
+      /** @type {Set<string>} */
+      const seenIds = new Set();
+      for (const raw of rawItems) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const entry = /** @type {Record<string, unknown>} */ (raw);
+        const id = typeof entry.id === 'string' ? entry.id.trim().toLowerCase().slice(0, 100) : '';
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        items.push({
+          id,
+          deviceId: typeof entry.deviceId === 'string' ? entry.deviceId.slice(0, 128) : '',
+          deviceName: typeof entry.deviceName === 'string' ? entry.deviceName.slice(0, 128) : '',
+          client: typeof entry.client === 'string' ? entry.client.slice(0, 40) : '',
+          sessionId: typeof entry.sessionId === 'string' ? entry.sessionId.slice(0, 128) : '',
+          tool: typeof entry.tool === 'string' ? entry.tool.slice(0, 80) : '',
+          command: typeof entry.command === 'string' ? entry.command.slice(0, 2000) : '',
+          description: typeof entry.description === 'string' ? entry.description.slice(0, 500) : '',
+          projectLabel: typeof entry.projectLabel === 'string' ? entry.projectLabel.slice(0, 200) : '',
+          createdAt: typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt) ? entry.createdAt : 0,
+          expiresAt: typeof entry.expiresAt === 'number' && Number.isFinite(entry.expiresAt) ? entry.expiresAt : 0,
+        });
+      }
+      return {
+        ...state,
+        approvalsPending: false,
+        approvals: {
+          enabled,
+          permission: Boolean(message.permission),
+          status: typeof message.status === 'string' ? message.status : (enabled ? 'ok' : 'off'),
+          message: typeof message.message === 'string' ? message.message.slice(0, 300) : (enabled ? '审批提醒在线' : '审批提醒未开启'),
+          items,
+        },
+      };
+    }
     case 'formError': return { ...state, formError: String(message.message || '连接参数无效'), connectPending: false };
     default: return state;
   }

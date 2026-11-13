@@ -9,7 +9,7 @@ import {
   Link2,
   Play,
 } from 'lucide-react';
-import { NotificationState, AppUpdateState, MonitorStats } from '../types/monitor';
+import { ApprovalsState, NotificationState, AppUpdateState, MonitorStats } from '../types/monitor';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
 import { AppUpdateCard } from './AppUpdateCard';
 import { WidgetGalleryCard } from './WidgetGalleryCard';
@@ -24,11 +24,14 @@ interface SettingsViewProps {
   formError: string;
   notifications: NotificationState;
   monitorPending: boolean;
+  approvals: ApprovalsState;
+  approvalsPending: boolean;
   isBrowserPreview?: boolean;
   onConnect: (url: string, secret: string, allowHttp: boolean) => void;
   onDisconnect: () => void;
   onLoadDemo?: () => void;
   onToggleMonitor: (enabled: boolean) => void;
+  onToggleApprovalAlerts: (enabled: boolean) => void;
   onTestNotification: () => void;
   onOpenSystemSettings: () => void;
   onSimulateUpdateCheck?: () => void;
@@ -45,11 +48,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   formError,
   notifications,
   monitorPending,
+  approvals,
+  approvalsPending,
   isBrowserPreview,
   onConnect,
   onDisconnect,
   onLoadDemo,
   onToggleMonitor,
+  onToggleApprovalAlerts,
   onTestNotification,
   onOpenSystemSettings,
   onSimulateUpdateCheck,
@@ -216,8 +222,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <CompletionSettingsCard
           notifications={notifications}
           monitorPending={monitorPending}
+          approvals={approvals}
+          approvalsPending={approvalsPending}
           connected={Boolean(connectionUrl)}
           onToggleMonitor={onToggleMonitor}
+          onToggleApprovalAlerts={onToggleApprovalAlerts}
           onTestNotification={onTestNotification}
           onOpenSystemSettings={onOpenSystemSettings}
         />

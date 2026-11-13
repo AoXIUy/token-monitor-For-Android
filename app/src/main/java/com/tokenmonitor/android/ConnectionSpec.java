@@ -45,6 +45,10 @@ final class ConnectionSpec {
         return url + path;
     }
 
+    String approvalAlertsEndpoint() {
+        return url + "/api/approval-alerts";
+    }
+
     String conversationEndpoint(String deviceId, String key, String cursor) {
         if (deviceId == null || deviceId.isEmpty() || deviceId.length() > 256 || key == null || key.length() > 512
                 || !key.matches("(codex|antigravity):[^\\s\\\\/\\x00-\\x1f]+")

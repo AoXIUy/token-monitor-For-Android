@@ -13,6 +13,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { ApprovalsPanel } from './components/ApprovalsPanel';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
 import { AppUpdateDialog } from './components/AppUpdateDialog';
 import { DeviceIcon } from './components/DeviceIcon';
@@ -85,6 +86,8 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     detailKey,
     notifications,
     monitorPending,
+    approvals,
+    approvalsPending,
     connectPending,
     formError,
   } = state;
@@ -265,6 +268,26 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
           permission: true,
           message: enabled ? '后台完成提醒运行中 · 实时监听 3 台设备' : '完成提醒未开启',
           lastReadAt: Date.now(),
+        })
+      );
+    }
+  };
+
+  const handleToggleApprovalAlerts = (enabled: boolean) => {
+    if (window.HubNative?.approvalAlerts) {
+      update((previous) => ({ ...previous, approvalsPending: true }));
+      window.HubNative.approvalAlerts(enabled);
+      return;
+    }
+    if (isBrowserPreview) {
+      update((previous) =>
+        receiveNativeMessage(previous, {
+          type: 'approvalAlerts',
+          enabled,
+          permission: true,
+          status: enabled ? 'ok' : 'off',
+          message: enabled ? '审批提醒在线 · 等待电脑端确认提醒' : '审批提醒未开启',
+          items: enabled ? previous.approvals.items : [],
         })
       );
     }
@@ -670,9 +693,12 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               <CompletionSettingsCard
                 notifications={notifications}
                 monitorPending={monitorPending}
+                approvals={approvals}
+                approvalsPending={approvalsPending}
                 connected={Boolean(connection)}
                 compact={true}
                 onToggleMonitor={handleToggleMonitor}
+                onToggleApprovalAlerts={handleToggleApprovalAlerts}
                 onTestNotification={handleTestNotification}
                 onOpenSystemSettings={handleOpenNotificationSettings}
               />
@@ -690,11 +716,14 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               formError={formError}
               notifications={notifications}
               monitorPending={monitorPending}
+              approvals={approvals}
+              approvalsPending={approvalsPending}
               isBrowserPreview={isBrowserPreview}
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
               onLoadDemo={() => loadBrowserDemo()}
               onToggleMonitor={handleToggleMonitor}
+              onToggleApprovalAlerts={handleToggleApprovalAlerts}
               onTestNotification={handleTestNotification}
               onOpenSystemSettings={handleOpenNotificationSettings}
               onSimulateUpdateCheck={isBrowserPreview ? handleSimulateUpdateCheck : undefined}
@@ -703,7 +732,11 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               }
             />
           ) : !stats ? (
-            <div id="content" className="glass-panel rounded-3xl p-8 text-center my-4 space-y-3">
+            <>
+              {page === 'overview' && connection && (
+                <ApprovalsPanel approvals={approvals} />
+              )}
+              <div id="content" className="glass-panel rounded-3xl p-8 text-center my-4 space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 mx-auto">
                 <Activity className="w-6 h-6" />
               </div>
@@ -737,11 +770,14 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           ) : (
             <div id="content">
               {page === 'overview' && (
-                <OverviewView
+                <>
+                  <ApprovalsPanel approvals={approvals} />
+                  <OverviewView
                   stats={stats}
                   selected={selected}
                   period={period}
@@ -771,6 +807,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                     setSessionTool(toolId);
                   }}
                 />
+                </>
               )}
 
               {page === 'devices' && (

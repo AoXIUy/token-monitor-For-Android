@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.14.1](https://img.shields.io/badge/version-1.14.1-38BDF8)
+![Version 1.15.0](https://img.shields.io/badge/version-1.15.0-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -26,6 +26,7 @@
 | 额度与余额 | 查看 Hark、Mistral 额度与 Qoder 独立个人 / 团队积分；区分 Muse 网页 / CLI、MiniMax Code / API 和 MiMo 产品；账户仍在电脑端管理 |
 | 额度历史 | 点击展开本机观测的额度趋势和近 14 天净变化，支持 OpenDesign 工作区；缺失读数保持未知 |
 | 完成提醒 | 主动开启后台监控后，对观察到的明确轮次结束发送通知 |
+| 审批提醒 | 可选开启 Codex / Antigravity 待确认只读提醒，通过通知栏与总览卡片提示待确认操作（不阻塞电脑端，仍在电脑端确认），详见 [审批提醒指南](docs/APPROVAL_ALERTS.md) |
 | 桌面微件 | 原生桌面卡片展示最近读取的今日 Token、费用和缓存读取占比，支持手动刷新 |
 | 软件更新 | 启动时弹窗提示新版本，支持应用内下载、完整性与签名校验及系统确认安装 |
 

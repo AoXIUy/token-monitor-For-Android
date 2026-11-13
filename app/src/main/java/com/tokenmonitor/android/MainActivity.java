@@ -164,6 +164,7 @@ public final class MainActivity extends Activity {
                     .put("allowHttp", spec != null && spec.allowHttp).put("error", initialError));
             initialError = "";
             notificationState();
+            approvalAlertsState();
         } catch (Exception ignored) { }
     }
 
@@ -197,13 +198,59 @@ public final class MainActivity extends Activity {
 
     private void notificationState() {
         try {
-            emit(event("notifications").put("enabled", SessionMonitorService.running())
+            emit(event("notifications").put("enabled", SessionMonitorService.running() && new MonitorPreferences(this).enabled())
                     .put("permission", SessionNotifications.allowed(this)).put("message", SessionMonitorService.message(this))
                     .put("lastReadAt", SessionMonitorService.lastReadAt()));
         } catch (Exception ignored) { }
     }
 
+    private void approvalAlertsState() {
+        approvalAlertsState(null);
+    }
+
+    private void approvalAlertsState(org.json.JSONArray items) {
+        try {
+            ApprovalStore approvalStore = new ApprovalStore(this);
+            boolean enabled = approvalStore.enabled();
+            emit(event("approvalAlerts")
+                    .put("enabled", enabled)
+                    .put("permission", SessionNotifications.approvalsAllowed(this))
+                    .put("status", approvalStore.status())
+                    .put("message", approvalStore.message())
+                    .put("items", enabled && items != null ? items : new org.json.JSONArray()));
+        } catch (Exception ignored) { }
+    }
+
     private void notificationAction(String action) {
+        if ("approvals".equals(action)) {
+            ApprovalStore approvalStore = new ApprovalStore(this);
+            if (spec == null) {
+                try { approvalStore.saveState(false, "error", "请先连接 Hub 再开启审批提醒"); } catch (Exception ignored) { }
+                approvalAlertsState(); return;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                if (pendingNotificationAction != null) return;
+                pendingNotificationAction = action;
+                requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_REQUEST);
+                return;
+            }
+            if (!SessionNotifications.approvalsAllowed(this)) {
+                try { approvalStore.saveState(false, "error", "请在系统通知设置中允许审批提醒通知"); } catch (Exception ignored) { }
+                approvalAlertsState(); return;
+            }
+            try {
+                approvalStore.saveState(true, "ok", "正在连接审批提醒…");
+                startForegroundService(new Intent(this, SessionMonitorService.class).setAction(SessionMonitorService.ACTION_SYNC));
+                approvalAlertsState();
+                notificationState();
+                main.postDelayed(() -> { approvalAlertsState(); notificationState(); }, 500);
+                refresh(false);
+            } catch (Exception error) {
+                try { approvalStore.saveState(false, "error", "审批提醒服务未能启动，请重新开启并检查通知权限"); } catch (Exception ignored) { }
+                approvalAlertsState();
+            }
+            return;
+        }
         if ("enable".equals(action) && spec == null) {
             try { new MonitorPreferences(this).state(false, "请先连接 Hub 再开启完成提醒"); } catch (Exception ignored) { }
             notificationState(); return;
@@ -234,7 +281,10 @@ public final class MainActivity extends Activity {
         String action = pendingNotificationAction;
         pendingNotificationAction = null;
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && action != null) notificationAction(action);
-        else {
+        else if ("approvals".equals(action)) {
+            try { new ApprovalStore(this).saveState(false, "error", "通知权限未授权，可在系统通知设置中开启"); } catch (Exception ignored) { }
+            approvalAlertsState();
+        } else {
             try { new MonitorPreferences(this).state(false, "通知权限未授权，可在系统通知设置中开启"); } catch (Exception ignored) { }
             notificationState();
         }
@@ -249,6 +299,20 @@ public final class MainActivity extends Activity {
 
     private void openNotificationSession() {
         if (!ready || spec == null) return;
+        boolean openApprovals = getIntent().getBooleanExtra(ApprovalNotifications.EXTRA_OPEN_APPROVALS, false);
+        if (openApprovals) {
+            String approvalDest = getIntent().getStringExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION);
+            getIntent().removeExtra(ApprovalNotifications.EXTRA_OPEN_APPROVALS);
+            getIntent().removeExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION);
+            if (!spec.fingerprint().equals(approvalDest)) {
+                android.widget.Toast.makeText(this, "这条通知来自之前的 Hub 连接", android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try { emit(event("openApprovalAlerts")); } catch (Exception ignored) { }
+            cancel();
+            refresh(false);
+            return;
+        }
         String key = getIntent().getStringExtra(SessionNotifications.EXTRA_KEY);
         String destination = getIntent().getStringExtra(SessionNotifications.EXTRA_DESTINATION);
         if (key == null || key.length() > 1024) return;
@@ -270,6 +334,8 @@ public final class MainActivity extends Activity {
         // only the latest routing extras until the WebView is ready to consume them.
         getIntent().putExtra(SessionNotifications.EXTRA_KEY, intent.getStringExtra(SessionNotifications.EXTRA_KEY));
         getIntent().putExtra(SessionNotifications.EXTRA_DESTINATION, intent.getStringExtra(SessionNotifications.EXTRA_DESTINATION));
+        getIntent().putExtra(ApprovalNotifications.EXTRA_OPEN_APPROVALS, intent.getBooleanExtra(ApprovalNotifications.EXTRA_OPEN_APPROVALS, false));
+        getIntent().putExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION, intent.getStringExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION));
         openNotificationSession();
     }
 
@@ -324,6 +390,51 @@ public final class MainActivity extends Activity {
                     history.record(stats, System.currentTimeMillis());
                 } catch (Exception problem) { persistenceError = "额度历史未能保存，请检查可用存储空间后刷新重试"; }
                 String historyMessage = persistenceError;
+                ApprovalStore approvalStore = new ApprovalStore(MainActivity.this);
+                boolean fetchApprovals = approvalStore.enabled();
+                org.json.JSONArray approvalItems = null;
+                String approvalStatus = approvalStore.status();
+                String approvalMessage = approvalStore.message();
+                if (fetchApprovals) {
+                    try {
+                        JSONObject approvalsBody = request.approvalAlerts(destination);
+                        if (approvalsBody.optBoolean("ok", false) && approvalsBody.optJSONArray("alerts") != null) {
+                            approvalItems = approvalsBody.getJSONArray("alerts");
+                            approvalStatus = "ok";
+                            approvalMessage = approvalItems.length() > 0
+                                    ? ("待电脑端确认 " + approvalItems.length() + " 条")
+                                    : "审批提醒在线 · 等待需要确认的操作";
+                        } else {
+                            String err = approvalsBody.optString("error", "disabled");
+                            if ("disabled".equals(err)) {
+                                approvalStatus = "disabled";
+                                approvalMessage = "Hub 端未开启审批提醒（请在桌面端同步设置或 Hub 中开启）";
+                            } else {
+                                approvalStatus = "error";
+                                approvalMessage = "Hub 返回异常状态（" + err + "）";
+                            }
+                            approvalItems = new org.json.JSONArray();
+                        }
+                    } catch (HubClient.HubError error) {
+                        if (error.status == 401 || error.status == 403) throw error;
+                        if (error.status == 404) {
+                            approvalStatus = "unsupported";
+                            approvalMessage = "当前 Hub 尚不支持审批提醒（请升级 Hub 或开启审批提醒）";
+                        } else {
+                            approvalStatus = "error";
+                            approvalMessage = error.getMessage();
+                        }
+                        approvalItems = new org.json.JSONArray();
+                    } catch (Exception error) {
+                        approvalStatus = "error";
+                        approvalMessage = "审批提醒拉取失败：" + (error.getMessage() == null ? "网络错误" : error.getMessage());
+                        approvalItems = new org.json.JSONArray();
+                    }
+                }
+                final boolean fetchedApprovals = fetchApprovals;
+                final org.json.JSONArray finalApprovalItems = approvalItems;
+                final String finalApprovalStatus = approvalStatus;
+                final String finalApprovalMessage = approvalMessage;
                 main.post(() -> {
                     if (epoch != generation || !foreground) return;
                     busy = false;
@@ -343,6 +454,11 @@ public final class MainActivity extends Activity {
                             // rather than adding another network request on every stats poll.
                             subscriptionVersion = marker;
                             emit(event("subscriptionError").put("message", subscriptionMessage));
+                        }
+                        if (fetchedApprovals && approvalStore.enabled()) {
+                            approvalStore.saveState(true, finalApprovalStatus, finalApprovalMessage);
+                            ApprovalNotifications.notifyNew(MainActivity.this, destination.fingerprint(), finalApprovalItems, System.currentTimeMillis(), approvalStore);
+                            approvalAlertsState(finalApprovalItems);
                         }
                     } catch (Exception ignored) { }
                     status("online", "已连接 · 每 5 秒更新");
@@ -426,9 +542,39 @@ public final class MainActivity extends Activity {
             main.post(() -> {
                 if (enabled) notificationAction("enable");
                 else {
-                    try { SessionMonitorService.stop(MainActivity.this, "完成提醒已关闭", false); } catch (Exception ignored) { }
+                    try {
+                        ApprovalStore approvalStore = new ApprovalStore(MainActivity.this);
+                        if (approvalStore.enabled() && SessionMonitorService.running()) {
+                            new MonitorPreferences(MainActivity.this).state(false, "完成提醒已关闭");
+                            startService(new Intent(MainActivity.this, SessionMonitorService.class).setAction(SessionMonitorService.ACTION_SYNC));
+                        } else {
+                            SessionMonitorService.stop(MainActivity.this, "完成提醒已关闭", false);
+                        }
+                    } catch (Exception ignored) { }
                     notificationState();
+                    approvalAlertsState();
                 }
+            });
+        }
+        @JavascriptInterface public void approvalAlerts(boolean enabled) {
+            main.post(() -> {
+                if (enabled) {
+                    notificationAction("approvals");
+                    return;
+                }
+                try {
+                    ApprovalStore approvalStore = new ApprovalStore(MainActivity.this);
+                    approvalStore.saveState(false, "off", "审批提醒未开启");
+                    ApprovalNotifications.cancelAll(MainActivity.this);
+                    MonitorPreferences monitorPrefs = new MonitorPreferences(MainActivity.this);
+                    if (monitorPrefs.enabled() && SessionMonitorService.running()) {
+                        startService(new Intent(MainActivity.this, SessionMonitorService.class).setAction(SessionMonitorService.ACTION_SYNC));
+                    } else if (!monitorPrefs.enabled()) {
+                        SessionMonitorService.stop(MainActivity.this, monitorPrefs.message(), false);
+                    }
+                } catch (Exception ignored) { }
+                approvalAlertsState();
+                notificationState();
             });
         }
         @JavascriptInterface public void testNotification() { main.post(() -> notificationAction("test")); }
@@ -558,8 +704,14 @@ public final class MainActivity extends Activity {
         try {
             MonitorPreferences monitoring = new MonitorPreferences(this);
             if (!SessionMonitorService.running() && monitoring.enabled()) monitoring.state(false, "后台监控已中断，请重新开启完成提醒");
+            ApprovalStore approvals = new ApprovalStore(this);
+            if (!SessionMonitorService.running() && approvals.enabled()) {
+                approvals.saveState(false, "error", "后台监控已中断，请重新开启审批提醒");
+                ApprovalNotifications.cancelAll(this);
+            }
         } catch (Exception ignored) { }
         notificationState();
+        approvalAlertsState();
         refresh(false);
         if (ready && updates != null) updates.resume();
         if (downloads != null) {

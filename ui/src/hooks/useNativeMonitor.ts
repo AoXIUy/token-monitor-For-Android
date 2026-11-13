@@ -64,6 +64,10 @@ export function useNativeMonitor() {
         lastReadAt: demo.notifications.lastReadAt,
       });
       next = receiveNativeMessage(next, {
+        type: 'approvalAlerts',
+        ...demo.approvals,
+      });
+      next = receiveNativeMessage(next, {
         type: 'appUpdate',
         ...demo.appUpdate,
       });
