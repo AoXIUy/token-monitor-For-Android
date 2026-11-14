@@ -10,6 +10,25 @@ export interface Selection {
   expired: boolean;
 }
 interface BreakdownRow { id: string; label: string; tokens: number; cost: number | null; components?: ModelTokenComponents }
+export interface DeviceBreakdownRow {
+  id: string;
+  deviceId: string;
+  label: string;
+  hostname: string | null;
+  deviceKind: string;
+  platform: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  agentVersion: string | null;
+  stale: boolean;
+  updatedAt: string | null;
+  status: 'active' | 'expired' | 'missing';
+  available: boolean;
+  expired: boolean;
+  tokens: number | null;
+  cost: number | null;
+  clients: BreakdownRow[];
+}
 interface CacheEfficiency { hit: number; miss: number; percent: number }
 interface SessionOptions {
   now?: number;
@@ -39,7 +58,8 @@ export interface MonitorModelApi {
   compact(value: unknown): string;
   money(value: unknown, currency?: string): string;
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
-  breakdown(period: PeriodData | null, kind: BreakdownKind): BreakdownRow[];
+  breakdown(period: PeriodData | null, kind: Exclude<BreakdownKind, 'devices'>): BreakdownRow[];
+  deviceBreakdown(stats: MonitorStats | null, period: PeriodId, now?: number): DeviceBreakdownRow[];
   sessions(period: PeriodData | null, search?: string): SessionRow[];
   filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
   filterSessionStatuses(statuses: SessionStatusResult[], filter?: 'all' | 'running' | 'waiting' | 'ended'): {

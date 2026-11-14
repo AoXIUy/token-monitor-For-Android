@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ChevronDown,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { DeviceIcon } from './DeviceIcon';
 import { HistoryChart } from './HistoryChart';
-import { MonitorModel } from '../model/monitorModel';
+import { DeviceBreakdownRow, MonitorModel } from '../model/monitorModel';
 import {
   BreakdownKind,
   DeviceData,
@@ -49,6 +49,231 @@ interface OverviewViewProps {
 
 type BreakdownSortBy = 'tokens' | 'cost';
 
+const BREAKDOWN_SEARCH_LABELS: Record<BreakdownKind, string> = {
+  clients: '筛选工具名称',
+  devices: '搜索设备名称、ID 或系统',
+  models: '筛选模型名称',
+  projects: '筛选项目名称',
+};
+
+function formatSharePct(pct: number): string {
+  if (pct <= 0) return '0.0%';
+  return pct >= 0.1 ? `${pct.toFixed(1)}%` : '<0.1%';
+}
+
+interface DeviceBreakdownRowCardProps {
+  row: DeviceBreakdownRow;
+  rank: number;
+  breakdownSort: BreakdownSortBy;
+  activeTokensTotal: number;
+  activeCostTotal: number | null;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onSelectDevice?: (deviceId: string) => void;
+}
+
+const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
+  row,
+  rank,
+  breakdownSort,
+  activeTokensTotal,
+  activeCostTotal,
+  isExpanded,
+  onToggle,
+  onSelectDevice,
+}) => {
+  const tokenPct =
+    row.available && row.tokens !== null && activeTokensTotal > 0
+      ? Math.min(100, (row.tokens / activeTokensTotal) * 100)
+      : 0;
+  const costPct =
+    row.available && activeCostTotal !== null && activeCostTotal > 0 && row.cost !== null
+      ? Math.min(100, (row.cost / activeCostTotal) * 100)
+      : null;
+  const pct = breakdownSort === 'cost' && costPct !== null ? costPct : tokenPct;
+  const osLabel = row.osName
+    ? row.osVersion
+      ? `${row.osName} ${row.osVersion}`
+      : row.osName
+    : row.platform || '';
+  const subtitleParts = [
+    row.hostname && row.hostname !== row.deviceId ? row.deviceId : null,
+    osLabel || null,
+    row.available && row.stale ? '状态过期' : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <div
+      data-breakdown-device={row.deviceId}
+      className="rounded-2xl bg-white/[0.02] border border-white/[0.05] p-3 space-y-2"
+    >
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          data-breakdown-device-toggle={row.deviceId}
+          aria-expanded={row.available ? isExpanded : undefined}
+          disabled={!row.available}
+          onClick={onToggle}
+          className={`flex-1 min-w-0 text-left space-y-1.5 ${
+            row.available ? 'cursor-pointer' : 'cursor-default opacity-80'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0">
+                {String(rank).padStart(2, '0')}
+              </span>
+              {row.available && (
+                <ChevronRight
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-150 ${
+                    isExpanded ? 'rotate-90 text-sky-300' : ''
+                  }`}
+                />
+              )}
+              <DeviceIcon kind={row.deviceKind} className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+              <i
+                aria-hidden="true"
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  !row.available
+                    ? 'bg-slate-500'
+                    : row.stale
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400'
+                }`}
+              />
+              <span className="text-xs font-medium text-slate-100 truncate">{row.label}</span>
+              {row.available && (
+                <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0">
+                  {formatSharePct(pct)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2 shrink-0 font-mono-tabular text-xs">
+              {row.available ? (
+                <>
+                  <span
+                    className={
+                      breakdownSort === 'tokens'
+                        ? 'font-semibold text-slate-100'
+                        : 'text-[11px] text-slate-400'
+                    }
+                  >
+                    {MonitorModel.compact(row.tokens)}
+                  </span>
+                  <span
+                    className={
+                      breakdownSort === 'cost'
+                        ? 'font-semibold text-emerald-300'
+                        : 'text-[11px] text-slate-400'
+                    }
+                  >
+                    {MonitorModel.money(row.cost)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-slate-400">—</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400">
+                    {row.expired ? '周期已结束' : '暂无读数'}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {subtitleParts.length > 0 && (
+            <p className="pl-5 text-[10px] text-slate-400 font-mono-tabular truncate">
+              {subtitleParts.join(' · ')}
+            </p>
+          )}
+        </button>
+
+        {onSelectDevice && (
+          <button
+            type="button"
+            data-breakdown-device-filter={row.deviceId}
+            onClick={() => onSelectDevice(row.deviceId)}
+            aria-label={`筛选设备 ${row.label}`}
+            className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-sky-400/15 text-[10px] font-semibold text-sky-300 transition-colors shrink-0 mt-0.5"
+          >
+            <span>筛选</span>
+            <ArrowRight className="w-2.5 h-2.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden" aria-hidden="true">
+        <div
+          style={{ width: `${row.available && (row.tokens ?? 0) > 0 ? Math.max(1.5, pct) : 0}%` }}
+          className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-300 transition-all duration-300"
+        />
+      </div>
+
+      {isExpanded && row.available && (
+        <div
+          data-breakdown-device-tools={row.deviceId}
+          className="pt-2 mt-1 border-t border-white/[0.06] pl-5 space-y-2"
+        >
+          <div className="flex items-center justify-between text-[10px] text-slate-400">
+            <span>工具构成</span>
+            {row.agentVersion && (
+              <span className="font-mono-tabular">Agent v{row.agentVersion}</span>
+            )}
+          </div>
+          {row.clients.length > 0 ? (
+            <div className="space-y-2">
+              {row.clients.map((tool) => {
+                const isUnattributed = tool.id === '__unattributed__';
+                const toolPct =
+                  row.tokens && row.tokens > 0
+                    ? Math.min(100, (tool.tokens / row.tokens) * 100)
+                    : 0;
+                const tTone = isUnattributed
+                  ? { dot: 'bg-slate-400', bar: 'from-slate-400 to-slate-500' }
+                  : clientTone(tool.id);
+                const toolTitle = isUnattributed ? '未归因' : clientName(tool.label);
+                return (
+                  <div key={tool.id} className="space-y-1">
+                    <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <i
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${tTone.dot}`}
+                          aria-hidden="true"
+                        />
+                        <span className="text-slate-200 truncate">{toolTitle}</span>
+                        <span className="text-[10px] font-mono-tabular text-slate-400 shrink-0">
+                          {formatSharePct(toolPct)}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2 shrink-0 font-mono-tabular text-[10px]">
+                        <span className="text-slate-200">{MonitorModel.compact(tool.tokens)}</span>
+                        <span className="text-slate-400">{MonitorModel.money(tool.cost)}</span>
+                      </div>
+                    </div>
+                    <div
+                      className="h-1 w-full rounded-full bg-white/[0.05] overflow-hidden"
+                      aria-hidden="true"
+                    >
+                      <div
+                        style={{ width: `${tool.tokens > 0 ? Math.max(2, toolPct) : 0}%` }}
+                        className={`h-full rounded-full bg-gradient-to-r ${tTone.bar}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 py-1">
+              {(row.tokens ?? 0) === 0 ? '当前周期暂无工具用量记录' : '该设备暂未上报各工具明细'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const OverviewView: React.FC<OverviewViewProps> = ({
   stats,
   selected,
@@ -65,15 +290,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onOpenSessionDetail,
   onSelectToolSessions,
 }) => {
+  const breakdownSectionRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [showDailyList, setShowDailyList] = useState(false);
   const [breakdownSort, setBreakdownSort] = useState<BreakdownSortBy>('tokens');
   const [breakdownSearch, setBreakdownSearch] = useState('');
   const [showAllBreakdown, setShowAllBreakdown] = useState(false);
+  const [expandedBreakdownDevices, setExpandedBreakdownDevices] = useState<Set<string>>(() => new Set());
   const [showAllLimits, setShowAllLimits] = useState(false);
 
   useEffect(() => {
     setShowAllBreakdown(false);
+    setExpandedBreakdownDevices(new Set());
   }, [period, deviceId, breakdownKind]);
 
   useEffect(() => {
@@ -272,14 +500,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     return rows.slice(0, 4);
   }, [stats, deviceId, period, now]);
 
+  const effectiveBreakdownKind: BreakdownKind =
+    deviceId && breakdownKind === 'devices' ? 'clients' : breakdownKind;
+
+  const deviceRows = useMemo(
+    () => (deviceId ? [] : MonitorModel.deviceBreakdown(stats, period, now)),
+    [stats, period, deviceId, now]
+  );
+
   const allBreakdownCounts = useMemo(() => {
-    if (!p) return { clients: 0, models: 0, projects: 0 };
     return {
-      clients: MonitorModel.breakdown(p, 'clients').length,
-      models: MonitorModel.breakdown(p, 'models').length,
-      projects: MonitorModel.breakdown(p, 'projects').length,
+      clients: p ? MonitorModel.breakdown(p, 'clients').length : 0,
+      devices: deviceRows.length,
+      models: p ? MonitorModel.breakdown(p, 'models').length : 0,
+      projects: p ? MonitorModel.breakdown(p, 'projects').length : 0,
     };
-  }, [p]);
+  }, [p, deviceRows]);
 
   if (!p) {
     return (
@@ -303,7 +539,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const unpriced = MonitorModel.count(p.unpricedTokens);
   const unclassified = MonitorModel.count(p.unclassifiedTokens);
   const trend = MonitorModel.daily(stats);
-  const rows = MonitorModel.breakdown(p, breakdownKind);
+  const rows =
+    effectiveBreakdownKind === 'devices'
+      ? []
+      : MonitorModel.breakdown(p, effectiveBreakdownKind);
   const totalTokensCount = MonitorModel.count(p.totalTokens);
   const totalCostNum = MonitorModel.numeric(p.costUsd);
   const inputTokensCount = MonitorModel.count(p.inputTokens);
@@ -333,7 +572,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const searchKeyword = breakdownSearch.trim().toLocaleLowerCase();
   const filteredBreakdownRows = rows.filter((row) => {
     if (!searchKeyword) return true;
-    const displayLabel = breakdownKind === 'clients' ? clientName(row.label) : row.label;
+    const displayLabel = effectiveBreakdownKind === 'clients' ? clientName(row.label) : row.label;
     return (
       displayLabel.toLocaleLowerCase().includes(searchKeyword) ||
       row.id.toLocaleLowerCase().includes(searchKeyword)
@@ -350,9 +589,58 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         })
       : filteredBreakdownRows;
 
+  const activeDeviceTokensTotal = deviceRows.reduce(
+    (sum, row) => sum + (row.available && row.tokens !== null ? row.tokens : 0),
+    0
+  );
+  const activeDeviceCosts = deviceRows.filter((row) => row.available && row.cost !== null);
+  const activeDeviceCostTotal =
+    activeDeviceCosts.length > 0
+      ? activeDeviceCosts.reduce((sum, row) => sum + (row.cost as number), 0)
+      : null;
+  const unavailableDevicesCount = deviceRows.filter((row) => !row.available).length;
+
+  const filteredDeviceRows = deviceRows.filter((row) => {
+    if (!searchKeyword) return true;
+    return [row.label, row.deviceId, row.hostname, row.osName, row.platform].some((val) =>
+      String(val || '').toLocaleLowerCase().includes(searchKeyword)
+    );
+  });
+
+  const sortedDeviceRows =
+    breakdownSort === 'cost'
+      ? filteredDeviceRows.slice().sort((a, b) => {
+          if (a.available !== b.available) return a.available ? -1 : 1;
+          if (a.available && b.available) {
+            const costA = a.cost ?? -1;
+            const costB = b.cost ?? -1;
+            if (costB !== costA) return costB - costA;
+            return (
+              (b.tokens ?? 0) - (a.tokens ?? 0) ||
+              a.label.localeCompare(b.label) ||
+              a.deviceId.localeCompare(b.deviceId)
+            );
+          }
+          return (
+            Number(a.expired) - Number(b.expired) ||
+            a.label.localeCompare(b.label) ||
+            a.deviceId.localeCompare(b.deviceId)
+          );
+        })
+      : filteredDeviceRows;
+
   const visibleRows = showAllBreakdown
     ? sortedBreakdownRows
     : sortedBreakdownRows.slice(0, 30);
+  const visibleDeviceRows = showAllBreakdown
+    ? sortedDeviceRows
+    : sortedDeviceRows.slice(0, 30);
+  const totalRawBreakdownCount =
+    effectiveBreakdownKind === 'devices' ? deviceRows.length : rows.length;
+  const sortedBreakdownCount =
+    effectiveBreakdownKind === 'devices' ? sortedDeviceRows.length : sortedBreakdownRows.length;
+  const visibleBreakdownCount =
+    effectiveBreakdownKind === 'devices' ? visibleDeviceRows.length : visibleRows.length;
 
   const heroSegments = [
     {
@@ -898,20 +1186,37 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   <h3 className="text-xs font-semibold text-slate-100 truncate">
                     设备用量贡献
                   </h3>
-                  <span className="text-[10px] font-mono-tabular text-slate-400">
+                  <span className="text-[10px] font-mono-tabular text-slate-400 truncate hidden sm:inline">
                     轻触筛选单台设备
                   </span>
                 </div>
-                {onNavigate && (
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => onNavigate('devices')}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-300 hover:text-sky-200 shrink-0"
+                    data-overview-devices-jump="true"
+                    onClick={() => {
+                      onBreakdownChange('devices');
+                      breakdownSectionRef.current?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      });
+                    }}
+                    className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-sky-300 hover:text-sky-200 whitespace-nowrap"
                   >
-                    <span>设备页</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <span>完整分布</span>
+                    <ChevronDown className="w-3.5 h-3.5" />
                   </button>
-                )}
+                  {onNavigate && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('devices')}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap"
+                    >
+                      <span>设备页</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1142,7 +1447,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       )}
 
       {/* 5. 多维用量分布面板 */}
-      <div className="pt-2">
+      <div id="overview-breakdown" ref={breakdownSectionRef} className="pt-2">
         <div className="flex items-baseline justify-between mb-2.5 px-1">
           <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
             <Layers className="w-4 h-4 text-sky-400" />
@@ -1183,13 +1488,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <section className="glass-panel rounded-3xl p-5">
           <div className="glass-inset p-1 rounded-2xl flex gap-1 mb-3.5">
             {(
-              [
-                ['clients', '工具', allBreakdownCounts.clients],
-                ['models', '模型', allBreakdownCounts.models],
-                ['projects', '项目', allBreakdownCounts.projects],
-              ] as Array<[BreakdownKind, string, number]>
+              (deviceId
+                ? [
+                    ['clients', '工具', allBreakdownCounts.clients],
+                    ['models', '模型', allBreakdownCounts.models],
+                    ['projects', '项目', allBreakdownCounts.projects],
+                  ]
+                : [
+                    ['clients', '工具', allBreakdownCounts.clients],
+                    ['devices', '设备', allBreakdownCounts.devices],
+                    ['models', '模型', allBreakdownCounts.models],
+                    ['projects', '项目', allBreakdownCounts.projects],
+                  ]) as Array<[BreakdownKind, string, number]>
             ).map(([kind, label, count]) => {
-              const active = breakdownKind === kind;
+              const active = effectiveBreakdownKind === kind;
               return (
                 <button
                   key={kind}
@@ -1197,7 +1509,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   type="button"
                   onClick={() => onBreakdownChange(kind)}
                   aria-pressed={active}
-                  className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 min-w-0 min-h-[40px] px-1.5 rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap flex items-center justify-center gap-1 ${
                     active
                       ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
                       : 'text-slate-400 hover:text-slate-200'
@@ -1212,31 +1524,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             })}
           </div>
 
-          {(rows.length > 5 || breakdownSearch !== '') && (
+          {(totalRawBreakdownCount > 5 || breakdownSearch !== '') && (
             <div className="relative flex items-center mb-3.5">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 pointer-events-none" />
               <input
                 type="search"
                 data-breakdown-search="true"
-                aria-label={`筛选${
-                  breakdownKind === 'clients'
-                    ? '工具'
-                    : breakdownKind === 'models'
-                    ? '模型'
-                    : '项目'
-                }名称`}
+                aria-label={BREAKDOWN_SEARCH_LABELS[effectiveBreakdownKind]}
                 value={breakdownSearch}
                 onChange={(e) => {
                   setBreakdownSearch(e.target.value);
                   setShowAllBreakdown(false);
                 }}
-                placeholder={`筛选${
-                  breakdownKind === 'clients'
-                    ? '工具'
-                    : breakdownKind === 'models'
-                    ? '模型'
-                    : '项目'
-                }名称…`}
+                placeholder={`${BREAKDOWN_SEARCH_LABELS[effectiveBreakdownKind]}…`}
                 autoComplete="off"
                 className="w-full min-h-[38px] pl-9 pr-9 py-1.5 rounded-xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/60 transition-colors"
               />
@@ -1253,7 +1553,37 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
           )}
 
-          {visibleRows.length > 0 ? (
+          {effectiveBreakdownKind === 'devices' ? (
+            visibleDeviceRows.length > 0 ? (
+              <div className="space-y-2.5">
+                {visibleDeviceRows.map((row, idx) => (
+                  <DeviceBreakdownRowCard
+                    key={row.deviceId}
+                    row={row}
+                    rank={idx + 1}
+                    breakdownSort={breakdownSort}
+                    activeTokensTotal={activeDeviceTokensTotal}
+                    activeCostTotal={activeDeviceCostTotal}
+                    isExpanded={row.available && expandedBreakdownDevices.has(row.deviceId)}
+                    onToggle={() => {
+                      if (!row.available) return;
+                      setExpandedBreakdownDevices((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(row.deviceId)) next.delete(row.deviceId);
+                        else next.add(row.deviceId);
+                        return next;
+                      });
+                    }}
+                    onSelectDevice={onSelectDevice}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-xs text-slate-400 py-6">
+                {searchKeyword ? '无匹配的设备' : '当前周期暂无设备明细'}
+              </p>
+            )
+          ) : visibleRows.length > 0 ? (
             <div className="space-y-3.5">
               {visibleRows.map((row, idx) => {
                 const tokenPct =
@@ -1265,11 +1595,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 const pct =
                   breakdownSort === 'cost' && costPct !== null ? costPct : tokenPct;
                 const displayLabel =
-                  breakdownKind === 'clients' ? clientName(row.label) : row.label;
+                  effectiveBreakdownKind === 'clients' ? clientName(row.label) : row.label;
                 const tone =
-                  breakdownKind === 'clients' ? clientTone(row.id) : clientTone(undefined);
+                  effectiveBreakdownKind === 'clients' ? clientTone(row.id) : clientTone(undefined);
                 const canDrillSessions =
-                  breakdownKind === 'clients' &&
+                  effectiveBreakdownKind === 'clients' &&
                   period !== 'allTime' &&
                   Boolean(onSelectToolSessions) &&
                   Boolean(sessionPulse?.toolHasSessions.has(row.id));
@@ -1281,7 +1611,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0">
                           {String(idx + 1).padStart(2, '0')}
                         </span>
-                        {breakdownKind === 'clients' && (
+                        {effectiveBreakdownKind === 'clients' && (
                           <i
                             className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`}
                             aria-hidden="true"
@@ -1347,12 +1677,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </p>
           )}
 
-          {sortedBreakdownRows.length > 30 && (
+          {sortedBreakdownCount > 30 && (
             <div className="mt-4 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-400/20 rounded-xl p-3 flex items-center justify-between gap-3 leading-relaxed">
               <span>
                 {showAllBreakdown
-                  ? `已展示全部 ${sortedBreakdownRows.length} 项明细；总量保持完整。`
-                  : `仅列出${breakdownSort === 'cost' ? '费用' : '用量'}最高的 ${visibleRows.length} 项，共 ${sortedBreakdownRows.length} 项；总量保持完整。`}
+                  ? `已展示全部 ${sortedBreakdownCount} 项明细；总量保持完整。`
+                  : `仅列出${breakdownSort === 'cost' ? '费用' : '用量'}最高的 ${visibleBreakdownCount} 项，共 ${sortedBreakdownCount} 项；总量保持完整。`}
               </span>
               <button
                 type="button"
@@ -1360,12 +1690,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 onClick={() => setShowAllBreakdown((prev) => !prev)}
                 className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-300/30 text-[11px] font-semibold text-amber-200 whitespace-nowrap shrink-0 transition-colors"
               >
-                {showAllBreakdown ? '收起至前 30 项' : `展开全部 (${sortedBreakdownRows.length} 项)`}
+                {showAllBreakdown ? '收起至前 30 项' : `展开全部 (${sortedBreakdownCount} 项)`}
               </button>
             </div>
           )}
 
-          {breakdownKind === 'projects' &&
+          {effectiveBreakdownKind === 'devices' && unavailableDevicesCount > 0 && (
+            <p className="mt-3 text-xs text-slate-400 bg-white/[0.03] border border-white/[0.08] rounded-xl p-3 leading-relaxed">
+              {unavailableDevicesCount} 台设备当前周期已结束或暂无读数，未计入有效占比。
+            </p>
+          )}
+
+          {effectiveBreakdownKind === 'projects' &&
             (stats.projectsIncomplete || stats.periodProjectsOmitted?.[period]) && (
               <p className="mt-3 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-400/20 rounded-xl p-3 leading-relaxed">
                 部分设备未提供完整项目明细，项目合计可能小于总用量。

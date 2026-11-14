@@ -103,6 +103,12 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
+    if (device && breakdownKind === 'devices') {
+      setBreakdownKind('clients');
+    }
+  }, [device, breakdownKind]);
+
+  useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
       if (isTextEntryElement(event.target)) setInputFocused(true);
     };

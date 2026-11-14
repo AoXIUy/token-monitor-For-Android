@@ -78,3 +78,48 @@ test('Android top-up totals come from the ledger while subscriptions retain thei
   assert.equal(M.subscriptionAmount({ kind: 'subscription' }), null);
   assert.equal(M.subscriptionAmount({ kind: 'topup', amountMinor: 0, topUps: [{ amountMinor: 1000 }, { amountMinor: 2500 }] }), 35);
 });
+
+test('Android device breakdown ranks active devices, distinguishes expired/missing from zero, and keeps per-device tools', () => {
+  const now = Date.parse('2026-10-25T12:00:00Z');
+  const stats = {
+    devices: [
+      {
+        deviceId: 'expired-box', hostname: 'OldBox', deviceKind: 'server', stale: false, updatedAt: '2026-10-25T11:00:00Z',
+        periodWindows: { today: { endsAt: '2026-10-25T11:30:00Z' } },
+        periods: { today: { totalTokens: 900, costUsd: 9, clients: { codex: 900 } } },
+      },
+      {
+        deviceId: 'dup-b', hostname: 'Development', deviceKind: 'laptop', stale: false, updatedAt: '2026-10-25T11:55:00Z',
+        periods: { today: { totalTokens: 300, costUsd: 0.75, clients: { claude: 200 }, clientCosts: { claude: 0.5 } } },
+      },
+      {
+        deviceId: 'dup-a', hostname: 'Development', deviceKind: 'desktop', stale: true, updatedAt: '2026-10-25T10:00:00Z',
+        periods: { today: { totalTokens: 500, costUsd: 1.5, clients: { codex: 500 }, clientCosts: { codex: 1.5 } } },
+      },
+      {
+        deviceId: 'zero-box', hostname: 'IdleBox', updatedAt: '2026-10-25T11:50:00Z',
+        periods: { today: { totalTokens: 0, costUsd: 0 } },
+      },
+      {
+        deviceId: 'missing-box', hostname: 'SilentBox', updatedAt: '2026-10-25T11:50:00Z',
+        periods: {},
+      },
+    ],
+  };
+
+  const rows = M.deviceBreakdown(stats, 'today', now);
+  assert.deepEqual(rows.map((r) => r.deviceId), ['dup-a', 'dup-b', 'zero-box', 'missing-box', 'expired-box']);
+  assert.deepEqual(rows.map((r) => r.status), ['active', 'active', 'active', 'missing', 'expired']);
+  assert.equal(rows[0].hostname, 'Development');
+  assert.equal(rows[1].hostname, 'Development');
+  assert.equal(rows[0].deviceKind, 'desktop');
+  assert.equal(rows[1].clients.length, 2);
+  assert.deepEqual(rows[1].clients[1], { id: '__unattributed__', label: '未归因', tokens: 100, cost: 0.25 });
+  assert.deepEqual(rows[2].tokens, 0);
+  assert.deepEqual(rows[2].cost, 0);
+  assert.equal(rows[3].tokens, null);
+  assert.equal(rows[3].cost, null);
+  assert.equal(rows[4].expired, true);
+  assert.equal(rows[4].tokens, null);
+  assert.deepEqual(M.deviceBreakdown(null, 'today', now), []);
+});

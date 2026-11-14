@@ -1,6 +1,6 @@
 export type PageId = 'overview' | 'devices' | 'limits' | 'sessions' | 'sessionDetail' | 'settings';
 export type PeriodId = 'today' | 'month' | 'allTime';
-export type BreakdownKind = 'clients' | 'models' | 'projects';
+export type BreakdownKind = 'clients' | 'devices' | 'models' | 'projects';
 export type QuotaTabId = 'limits' | 'subscriptions';
 export type ConnectionStatus = 'online' | 'offline' | 'loading' | 'disconnected';
 

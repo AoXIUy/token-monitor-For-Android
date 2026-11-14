@@ -701,6 +701,54 @@ public final class StartupTest {
         awaitScript("document.querySelectorAll('[data-overview-device]').length === 4 && document.querySelector('.token-total').textContent.trim() === window.MonitorModel.compact(1234)");
     }
 
+    @Test public void overviewBreakdownSupportsPerDeviceDistributionToolsAndQuickFilter() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false));
+        String now = java.time.Instant.now().toString();
+        stats.getJSONArray("devices").getJSONObject(0)
+                .put("hostname", "Development").put("osName", "macOS")
+                .getJSONObject("periods").getJSONObject("today")
+                .put("clients", new org.json.JSONObject().put("codex", 1000))
+                .put("clientCosts", new org.json.JSONObject().put("codex", 1.0));
+        stats.getJSONArray("devices")
+                .put(new org.json.JSONObject().put("deviceId", "dup-linux").put("hostname", "Development")
+                        .put("deviceKind", "linux").put("osName", "Ubuntu").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("totalTokens", 400).put("costUsd", 2.5)
+                                .put("clients", new org.json.JSONObject().put("claude", 400))
+                                .put("clientCosts", new org.json.JSONObject().put("claude", 2.5)))))
+                .put(new org.json.JSONObject().put("deviceId", "zero").put("hostname", "Idle").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("totalTokens", 0).put("costUsd", 0))))
+                .put(new org.json.JSONObject().put("deviceId", "missing").put("hostname", "Silent").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject()))
+                .put(new org.json.JSONObject().put("deviceId", "expired").put("hostname", "TimedOut").put("updatedAt", now)
+                        .put("periods", stats.getJSONObject("periods"))
+                        .put("periodWindows", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("endsAt", java.time.Instant.now().minusSeconds(60).toString()))))
+                .put(new org.json.JSONObject().put("deviceId", "extra-box").put("hostname", "CloudBox").put("updatedAt", now)
+                        .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
+                                .put("totalTokens", 50).put("costUsd", 0.1))));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        awaitScript("Array.from(document.querySelectorAll('[data-breakdown]')).map(el => el.getAttribute('data-breakdown')).join(',') === 'clients,devices,models,projects'");
+        evaluate("document.querySelector('[data-overview-devices-jump=\"true\"]').click()");
+        awaitScript("document.querySelector('[data-breakdown=\"devices\"]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('[data-breakdown-device]').length === 6");
+        assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"test-pc\"]').textContent.includes('Development') && document.querySelector('[data-breakdown-device=\"dup-linux\"]').textContent.includes('dup-linux')"));
+        assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"zero\"]').textContent.includes('$0.00') && !document.querySelector('[data-breakdown-device=\"zero\"]').textContent.includes('—')"));
+        assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"missing\"]').textContent.includes('暂无读数') && document.querySelector('[data-breakdown-device=\"missing\"]').textContent.includes('—')"));
+        assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"expired\"]').textContent.includes('周期已结束') && document.querySelector('[data-breakdown-device=\"expired\"]').textContent.includes('—')"));
+        evaluate("document.querySelector('[data-breakdown-device-toggle=\"test-pc\"]').click()");
+        awaitScript("document.querySelector('[data-breakdown-device-tools=\"test-pc\"]') !== null");
+        assertEquals("true", evaluate("document.querySelector('[data-breakdown-device-tools=\"test-pc\"]').textContent.includes('Codex') && document.querySelector('[data-breakdown-device-tools=\"test-pc\"]').textContent.includes('未归因')"));
+        evaluate("document.querySelector('[data-breakdown-sort=\"cost\"]').click()");
+        awaitScript("document.querySelectorAll('[data-breakdown-device]')[0].getAttribute('data-breakdown-device') === 'dup-linux'");
+        evaluate("const input = document.querySelector('[data-breakdown-search=\"true\"]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, 'Ubuntu'); input.dispatchEvent(new Event('input', { bubbles: true }));");
+        awaitScript("document.querySelectorAll('[data-breakdown-device]').length === 1 && document.querySelector('[data-breakdown-device=\"dup-linux\"]') !== null");
+        evaluate("document.querySelector('[data-breakdown-device-filter=\"dup-linux\"]').click()");
+        awaitScript("document.getElementById('device').value === 'dup-linux' && !document.querySelector('[data-breakdown=\"devices\"]') && document.querySelector('[data-breakdown=\"clients\"]').getAttribute('aria-pressed') === 'true'");
+    }
+
     @Test public void devicePickerDialogSelectsDevicesAndHandlesBackNavigation() throws Exception {
         awaitConnectionPage();
         org.json.JSONObject stats = new org.json.JSONObject(testStats(false));

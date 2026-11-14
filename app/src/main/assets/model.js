@@ -67,6 +67,74 @@
     return Object.entries(period?.[kind] || {}).map(([id, tokens]) => ({ id, label: id, tokens: count(tokens), cost: numeric(costs?.[id]) }))
       .sort((a, b) => b.tokens - a.tokens || a.id.localeCompare(b.id));
   }
+  function deviceBreakdown(stats, periodName, now = Date.now()) {
+    const rows = (Array.isArray(stats?.devices) ? stats.devices : [])
+      .filter((dev) => dev && typeof dev.deviceId === 'string' && dev.deviceId)
+      .map((dev) => {
+        const isExpired = expired(dev, periodName, now);
+        const periodData = isExpired ? null : dev.periods?.[periodName] || null;
+        const base = {
+          id: dev.deviceId,
+          deviceId: dev.deviceId,
+          label: dev.hostname || dev.deviceId,
+          hostname: dev.hostname || null,
+          deviceKind: deviceKind(dev.deviceKind),
+          platform: dev.platform || null,
+          osName: dev.osName || null,
+          osVersion: dev.osVersion || null,
+          agentVersion: dev.agentVersion || null,
+          stale: dev.stale === true,
+          updatedAt: dev.updatedAt || null,
+        };
+        if (!periodData) {
+          return {
+            ...base,
+            status: isExpired ? 'expired' : 'missing',
+            available: false,
+            expired: Boolean(isExpired),
+            tokens: null,
+            cost: null,
+            clients: [],
+          };
+        }
+        const tokens = count(periodData.totalTokens);
+        const cost = numeric(periodData.costUsd);
+        const clientRows = breakdown(periodData, 'clients');
+        const attributedTokens = clientRows.reduce((sum, row) => sum + row.tokens, 0);
+        const remainderTokens = Math.max(0, tokens - attributedTokens);
+        const clients = clientRows.slice();
+        if (clientRows.length > 0 && remainderTokens > 0) {
+          const knownCost = clientRows.every((row) => row.cost !== null)
+            ? clientRows.reduce((sum, row) => sum + row.cost, 0)
+            : null;
+          const remainderCost = cost !== null && knownCost !== null && cost + 1e-9 >= knownCost
+            ? Math.max(0, cost - knownCost)
+            : null;
+          clients.push({
+            id: '__unattributed__',
+            label: '未归因',
+            tokens: remainderTokens,
+            cost: remainderCost,
+          });
+        }
+        return {
+          ...base,
+          status: 'active',
+          available: true,
+          expired: false,
+          tokens,
+          cost,
+          clients,
+        };
+      });
+    return rows.sort((a, b) => {
+      if (a.available !== b.available) return a.available ? -1 : 1;
+      if (a.available && b.available) {
+        return b.tokens - a.tokens || Number(a.stale) - Number(b.stale) || a.label.localeCompare(b.label) || a.deviceId.localeCompare(b.deviceId);
+      }
+      return Number(a.expired) - Number(b.expired) || a.label.localeCompare(b.label) || a.deviceId.localeCompare(b.deviceId);
+    });
+  }
   function sessions(period, query = '') {
     const search = query.trim().toLocaleLowerCase();
     const rows = Object.entries(period?.sessions || {}).map(([key, row]) => ({ ...row, key,
@@ -478,5 +546,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });
