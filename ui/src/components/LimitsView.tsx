@@ -213,7 +213,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       .map((group) => {
         const keptItems = group.items.filter((item) => {
           const isManualHidden = hiddenSet.has(item.accountHash);
-          const isAutoHidden = hideUncollected && !item.hasHistory;
+          const { provider } = item;
+          const needsCopilotLogin = provider.provider === 'copilot' && provider.accountKey && provider.status === 'unauthorized';
+          const isAutoHidden = hideUncollected && !item.hasHistory && !needsCopilotLogin;
           if (isManualHidden) {
             manualHidden.push(item);
             if (keyword && item.searchIndex.includes(keyword)) hiddenMatches += 1;

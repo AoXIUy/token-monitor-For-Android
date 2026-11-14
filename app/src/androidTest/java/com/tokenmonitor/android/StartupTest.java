@@ -529,6 +529,31 @@ public final class StartupTest {
         awaitScript("document.querySelectorAll('[data-limit-account]').length === 1 && !document.getElementById('content').innerText.includes('Team One')");
     }
 
+    @Test public void copilotKeepsNamedAccountsAndShowsAnExpiredLoginByDefault() throws Exception {
+        awaitConnectionPage();
+        org.json.JSONArray providers = new org.json.JSONArray("""
+                [
+                  {"provider":"copilot","accountKey":"sha256:personal","accountName":"same-login",
+                   "source":"api","sourceDetail":"managed","status":"ok",
+                   "windows":[{"kind":"billing","label":"Premium","usedPercent":25}]},
+                  {"provider":"copilot","accountKey":"sha256:enterprise","accountName":"same-login",
+                   "source":"api","sourceDetail":"managed","status":"unauthorized","windows":[]},
+                  {"provider":"copilot","source":"api","status":"notConfigured","windows":[]}
+                ]
+                """);
+        org.json.JSONObject stats = new org.json.JSONObject(testStats(false))
+                .put("limits", new org.json.JSONObject().put("providers", providers));
+        evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
+        publishStats(stats);
+        evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+        awaitScript("document.querySelectorAll('[data-limit-account]').length === 2");
+        assertEquals("true", evaluate("(() => { const cards = [...document.querySelectorAll('[data-limit-account]')];"
+                + " return cards[0].dataset.limitAccount !== cards[1].dataset.limitAccount"
+                + " && cards.every(card => card.innerText.includes('same-login'))"
+                + " && cards.some(card => card.innerText.includes('Premium') && card.innerText.includes('25%'))"
+                + " && cards.some(card => card.innerText.includes('需重新登录') && !card.innerText.includes('Premium')); })()"));
+    }
+
     @Test public void upstream84ShowsMuseProductsCreditsAndSessionMetadata() throws Exception {
         awaitConnectionPage();
         org.json.JSONObject stats = new org.json.JSONObject(testStats(false));

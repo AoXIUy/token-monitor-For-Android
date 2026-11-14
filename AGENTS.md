@@ -11,6 +11,10 @@ This repository contains the Android read-only client for [Token Monitor](https:
 - Do not add dependencies or tooling without discussing the reason in the issue or PR description.
 - Commit subjects use conventional commits, for example `fix(android): preserve connection state on refresh`. Do not add AI co-author trailers.
 
+## Syncing official upstream changes
+
+Treat local updates from [Javis603/token-monitor](https://github.com/Javis603/token-monitor) as a one-way sync into this repository. Fetch and review official changes, then adapt and verify the relevant features locally. Do not push branches or tags to the official upstream or open an upstream PR for the local changes unless the user explicitly requests it. Publishing to this project's `origin` is a separate task governed by the release procedure below.
+
 ## Android version standard
 
 Read [docs/RELEASING.md](docs/RELEASING.md) before preparing or repairing a release. The executable checks are [scripts/release-metadata.js](scripts/release-metadata.js) and [scripts/package-release.js](scripts/package-release.js); keep this guidance and the release guide current when those contracts change.

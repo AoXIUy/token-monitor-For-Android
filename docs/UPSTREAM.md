@@ -24,6 +24,12 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 会话实时速率模块 `sessionRealtime.js` 来自 [AoXIUy/token-monitor](https://github.com/AoXIUy/token-monitor) 分支，逐字节同步并在 `upstream-files.json` 中单独记录来源仓库、提交和 SHA-256；不代表主线已包含该功能。它保持浏览器全局 `TokenMonitorSessionRealtime` 与 CommonJS 双入口，不依赖 Electron 或第三方库。Android 和桌面使用相同的计数增量、时间、失效和曲线规则；安卓仅负责原生生命周期与界面适配。
 
+## 官方 v0.92.0 兼容性
+
+2026-11-14 核对了 [Javis603/token-monitor v0.92.0](https://github.com/Javis603/token-monitor/releases/tag/v0.92.0)（`001f1d4710f6bdcaa1a56f8836335153ca5babf8`）。Node Hub 和 Cloudflare Worker 通过现有统计接口提供 Copilot 多账号额度。Android 沿用 `accountKey` 区分账号及额度历史，并在默认额度筛选中保留需重新登录的已配置账号，即使该账号尚无额度读数。DeepSeek Search / Fetch 费用沿用既有展示。Android 前台通过 `GET /api/stats` 轮询，Hub 的 SSE 优化在升级服务端后供流式客户端使用。
+
+此前 [v0.92 适配审计](audits/2026-11-12-v092-adaptation-audit.md) 对照的是 AoXIUy 桌面分支的同名版本（`67bfc951`）。在线对话与只读审批提醒仍依赖 AoXIUy 分支的 Node Hub 和采集端。
+
 ## 独立工程的调整
 
 Android 工程提升至仓库根目录，修正 Gradle、Vite 和展示模型的相对路径；保留 Gradle Wrapper、前端锁文件、原生与仪器测试。GitHub CI 使用独立目录结构，Node 展示测试移除对整个 Hub / Electron 工程的依赖，具体范围见 [tests/README.md](../tests/README.md)。
