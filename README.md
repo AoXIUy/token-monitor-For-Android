@@ -4,7 +4,7 @@
 
 [![Android CI](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/android.yml)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-34D399?logo=android&logoColor=white)
-![Version 1.16.0](https://img.shields.io/badge/version-1.16.0-38BDF8)
+![Version 1.16.1](https://img.shields.io/badge/version-1.16.1-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -53,6 +53,8 @@
 1.5.0 增量适配 [上游 v0.87 主线](docs/upstream-0.87.md)，包含 MiniMax 产品分离、已验证账户分组、现金消费周期、视频次数及无限额展示，更新内容见 [发布说明](docs/releases/1.5.0.md)。
 
 1.6.0 适配 [主线 v0.88 / `eb8cf9d`](docs/upstream-0.88.md)：新增 Gemini CLI、Mistral Vibe、Prime Agent、Jcode 的工具展示，Mistral 额度、MiMo 余额组成，以及兼容来源反复接管后的额度历史，更新内容见 [发布说明](docs/releases/1.6.0.md)。
+
+1.16.1 优化手机端「用量分布 → 按设备」卡片排版，将设备名、唯一设备 ID、系统版本与占比/用量/费用分行展示并支持自动换行，避免窄屏截断。详见 [发布说明](docs/releases/1.16.1.md)。
 
 1.16.0 总览「用量分布」新增按设备维度（「工具 · 设备 · 模型 · 项目」），支持展开查看设备工具构成、按 Token / 费用排序、搜索与快捷筛选单设备，区分缺失、过期与真实零值。详见 [发布说明](docs/releases/1.16.0.md)。
 

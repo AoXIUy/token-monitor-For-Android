@@ -105,87 +105,43 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
   return (
     <div
       data-breakdown-device={row.deviceId}
-      className="rounded-2xl bg-white/[0.02] border border-white/[0.05] p-3 space-y-2"
+      className="rounded-2xl bg-white/[0.025] border border-white/[0.06] p-3.5 space-y-2"
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start justify-between gap-2">
         <button
           type="button"
           data-breakdown-device-toggle={row.deviceId}
           aria-expanded={row.available ? isExpanded : undefined}
           disabled={!row.available}
           onClick={onToggle}
-          className={`flex-1 min-w-0 text-left space-y-1.5 ${
-            row.available ? 'cursor-pointer' : 'cursor-default opacity-80'
+          className={`flex-1 min-w-0 text-left flex items-start gap-1.5 ${
+            row.available ? 'cursor-pointer' : 'cursor-default opacity-85'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0">
-                {String(rank).padStart(2, '0')}
-              </span>
-              {row.available && (
-                <ChevronRight
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-150 ${
-                    isExpanded ? 'rotate-90 text-sky-300' : ''
-                  }`}
-                />
-              )}
-              <DeviceIcon kind={row.deviceKind} className="w-3.5 h-3.5 text-sky-300 shrink-0" />
-              <i
-                aria-hidden="true"
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  !row.available
-                    ? 'bg-slate-500'
-                    : row.stale
-                    ? 'bg-amber-400'
-                    : 'bg-emerald-400'
-                }`}
-              />
-              <span className="text-xs font-medium text-slate-100 truncate">{row.label}</span>
-              {row.available && (
-                <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0">
-                  {formatSharePct(pct)}
-                </span>
-              )}
-            </div>
-            <div className="flex items-baseline gap-2 shrink-0 font-mono-tabular text-xs">
-              {row.available ? (
-                <>
-                  <span
-                    className={
-                      breakdownSort === 'tokens'
-                        ? 'font-semibold text-slate-100'
-                        : 'text-[11px] text-slate-400'
-                    }
-                  >
-                    {MonitorModel.compact(row.tokens)}
-                  </span>
-                  <span
-                    className={
-                      breakdownSort === 'cost'
-                        ? 'font-semibold text-emerald-300'
-                        : 'text-[11px] text-slate-400'
-                    }
-                  >
-                    {MonitorModel.money(row.cost)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-semibold text-slate-400">—</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400">
-                    {row.expired ? '周期已结束' : '暂无读数'}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {subtitleParts.length > 0 && (
-            <p className="pl-5 text-[10px] text-slate-400 font-mono-tabular truncate">
-              {subtitleParts.join(' · ')}
-            </p>
+          <span className="text-[10px] font-mono-tabular text-slate-500 w-4 shrink-0 pt-0.5">
+            {String(rank).padStart(2, '0')}
+          </span>
+          {row.available && (
+            <ChevronRight
+              className={`w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5 transition-transform duration-150 ${
+                isExpanded ? 'rotate-90 text-sky-300' : ''
+              }`}
+            />
           )}
+          <DeviceIcon kind={row.deviceKind} className="w-3.5 h-3.5 text-sky-300 shrink-0 mt-0.5" />
+          <i
+            aria-hidden="true"
+            className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
+              !row.available
+                ? 'bg-slate-500'
+                : row.stale
+                ? 'bg-amber-400'
+                : 'bg-emerald-400'
+            }`}
+          />
+          <span className="text-[13px] leading-snug font-semibold text-slate-100 [overflow-wrap:anywhere] min-w-0">
+            {row.label}
+          </span>
         </button>
 
         {onSelectDevice && (
@@ -194,25 +150,79 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
             data-breakdown-device-filter={row.deviceId}
             onClick={() => onSelectDevice(row.deviceId)}
             aria-label={`筛选设备 ${row.label}`}
-            className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-sky-400/15 text-[10px] font-semibold text-sky-300 transition-colors shrink-0 mt-0.5"
+            className="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-sky-400/15 text-[11px] font-semibold text-sky-300 transition-colors shrink-0"
           >
             <span>筛选</span>
-            <ArrowRight className="w-2.5 h-2.5" />
+            <ArrowRight className="w-3 h-3" />
           </button>
         )}
       </div>
 
-      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden" aria-hidden="true">
-        <div
-          style={{ width: `${row.available && (row.tokens ?? 0) > 0 ? Math.max(1.5, pct) : 0}%` }}
-          className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-300 transition-all duration-300"
-        />
+      <div
+        onClick={row.available ? onToggle : undefined}
+        className={`space-y-2 ${row.available ? 'cursor-pointer' : ''}`}
+      >
+        {subtitleParts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-slate-400 font-mono-tabular">
+            {row.hostname && row.hostname !== row.deviceId && (
+              <span className="text-slate-300/80 break-all">{row.deviceId}</span>
+            )}
+            {osLabel && <span className="[overflow-wrap:anywhere]">{osLabel}</span>}
+            {row.available && row.stale && (
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/12 border border-amber-400/25 text-[10px] text-amber-300">
+                状态过期
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-baseline justify-between gap-2 font-mono-tabular">
+          {row.available ? (
+            <>
+              <span className="text-[11px] text-slate-400">占比 {formatSharePct(pct)}</span>
+              <div className="flex items-baseline gap-2.5 text-xs">
+                <span
+                  className={
+                    breakdownSort === 'tokens'
+                      ? 'font-semibold text-slate-100'
+                      : 'text-[11px] text-slate-400'
+                  }
+                >
+                  {MonitorModel.compact(row.tokens)}
+                </span>
+                <span
+                  className={
+                    breakdownSort === 'cost'
+                      ? 'font-semibold text-emerald-300'
+                      : 'text-[11px] text-slate-400'
+                  }
+                >
+                  {MonitorModel.money(row.cost)}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.06] text-slate-400">
+                {row.expired ? '周期已结束' : '暂无读数'}
+              </span>
+              <span className="text-xs font-semibold text-slate-400">—</span>
+            </>
+          )}
+        </div>
+
+        <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden" aria-hidden="true">
+          <div
+            style={{ width: `${row.available && (row.tokens ?? 0) > 0 ? Math.max(1.5, pct) : 0}%` }}
+            className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-300 transition-all duration-300"
+          />
+        </div>
       </div>
 
       {isExpanded && row.available && (
         <div
           data-breakdown-device-tools={row.deviceId}
-          className="pt-2 mt-1 border-t border-white/[0.06] pl-5 space-y-2"
+          className="pt-2.5 mt-1 border-t border-white/[0.06] space-y-2"
         >
           <div className="flex items-center justify-between text-[10px] text-slate-400">
             <span>工具构成</span>
@@ -1485,7 +1495,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
         </div>
 
-        <section className="glass-panel rounded-3xl p-5">
+        <section className="glass-panel rounded-3xl p-4 sm:p-5">
           <div className="glass-inset p-1 rounded-2xl flex gap-1 mb-3.5">
             {(
               (deviceId

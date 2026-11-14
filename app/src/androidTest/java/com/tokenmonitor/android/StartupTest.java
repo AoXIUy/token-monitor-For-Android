@@ -726,7 +726,9 @@ public final class StartupTest {
                         .put("periods", stats.getJSONObject("periods"))
                         .put("periodWindows", new org.json.JSONObject().put("today", new org.json.JSONObject()
                                 .put("endsAt", java.time.Instant.now().minusSeconds(60).toString()))))
-                .put(new org.json.JSONObject().put("deviceId", "extra-box").put("hostname", "CloudBox").put("updatedAt", now)
+                .put(new org.json.JSONObject().put("deviceId", "agentserver-mz32-ar0-00")
+                        .put("hostname", "WIN-RJGDG7FKQ7M-AGENT").put("osName", "Debian GNU/Linux")
+                        .put("osVersion", "13 (trixie) build 26100").put("updatedAt", now)
                         .put("periods", new org.json.JSONObject().put("today", new org.json.JSONObject()
                                 .put("totalTokens", 50).put("costUsd", 0.1))));
         evaluate("window.receiveNative({type:'connection',url:'https://monitor.example.com'})");
@@ -735,6 +737,7 @@ public final class StartupTest {
         evaluate("document.querySelector('[data-overview-devices-jump=\"true\"]').click()");
         awaitScript("document.querySelector('[data-breakdown=\"devices\"]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('[data-breakdown-device]').length === 6");
         assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"test-pc\"]').textContent.includes('Development') && document.querySelector('[data-breakdown-device=\"dup-linux\"]').textContent.includes('dup-linux')"));
+        assertEquals("true", evaluate("(() => { const card = document.querySelector('[data-breakdown-device=\"agentserver-mz32-ar0-00\"]'); return Boolean(card) && card.scrollWidth <= card.clientWidth && Array.from(card.querySelectorAll('span')).every(s => s.scrollWidth <= s.clientWidth + 1 && getComputedStyle(s).textOverflow !== 'ellipsis'); })()"));
         assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"zero\"]').textContent.includes('$0.00') && !document.querySelector('[data-breakdown-device=\"zero\"]').textContent.includes('—')"));
         assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"missing\"]').textContent.includes('暂无读数') && document.querySelector('[data-breakdown-device=\"missing\"]').textContent.includes('—')"));
         assertEquals("true", evaluate("document.querySelector('[data-breakdown-device=\"expired\"]').textContent.includes('周期已结束') && document.querySelector('[data-breakdown-device=\"expired\"]').textContent.includes('—')"));
