@@ -123,3 +123,34 @@ test('Android device breakdown ranks active devices, distinguishes expired/missi
   assert.equal(rows[4].tokens, null);
   assert.deepEqual(M.deviceBreakdown(null, 'today', now), []);
 });
+
+test('Android merges Qoder and Qoder CN client breakdowns by default and supports separating them', () => {
+  assert.equal(M.clientLabel('qoder'), 'Qoder');
+  assert.equal(M.clientLabel('qodercn'), 'Qoder CN');
+
+  const combined = {
+    clients: { qoder: 120, qodercn: 80, claude: 150 },
+    clientCosts: { qoder: 0.4, qodercn: 0.6, claude: 1.5 },
+  };
+  assert.deepEqual(M.breakdown(combined, 'clients'), [
+    { id: 'qoder', ids: ['qoder', 'qodercn'], label: 'qoder', tokens: 200, cost: 1 },
+    { id: 'claude', label: 'claude', tokens: 150, cost: 1.5 },
+  ]);
+  assert.deepEqual(M.breakdown(combined, 'clients', { separateQoderClients: true }), [
+    { id: 'claude', label: 'claude', tokens: 150, cost: 1.5 },
+    { id: 'qoder', label: 'qoder', tokens: 120, cost: 0.4 },
+    { id: 'qodercn', label: 'qodercn', tokens: 80, cost: 0.6 },
+  ]);
+
+  // Merging drops cost when either edition lacks attribution rather than counting missing cost as zero.
+  const partialCost = { clients: { qoder: 120, qodercn: 80 }, clientCosts: { qoder: 0.4 } };
+  assert.deepEqual(M.breakdown(partialCost, 'clients'), [
+    { id: 'qoder', ids: ['qoder', 'qodercn'], label: 'qoder', tokens: 200, cost: null },
+  ]);
+
+  // CN-only usage still displays as Qoder when merged.
+  const cnOnly = { clients: { qodercn: 80 }, clientCosts: { qodercn: 0.25 } };
+  assert.deepEqual(M.breakdown(cnOnly, 'clients'), [
+    { id: 'qoder', ids: ['qodercn'], label: 'qoder', tokens: 80, cost: 0.25 },
+  ]);
+});

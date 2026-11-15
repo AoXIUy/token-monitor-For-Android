@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
-import type { LimitsPrefs, MonitorState } from '../types/monitor';
+import type { DisplayPrefs, LimitsPrefs, MonitorState } from '../types/monitor';
 import { createDemoPayload } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
 import { loadBrowserLimitsPrefs, saveBrowserLimitsPrefs, sanitizeLimitsPrefs } from '../utils/limitsPrefs';
+import { loadBrowserDisplayPrefs, saveBrowserDisplayPrefs, sanitizeDisplayPrefs } from '../utils/displayPrefs';
 
 export function useNativeMonitor() {
   const [state, setState] = useState<MonitorState>(createInitialState);
@@ -42,15 +43,42 @@ export function useNativeMonitor() {
     }
   }, [update]);
 
+  const saveDisplayPrefs = useCallback((prefs: DisplayPrefs) => {
+    const clean = sanitizeDisplayPrefs(prefs);
+    update(previous => ({ ...previous, displayPrefs: clean }));
+    if (window.HubNative?.saveDisplayPrefs) {
+      window.HubNative.saveDisplayPrefs(JSON.stringify(clean));
+    } else {
+      saveBrowserDisplayPrefs(clean);
+    }
+  }, [update]);
+
   const loadBrowserDemo = useCallback((customUrl?: string, allowHttpFlag?: boolean) => {
     const now = Date.now();
     const demo = createDemoPayload(now);
     const targetUrl = customUrl?.trim() || demo.connectionUrl;
+    const allowHttp = Boolean(allowHttpFlag);
     update(previous => {
+      const matched = previous.hubProfiles.find(profile => profile.url === targetUrl && profile.allowHttp === allowHttp);
+      const nextId = matched
+        ? matched.id
+        : previous.hubProfiles.length === 0
+          ? 'demo-primary'
+          : `demo-${Date.now().toString(36)}`;
+      const hubProfiles = matched
+        ? previous.hubProfiles
+        : [...previous.hubProfiles, {
+            id: nextId,
+            name: previous.hubProfiles.length === 0 ? '示例 Hub' : targetUrl,
+            url: targetUrl,
+            allowHttp,
+          }];
       let next = receiveNativeMessage(previous, {
         type: 'connection',
         url: targetUrl,
-        allowHttp: Boolean(allowHttpFlag),
+        allowHttp,
+        activeHubProfileId: nextId,
+        hubProfiles,
       });
       next = receiveNativeMessage(next, { type: 'status', state: 'online' });
       next = receiveNativeMessage(next, { type: 'stats', data: demo.stats, fetchedAt: now });
@@ -104,8 +132,13 @@ export function useNativeMonitor() {
       window.HubNative.ready();
     } else {
       const savedPrefs = loadBrowserLimitsPrefs();
+      const savedDisplayPrefs = loadBrowserDisplayPrefs();
       loadBrowserDemo();
-      update(previous => receiveNativeMessage(previous, { type: 'limitsPrefs', ...savedPrefs }));
+      update(previous => {
+        let next = receiveNativeMessage(previous, { type: 'limitsPrefs', ...savedPrefs });
+        next = receiveNativeMessage(next, { type: 'displayPrefs', ...savedDisplayPrefs });
+        return next;
+      });
     }
     return () => {
       if (window.receiveNative === receive) delete window.receiveNative;
@@ -113,5 +146,5 @@ export function useNativeMonitor() {
     };
   }, [update, loadBrowserDemo]);
 
-  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs };
+  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs, saveDisplayPrefs };
 }

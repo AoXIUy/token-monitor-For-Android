@@ -106,18 +106,17 @@ public final class LimitsHistoryStoreTest {
             assertEquals(0, result.getDouble("unallocated"), 0);
             assertEquals(0, result.getInt("resets"));
             assertEquals(5, entry(p, end).getJSONArray("points").length());
-            assertEquals(2, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
+            assertEquals(0, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
         }
     }
 
-    @Test public void storedLegacyConflictStillBlocksCompatibleSourceJump() throws Exception {
+    @Test public void storedLegacyConflictNoLongerBlocksCompatibleSourceJump() throws Exception {
         JSONObject p = provider("workspace-a", "a", now, 20); record(p);
         store.getWritableDatabase().execSQL("UPDATE streams SET guarded=1");
         record(provider("workspace-a", "a", now + 60000, 20).put("status", "unavailable"));
         p = provider("workspace-a", "b", now + 120000, 24); record(p);
-        assertTrue(today(p, now + 120000).isNull("value"));
-        assertTrue(today(p, now + 120000).getBoolean("uncertain"));
-        assertEquals(1, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
+        assertEquals(4, today(p, now + 120000).getDouble("value"), 0);
+        assertEquals(0, android.database.DatabaseUtils.longForQuery(store.getReadableDatabase(), "SELECT guarded FROM streams LIMIT 1", null));
     }
 
     @Test public void repeatedAndOutOfOrderObservationsDoNotBecomeNewConsumption() throws Exception {
@@ -160,16 +159,19 @@ public final class LimitsHistoryStoreTest {
         assertFalse(today(p, now + 120000).getBoolean("uncertain"));
     }
 
-    @Test public void sourceConflictsAndMissingWindowsBreakConsumptionWithoutDeletingHistory() throws Exception {
+    @Test public void sourceConflictsWhileCurrentAreIgnoredUntilOwnerFallsSilent() throws Exception {
         JSONObject p = provider("workspace-a", "laptop", now, 20); record(p);
         record(provider("workspace-a", "server", now + 60000, 5));
         p = provider("workspace-a", "laptop", now + 120000, 24); record(p);
-        assertTrue(today(p, now + 120000).isNull("value"));
-        assertTrue(today(p, now + 120000).getBoolean("uncertain"));
-        record(provider("workspace-a", "laptop", now + 180000, 24).put("windows", new JSONArray()));
-        p = provider("workspace-a", "laptop", now + 240000, 30); record(p);
-        assertTrue(today(p, now + 240000).isNull("value"));
-        assertTrue(entry(p, now + 240000).getJSONArray("points").length() >= 3);
+        assertEquals(4, today(p, now + 120000).getDouble("value"), 0);
+        assertFalse(today(p, now + 120000).getBoolean("uncertain"));
+        // Once the current owner goes silent past the 2.5x polling window, a contradictory peer starts an uncertain baseline.
+        p = provider("workspace-a", "server", now + 1000000, 10); record(p);
+        assertTrue(today(p, now + 1000000).getBoolean("uncertain"));
+        assertEquals(4, today(p, now + 1000000).getDouble("value"), 0);
+        record(provider("workspace-a", "server", now + 1060000, 24).put("windows", new JSONArray()));
+        p = provider("workspace-a", "server", now + 1120000, 30); record(p);
+        assertTrue(entry(p, now + 1120000).getJSONArray("points").length() >= 4);
     }
 
     @Test public void failuresAndSamplingGapsKeepSameDayNetChangesButNotFabricatedCrossDayUsage() throws Exception {
@@ -215,5 +217,86 @@ public final class LimitsHistoryStoreTest {
         JSONObject credits = new JSONObject().put("metric", "credits").put("remaining", 8).put("currency", "CREDITS").put("showMeter", false);
         assertEquals("CREDITS", LimitsHistoryStore.readings(credits).get(0).unit);
         assertTrue(LimitsHistoryStore.readings(credits).get(0).balance);
+    }
+
+    @Test public void subPointJitterAndLateDeadlinesAreIgnored() throws Exception {
+        JSONObject p = provider("workspace-a", "laptop", now, 2.04); record(p);
+        record(provider("workspace-a", "laptop", now + 60000, 1.08));
+        p = provider("workspace-a", "laptop", now + 120000, 3.04); record(p);
+        assertEquals(1.0, today(p, now + 120000).getDouble("value"), 1e-6);
+        assertEquals(0, entry(p, now + 120000).getJSONObject("distribution").getInt("resets"));
+
+        long oldReset = now + 4 * 3600000;
+        long newReset = now + 5 * 3600000;
+        JSONObject next = provider("workspace-a", "server", now + 180000, 0);
+        next.getJSONArray("windows").getJSONObject(0).put("resetsAt", java.time.Instant.ofEpochMilli(newReset).toString());
+        record(next);
+        JSONObject stale = provider("workspace-a", "laptop", now + 185000, 90);
+        stale.getJSONArray("windows").getJSONObject(0).put("resetsAt", java.time.Instant.ofEpochMilli(oldReset).toString());
+        record(stale);
+        JSONArray pts = entry(next, now + 185000).getJSONArray("points");
+        assertEquals(0.0, pts.getJSONObject(pts.length() - 1).getDouble("value"), 1e-6);
+    }
+
+    @Test public void rotatedCredentialAdoptsAliasHistoryWhileOpenCodeAliasesStaySeparate() throws Exception {
+        JSONObject cookieQoder = provider("sha256:cookie-qoder", "pc", now, 20).put("provider", "qoder");
+        cookieQoder.put("windows", new JSONArray().put(new JSONObject()
+                .put("kind", "billing").put("label", "Team credits").put("usedPercent", 20)));
+        record(cookieQoder);
+        cookieQoder.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        cookieQoder.getJSONArray("windows").getJSONObject(0).put("usedPercent", 25);
+        record(cookieQoder);
+
+        JSONObject userQoder = new JSONObject(cookieQoder.toString())
+                .put("accountKey", "sha256:user-qoder")
+                .put("accountKeyAliases", new JSONArray().put("sha256:cookie-qoder"));
+        userQoder.put("updatedAt", java.time.Instant.ofEpochMilli(now + 120000).toString());
+        userQoder.getJSONArray("windows").getJSONObject(0).put("usedPercent", 30);
+        record(userQoder);
+
+        assertEquals(10.0, today(userQoder, now + 120000).getDouble("value"), 0);
+        assertEquals(3, entry(userQoder, now + 120000).getJSONArray("points").length());
+        assertEquals(1L, android.database.DatabaseUtils.longForQuery(
+                store.getReadableDatabase(), "SELECT COUNT(*) FROM adoptions", null));
+
+        // OpenCode aliases represent distinct live devices and must not be adopted into one stream.
+        JSONObject ocApi = provider("sha256:oc-api", "pc", now, 10).put("provider", "opencode").put("source", "api");
+        record(ocApi);
+        JSONObject ocWeb = new JSONObject(ocApi.toString()).put("source", "web")
+                .put("accountKey", "sha256:oc-workspace")
+                .put("accountKeyAliases", new JSONArray().put("sha256:oc-api"));
+        ocWeb.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        ocWeb.getJSONArray("windows").getJSONObject(0).put("usedPercent", 15);
+        record(ocWeb);
+        assertEquals(1, entry(ocWeb, now + 60000).getJSONArray("points").length());
+        assertEquals(1, entry(ocApi, now + 60000).getJSONArray("points").length());
+    }
+
+    @Test public void upgradingV1DatabasePreservesHistoryAndEnablesAdoptions() throws Exception {
+        store.close();
+        context.deleteDatabase(LimitsHistoryStore.DATABASE);
+        android.database.sqlite.SQLiteOpenHelper v1 = new android.database.sqlite.SQLiteOpenHelper(
+                context, LimitsHistoryStore.DATABASE, null, 1) {
+            @Override public void onCreate(android.database.sqlite.SQLiteDatabase db) {
+                db.execSQL("CREATE TABLE streams(id TEXT PRIMARY KEY, account TEXT NOT NULL, source TEXT NOT NULL, guarded INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0)");
+                db.execSQL("CREATE INDEX streams_account ON streams(account)");
+                db.execSQL("CREATE TABLE runs(id INTEGER PRIMARY KEY, stream TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE, start_at INTEGER NOT NULL, end_at INTEGER NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL, balance INTEGER NOT NULL, reset_at INTEGER, basis TEXT NOT NULL, interval_ms INTEGER NOT NULL, break_after INTEGER NOT NULL DEFAULT 0, uncertain_before INTEGER NOT NULL DEFAULT 0, uncertain_until INTEGER)");
+                db.execSQL("CREATE INDEX runs_stream_end ON runs(stream,end_at)");
+                db.execSQL("CREATE TABLE origins(stream TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE, source TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(stream,source))");
+                db.execSQL("CREATE TABLE daily(stream TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE, day TEXT NOT NULL, value REAL, observations INTEGER NOT NULL DEFAULT 0, uncertain INTEGER NOT NULL DEFAULT 0, unallocated REAL NOT NULL DEFAULT 0, resets INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(stream,day))");
+                db.execSQL("CREATE TABLE maintenance(day TEXT PRIMARY KEY)");
+            }
+            @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase db, int o, int n) { }
+        };
+        v1.getWritableDatabase().close();
+        v1.close();
+
+        store = new LimitsHistoryStore(context, "hub-a");
+        JSONObject p = provider("workspace-v1", "laptop", now, 10);
+        record(p);
+        p = provider("workspace-v1", "laptop", now + 60000, 14);
+        record(p);
+        assertEquals(4.0, today(p, now + 60000).getDouble("value"), 0);
+        assertEquals(2, store.getReadableDatabase().getVersion());
     }
 }

@@ -28,7 +28,9 @@ final class UsageWidgetStore {
             JSONObject previous = read(context);
             if (previous.optLong("startedAt") > startedAt) return false;
             try {
-                JSONObject snapshot = UsageWidgetSnapshot.project(stats, fetchedAt, startedAt).put("binding", binding);
+                JSONObject snapshot = UsageWidgetSnapshot.project(
+                        stats, fetchedAt, startedAt, DisplayPrefs.separateQoderClients(context)
+                ).put("binding", binding);
                 preferences(context).edit().putString("snapshot", snapshot.toString()).apply();
                 UsageWidgetProvider.renderAll(context);
                 return true;

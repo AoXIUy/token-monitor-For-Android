@@ -187,3 +187,74 @@ test('approval alerts sanitize items, open overview on tap and reset on reconnec
   assert.equal(state.approvals.enabled, false);
   assert.equal(state.approvals.items.length, 0);
 });
+
+test('display preferences sanitize separateQoderClients and survive Hub connection changes', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = createInitialState();
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: false });
+
+  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: true });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+
+  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: 'truthy-string' });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.example.com' });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+});
+
+test('hubProfiles strip secret fields and survive inactive profile updates', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = createInitialState();
+  assert.deepEqual(state.hubProfiles, []);
+  assert.equal(state.activeHubProfileId, '');
+
+  state = receiveNativeMessage(state, {
+    type: 'connection',
+    url: 'https://hub-a.example.com',
+    allowHttp: false,
+    activeHubProfileId: 'hub-a',
+    hubProfiles: [
+      { id: 'hub-a', name: 'Work Hub', url: 'https://hub-a.example.com', allowHttp: false, secret: 'do-not-leak' },
+      { id: 'hub-a', name: 'Duplicate ID', url: 'https://dup.example.com', allowHttp: false },
+      { id: '', name: 'No ID', url: 'https://invalid.example.com', allowHttp: false },
+      { id: 'hub-b', name: ' ', url: 'http://127.0.0.1:17321', allowHttp: true, token: 'secret-too' },
+    ],
+  });
+  assert.equal(state.activeHubProfileId, 'hub-a');
+  assert.equal(state.hubProfiles.length, 2);
+  assert.deepEqual(state.hubProfiles[0], {
+    id: 'hub-a',
+    name: 'Work Hub',
+    url: 'https://hub-a.example.com',
+    allowHttp: false,
+  });
+  assert.deepEqual(state.hubProfiles[1], {
+    id: 'hub-b',
+    name: 'http://127.0.0.1:17321',
+    url: 'http://127.0.0.1:17321',
+    allowHttp: true,
+  });
+  assert.equal(JSON.stringify(state).includes('do-not-leak'), false);
+  assert.equal(JSON.stringify(state).includes('secret-too'), false);
+
+  state = receiveNativeMessage(state, { type: 'stats', data: { periods: { today: { totalTokens: 42 } } }, fetchedAt: 100 });
+  const epochBefore = state.connectionEpoch;
+
+  state = receiveNativeMessage(state, {
+    type: 'hubProfiles',
+    activeHubProfileId: 'hub-a',
+    hubProfiles: [{ id: 'hub-a', name: 'Work Hub', url: 'https://hub-a.example.com', allowHttp: false }],
+  });
+  assert.equal(state.connectionEpoch, epochBefore);
+  assert.equal(state.stats?.periods?.today?.totalTokens, 42);
+  assert.equal(state.hubProfiles.length, 1);
+
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://synthetic.example.com' });
+  assert.equal(state.hubProfiles.length, 1);
+  assert.equal(state.activeHubProfileId, 'hub-a');
+
+  state = receiveNativeMessage(state, { type: 'connection', url: '' });
+  assert.equal(state.hubProfiles.length, 1);
+  assert.equal(state.activeHubProfileId, '');
+});

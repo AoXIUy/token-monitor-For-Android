@@ -58,16 +58,30 @@
       expired: Boolean(isExpired),
     };
   }
-  function breakdown(period, kind) {
+  function breakdown(period, kind, options = {}) {
     if (kind === 'projects') {
       return Object.entries(period?.projects || {}).map(([id, row]) => ({ id, label: row.label || id, tokens: count(row.tokens), cost: numeric(row.costUsd) }))
         .sort((a, b) => b.tokens - a.tokens || a.label.localeCompare(b.label));
     }
     const costs = kind === 'models' ? period?.modelCosts : period?.clientCosts;
-    return Object.entries(period?.[kind] || {}).map(([id, tokens]) => ({ id, label: id, tokens: count(tokens), cost: numeric(costs?.[id]) }))
+    const rows = Object.entries(period?.[kind] || {}).map(([id, tokens]) => ({ id, label: id, tokens: count(tokens), cost: numeric(costs?.[id]) }))
+      .sort((a, b) => b.tokens - a.tokens || a.id.localeCompare(b.id));
+    if (kind !== 'clients' || options?.separateQoderClients === true) return rows;
+    const qoderRows = rows.filter(row => row.id === 'qoder' || row.id === 'qodercn');
+    if (!qoderRows.length) return rows;
+    const merged = {
+      id: 'qoder',
+      ids: qoderRows.map(row => row.id),
+      label: 'qoder',
+      tokens: qoderRows.reduce((sum, row) => sum + row.tokens, 0),
+      cost: qoderRows.every(row => row.cost !== null)
+        ? qoderRows.reduce((sum, row) => sum + row.cost, 0)
+        : null,
+    };
+    return [...rows.filter(row => row.id !== 'qoder' && row.id !== 'qodercn'), merged]
       .sort((a, b) => b.tokens - a.tokens || a.id.localeCompare(b.id));
   }
-  function deviceBreakdown(stats, periodName, now = Date.now()) {
+  function deviceBreakdown(stats, periodName, now = Date.now(), options = {}) {
     const rows = (Array.isArray(stats?.devices) ? stats.devices : [])
       .filter((dev) => dev && typeof dev.deviceId === 'string' && dev.deviceId)
       .map((dev) => {
@@ -99,7 +113,7 @@
         }
         const tokens = count(periodData.totalTokens);
         const cost = numeric(periodData.costUsd);
-        const clientRows = breakdown(periodData, 'clients');
+        const clientRows = breakdown(periodData, 'clients', options);
         const attributedTokens = clientRows.reduce((sum, row) => sum + row.tokens, 0);
         const remainderTokens = Math.max(0, tokens - attributedTokens);
         const clients = clientRows.slice();

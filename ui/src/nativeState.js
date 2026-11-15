@@ -6,6 +6,25 @@ function isConnectionStatus(value) {
   return typeof value === 'string' && ['online', 'offline', 'loading', 'disconnected'].includes(value);
 }
 
+/** @param {unknown} raw @returns {import('./types/monitor').HubProfile[]} */
+export function sanitizeHubProfiles(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {import('./types/monitor').HubProfile[]} */
+  const clean = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const item = /** @type {Record<string, unknown>} */ (entry);
+    const id = typeof item.id === 'string' ? item.id.trim().slice(0, 80) : '';
+    const url = typeof item.url === 'string' ? item.url.trim().slice(0, 2048) : '';
+    if (!id || !url || seen.has(id)) continue;
+    seen.add(id);
+    const rawName = typeof item.name === 'string' ? item.name.trim().replace(/\s+/g, ' ').slice(0, 64) : '';
+    clean.push({ id, name: rawName || url, url, allowHttp: Boolean(item.allowHttp) });
+  }
+  return clean;
+}
+
 /** @returns {import('./types/monitor').MonitorState} */
 export function createInitialState() {
   return {
@@ -16,7 +35,8 @@ export function createInitialState() {
       download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' } },
     dismissedUpdateVersion: '', dismissedUpdatePrompt: '',
     page: 'overview', period: 'today', device: '', stats: null, subscriptions: null,
-    subscriptionError: '', connection: '', allowHttp: false, status: 'disconnected',
+    subscriptionError: '', connection: '', allowHttp: false, hubProfiles: [], activeHubProfileId: '',
+    status: 'disconnected',
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
     notifications: { enabled: false, permission: false, message: '完成提醒未开启' },
     monitorPending: false,
@@ -27,6 +47,7 @@ export function createInitialState() {
     approvalsPending: false,
     connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
+    displayPrefs: { separateQoderClients: false },
   };
 }
 
@@ -74,12 +95,40 @@ export function receiveNativeMessage(state, message) {
     }
     case 'connection': {
       const connection = String(message.url || '');
+      const hasProfiles = Array.isArray(message.hubProfiles);
+      const hubProfiles = hasProfiles ? sanitizeHubProfiles(message.hubProfiles) : state.hubProfiles;
+      const rawActiveId = typeof message.activeHubProfileId === 'string'
+        ? message.activeHubProfileId.trim()
+        : (connection ? state.activeHubProfileId : '');
+      const activeHubProfileId = rawActiveId && (!hasProfiles || hubProfiles.some(profile => profile.id === rawActiveId))
+        ? rawActiveId
+        : '';
       return {
         ...createInitialState(), connection, allowHttp: Boolean(message.allowHttp),
+        hubProfiles, activeHubProfileId,
         appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion, dismissedUpdatePrompt: state.dismissedUpdatePrompt,
         limitsPrefs: state.limitsPrefs,
+        displayPrefs: state.displayPrefs,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
+      };
+    }
+    case 'hubProfiles': {
+      const hubProfiles = Array.isArray(message.hubProfiles)
+        ? sanitizeHubProfiles(message.hubProfiles)
+        : state.hubProfiles;
+      const rawActiveId = typeof message.activeHubProfileId === 'string'
+        ? message.activeHubProfileId.trim()
+        : state.activeHubProfileId;
+      const activeHubProfileId = rawActiveId && hubProfiles.some(profile => profile.id === rawActiveId)
+        ? rawActiveId
+        : '';
+      return {
+        ...state,
+        connectPending: false,
+        formError: '',
+        hubProfiles,
+        activeHubProfileId,
       };
     }
     case 'limitsPrefs': {
@@ -95,6 +144,15 @@ export function receiveNativeMessage(state, message) {
         },
       };
     }
+    case 'displayPrefs':
+      return {
+        ...state,
+        displayPrefs: {
+          separateQoderClients: typeof message.separateQoderClients === 'boolean'
+            ? message.separateQoderClients
+            : state.displayPrefs.separateQoderClients,
+        },
+      };
     case 'stats':
       return {
         ...state, stats: /** @type {import('./types/monitor').MonitorStats | null} */ (message.data || null),

@@ -16,9 +16,11 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 2026-11-10 增量同步主线 `main` 至 **`82e00510cf93fc61415571ccc04d4ab58e68202f`**（源码版本 **0.90.0**，覆盖 v0.89 及 v0.90 标签之后的缓存明细提交）。适配 Hark 额度、Qoder 个人 / 团队积分、会话最近模型、输入缓存命中率与会话明细，以及完整性受控的累计活跃天数，随 Android **1.7.0 / versionCode 18** 发布；范围及验证见 [v0.89 / v0.90 适配记录](upstream-0.90.md)。
 
+2026-11-15 增量同步主线 `v0.93.0`（**`a88c69504b63f5fd7f36f87a32f4c762c7b36120`**）的 `src/shared/clientCatalog.js`（新增 `qodercn` 条目），并同步适配 Qoder 默认合并展示与分开显示开关、本地额度历史观测时间合并、`accountKeyAliases` 自动迁移与多 Hub 已保存连接。
+
 独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
-这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js`；v0.90 更新 `limits/windowText.js` 与 `limits/historyModel.js`。前者与固定上游提交字节一致，后者仅保留上述导入路径调整；其余文件保留各自快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。
+这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js`；v0.90 更新 `limits/windowText.js` 与 `limits/historyModel.js`；v0.93 更新 `clientCatalog.js`（新增 `qodercn`）。前者与固定上游提交字节一致，后者仅保留上述导入路径调整；其余文件保留各自快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。
 
 更新共享模块时，从对应源版本一次同步必要的闭包，检查 CommonJS require 和浏览器全局依赖，更新校验记录，并运行 `npm run verify` 和 Android 构建 / 仪器测试。不要仅更新 APK 生成目录，也不要为通过测试复制 Hub 或 Electron 应用。
 

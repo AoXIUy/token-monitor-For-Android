@@ -45,6 +45,7 @@ interface OverviewViewProps {
   onNavigate?: (page: PageId) => void;
   onOpenSessionDetail?: (key: string) => void;
   onSelectToolSessions?: (tool: string) => void;
+  separateQoderClients?: boolean;
 }
 
 type BreakdownSortBy = 'tokens' | 'cost';
@@ -299,6 +300,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onNavigate,
   onOpenSessionDetail,
   onSelectToolSessions,
+  separateQoderClients = false,
 }) => {
   const breakdownSectionRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState('');
@@ -514,18 +516,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     deviceId && breakdownKind === 'devices' ? 'clients' : breakdownKind;
 
   const deviceRows = useMemo(
-    () => (deviceId ? [] : MonitorModel.deviceBreakdown(stats, period, now)),
-    [stats, period, deviceId, now]
+    () => (deviceId ? [] : MonitorModel.deviceBreakdown(stats, period, now, { separateQoderClients })),
+    [stats, period, deviceId, now, separateQoderClients]
   );
 
   const allBreakdownCounts = useMemo(() => {
     return {
-      clients: p ? MonitorModel.breakdown(p, 'clients').length : 0,
+      clients: p ? MonitorModel.breakdown(p, 'clients', { separateQoderClients }).length : 0,
       devices: deviceRows.length,
       models: p ? MonitorModel.breakdown(p, 'models').length : 0,
       projects: p ? MonitorModel.breakdown(p, 'projects').length : 0,
     };
-  }, [p, deviceRows]);
+  }, [p, deviceRows, separateQoderClients]);
 
   if (!p) {
     return (
@@ -552,7 +554,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const rows =
     effectiveBreakdownKind === 'devices'
       ? []
-      : MonitorModel.breakdown(p, effectiveBreakdownKind);
+      : MonitorModel.breakdown(
+          p,
+          effectiveBreakdownKind,
+          effectiveBreakdownKind === 'clients' ? { separateQoderClients } : undefined
+        );
   const totalTokensCount = MonitorModel.count(p.totalTokens);
   const totalCostNum = MonitorModel.numeric(p.costUsd);
   const inputTokensCount = MonitorModel.count(p.inputTokens);
@@ -585,7 +591,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     const displayLabel = effectiveBreakdownKind === 'clients' ? clientName(row.label) : row.label;
     return (
       displayLabel.toLocaleLowerCase().includes(searchKeyword) ||
-      row.id.toLocaleLowerCase().includes(searchKeyword)
+      row.id.toLocaleLowerCase().includes(searchKeyword) ||
+      Boolean(row.ids?.some((id) => id.toLocaleLowerCase().includes(searchKeyword)))
     );
   });
 
@@ -1608,11 +1615,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   effectiveBreakdownKind === 'clients' ? clientName(row.label) : row.label;
                 const tone =
                   effectiveBreakdownKind === 'clients' ? clientTone(row.id) : clientTone(undefined);
+                const drillIds = row.ids && row.ids.length > 0 ? row.ids : [row.id];
+                const matchingSessionTools = sessionPulse
+                  ? drillIds.filter((id) => sessionPulse.toolHasSessions.has(id))
+                  : [];
                 const canDrillSessions =
                   effectiveBreakdownKind === 'clients' &&
                   period !== 'allTime' &&
                   Boolean(onSelectToolSessions) &&
-                  Boolean(sessionPulse?.toolHasSessions.has(row.id));
+                  matchingSessionTools.length > 0;
 
                 return (
                   <div key={row.id} className="space-y-1.5">
@@ -1637,7 +1648,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           <button
                             type="button"
                             data-breakdown-tool-sessions={row.id}
-                            onClick={() => onSelectToolSessions?.(row.id)}
+                            onClick={() =>
+                              onSelectToolSessions?.(
+                                matchingSessionTools.length === 1 ? matchingSessionTools[0] : row.id
+                              )
+                            }
                             aria-label={`查看 ${displayLabel} 的会话`}
                             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.05] hover:bg-sky-400/15 text-[10px] text-sky-300 transition-colors shrink-0"
                           >

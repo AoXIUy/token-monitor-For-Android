@@ -9,7 +9,7 @@ export interface Selection {
   device: DeviceData | null;
   expired: boolean;
 }
-interface BreakdownRow { id: string; label: string; tokens: number; cost: number | null; components?: ModelTokenComponents }
+interface BreakdownRow { id: string; ids?: string[]; label: string; tokens: number; cost: number | null; components?: ModelTokenComponents }
 export interface DeviceBreakdownRow {
   id: string;
   deviceId: string;
@@ -58,8 +58,8 @@ export interface MonitorModelApi {
   compact(value: unknown): string;
   money(value: unknown, currency?: string): string;
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
-  breakdown(period: PeriodData | null, kind: Exclude<BreakdownKind, 'devices'>): BreakdownRow[];
-  deviceBreakdown(stats: MonitorStats | null, period: PeriodId, now?: number): DeviceBreakdownRow[];
+  breakdown(period: PeriodData | null, kind: Exclude<BreakdownKind, 'devices'>, options?: { separateQoderClients?: boolean }): BreakdownRow[];
+  deviceBreakdown(stats: MonitorStats | null, period: PeriodId, now?: number, options?: { separateQoderClients?: boolean }): DeviceBreakdownRow[];
   sessions(period: PeriodData | null, search?: string): SessionRow[];
   filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
   filterSessionStatuses(statuses: SessionStatusResult[], filter?: 'all' | 'running' | 'waiting' | 'ended'): {

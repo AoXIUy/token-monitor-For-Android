@@ -290,4 +290,28 @@ public final class UsageWidgetTest {
             }
         });
     }
+
+    @Test public void qoderAndQoderCnMergeOrSeparateBasedOnDisplayPreference() throws Exception {
+        JSONObject source = stats();
+        source.getJSONObject("periods").getJSONObject("today").put("clients", new JSONObject()
+                .put("qoder", 120_000)
+                .put("qodercn", 80_000)
+                .put("claude", 50_000));
+
+        JSONObject merged = UsageWidgetSnapshot.project(source, 2000L, 1900L, false);
+        JSONArray mergedTop = merged.getJSONArray("topClients");
+        assertEquals(2, mergedTop.length());
+        assertEquals("Qoder", mergedTop.getJSONObject(0).getString("label"));
+        assertEquals("200K", mergedTop.getJSONObject(0).getString("tokens"));
+        assertEquals("Claude", mergedTop.getJSONObject(1).getString("label"));
+
+        JSONObject separate = UsageWidgetSnapshot.project(source, 2000L, 1900L, true);
+        JSONArray separateTop = separate.getJSONArray("topClients");
+        assertEquals(3, separateTop.length());
+        assertEquals("Qoder", separateTop.getJSONObject(0).getString("label"));
+        assertEquals("120K", separateTop.getJSONObject(0).getString("tokens"));
+        assertEquals("Qoder CN", separateTop.getJSONObject(1).getString("label"));
+        assertEquals("80K", separateTop.getJSONObject(1).getString("tokens"));
+        assertEquals("Claude", separateTop.getJSONObject(2).getString("label"));
+    }
 }

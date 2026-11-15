@@ -103,6 +103,7 @@ export function clientTone(client?: string): {
       };
     case 'deepseek':
     case 'qoder':
+    case 'qodercn':
     case 'mimo':
       return {
         text: 'text-teal-300',

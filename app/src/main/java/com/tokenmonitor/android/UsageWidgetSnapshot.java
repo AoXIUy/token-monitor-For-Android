@@ -16,6 +16,10 @@ final class UsageWidgetSnapshot {
     private UsageWidgetSnapshot() { }
 
     static JSONObject project(JSONObject stats, long fetchedAt, long startedAt) throws Exception {
+        return project(stats, fetchedAt, startedAt, false);
+    }
+
+    static JSONObject project(JSONObject stats, long fetchedAt, long startedAt, boolean separateQoderClients) throws Exception {
         JSONObject periods = stats.optJSONObject("periods");
         JSONObject today = periods == null ? null : periods.optJSONObject("today");
         JSONArray devices = stats.optJSONArray("devices");
@@ -53,7 +57,7 @@ final class UsageWidgetSnapshot {
         }
 
         projectOtherPeriods(periods, result);
-        projectTopClients(today, total, result);
+        projectTopClients(today, total, result, separateQoderClients);
         projectHistory(stats.optJSONObject("historyPreview"), fetchedAt, result);
         projectQuotas(stats.optJSONObject("limits"), result);
         return result;
@@ -83,7 +87,7 @@ final class UsageWidgetSnapshot {
                 .put("allTimeCost", WidgetLayoutPolicy.moneyUsd(allCost));
     }
 
-    private static void projectTopClients(JSONObject today, double todayTotal, JSONObject out) throws Exception {
+    private static void projectTopClients(JSONObject today, double todayTotal, JSONObject out, boolean separateQoderClients) throws Exception {
         JSONObject clients = today.optJSONObject("clients");
         JSONArray top = new JSONArray();
         if (clients != null) {
@@ -93,7 +97,8 @@ final class UsageWidgetSnapshot {
                 String rawKey = keys.next();
                 Double tok = number(clients, rawKey);
                 if (tok == null || tok <= 0) continue;
-                String label = WidgetLayoutPolicy.clientLabel(rawKey);
+                String displayKey = !separateQoderClients && "qodercn".equals(rawKey) ? "qoder" : rawKey;
+                String label = WidgetLayoutPolicy.clientLabel(displayKey);
                 bucketed.put(label, bucketed.getOrDefault(label, 0.0) + tok);
             }
             List<Map.Entry<String, Double>> sorted = new ArrayList<>(bucketed.entrySet());

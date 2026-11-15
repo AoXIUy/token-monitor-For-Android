@@ -68,7 +68,7 @@ function isTextEntryElement(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
-function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs }: Monitor) {
+function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs, saveDisplayPrefs }: Monitor) {
   const {
     page,
     period,
@@ -78,6 +78,8 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     subscriptionError,
     connection,
     allowHttp,
+    hubProfiles,
+    activeHubProfileId,
     status,
     message,
     fetchedAt,
@@ -252,12 +254,82 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     window.HubNative.connect(url, secret, allowHttpChecked);
   };
 
+  const handleSelectHubProfile = (id: string) => {
+    if (window.HubNative?.selectHubProfile) {
+      update((previous) => ({ ...previous, connectPending: true, formError: '' }));
+      window.HubNative.selectHubProfile(id);
+      return;
+    }
+    const target = hubProfiles.find((profile) => profile.id === id);
+    if (target) loadBrowserDemo(target.url, target.allowHttp);
+  };
+
+  const handleAddHubProfile = (name: string, url: string, secret: string, allowHttpChecked: boolean) => {
+    if (window.HubNative?.addHubProfile) {
+      update((previous) => ({ ...previous, connectPending: true, formError: '' }));
+      window.HubNative.addHubProfile(name, url, secret, allowHttpChecked);
+      return;
+    }
+    const nextId = `demo-${Date.now().toString(36)}`;
+    const nextProfile = { id: nextId, name: name.trim() || url, url, allowHttp: allowHttpChecked };
+    update((previous) => ({
+      ...previous,
+      hubProfiles: [...previous.hubProfiles, nextProfile],
+      activeHubProfileId: nextId,
+    }));
+    loadBrowserDemo(url, allowHttpChecked);
+  };
+
+  const handleSaveHubProfile = (id: string, name: string, url: string, secret: string, allowHttpChecked: boolean) => {
+    if (window.HubNative?.saveHubProfile) {
+      update((previous) => ({ ...previous, connectPending: true, formError: '' }));
+      window.HubNative.saveHubProfile(id, name, url, secret, allowHttpChecked);
+      return;
+    }
+    update((previous) => ({
+      ...previous,
+      hubProfiles: previous.hubProfiles.map((profile) =>
+        profile.id === id ? { ...profile, name: name.trim() || url, url, allowHttp: allowHttpChecked } : profile),
+      activeHubProfileId: id,
+    }));
+    loadBrowserDemo(url, allowHttpChecked);
+  };
+
+  const handleDeleteHubProfile = (id: string) => {
+    if (window.HubNative?.deleteHubProfile) {
+      update((previous) => ({ ...previous, formError: '' }));
+      window.HubNative.deleteHubProfile(id);
+      return;
+    }
+    update((previous) => {
+      const nextProfiles = previous.hubProfiles.filter((profile) => profile.id !== id);
+      if (previous.activeHubProfileId === id) {
+        return receiveNativeMessage(previous, {
+          type: 'connection',
+          url: '',
+          activeHubProfileId: '',
+          hubProfiles: nextProfiles,
+        });
+      }
+      return receiveNativeMessage(previous, {
+        type: 'hubProfiles',
+        activeHubProfileId: previous.activeHubProfileId,
+        hubProfiles: nextProfiles,
+      });
+    });
+  };
+
   const handleDisconnect = () => {
     if (window.HubNative?.disconnect) {
       window.HubNative.disconnect();
       return;
     }
-    update((previous) => receiveNativeMessage(previous, { type: 'connection', url: '' }));
+    update((previous) => receiveNativeMessage(previous, {
+      type: 'connection',
+      url: '',
+      activeHubProfileId: '',
+      hubProfiles: previous.hubProfiles,
+    }));
   };
 
   const handleToggleMonitor = (enabled: boolean) => {
@@ -718,14 +790,22 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               fetchedAt={fetchedAt}
               connectionUrl={connection}
               allowHttpInitial={allowHttp}
+              hubProfiles={hubProfiles}
+              activeHubProfileId={activeHubProfileId}
               connectPending={connectPending}
               formError={formError}
+              displayPrefs={state.displayPrefs}
+              onChangeDisplayPrefs={saveDisplayPrefs}
               notifications={notifications}
               monitorPending={monitorPending}
               approvals={approvals}
               approvalsPending={approvalsPending}
               isBrowserPreview={isBrowserPreview}
               onConnect={handleConnect}
+              onSelectHubProfile={handleSelectHubProfile}
+              onAddHubProfile={handleAddHubProfile}
+              onSaveHubProfile={handleSaveHubProfile}
+              onDeleteHubProfile={handleDeleteHubProfile}
               onDisconnect={handleDisconnect}
               onLoadDemo={() => loadBrowserDemo()}
               onToggleMonitor={handleToggleMonitor}
@@ -807,6 +887,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                     setPage(targetPage);
                   }}
                   onOpenSessionDetail={openSession}
+                  separateQoderClients={state.displayPrefs.separateQoderClients}
                   onSelectToolSessions={(toolId) => {
                     setSearch('');
                     setPage('sessions');

@@ -261,12 +261,23 @@ export interface SessionStatusResult {
   nextChangeAt: number;
 }
 
+export interface HubProfile {
+  id: string;
+  name: string;
+  url: string;
+  allowHttp: boolean;
+}
+
 export interface HubNativeBridge {
   conversation?: (deviceId: string, key: string, cursor: string, requestId: string) => void;
   cancelConversation?: () => void;
   quotaHistory?: (key: string) => void;
   ready?: () => void;
   connect: (url: string, secret: string, allowHttp: boolean) => void;
+  selectHubProfile?: (id: string) => void;
+  addHubProfile?: (name: string, url: string, secret: string, allowHttp: boolean) => void;
+  saveHubProfile?: (id: string, name: string, url: string, secret: string, allowHttp: boolean) => void;
+  deleteHubProfile?: (id: string) => void;
   disconnect?: () => void;
   refresh?: () => void;
   subscriptions?: () => void;
@@ -281,6 +292,11 @@ export interface HubNativeBridge {
   cancelUpdateDownload?: () => void;
   dismissAppUpdatePrompt?: () => void;
   saveLimitsPrefs?: (serialized: string) => void;
+  saveDisplayPrefs?: (serialized: string) => void;
+}
+
+export interface DisplayPrefs {
+  separateQoderClients: boolean;
 }
 
 export interface LimitsPrefs {
@@ -339,6 +355,8 @@ export interface MonitorState {
   subscriptionError: string;
   connection: string;
   allowHttp: boolean;
+  hubProfiles: HubProfile[];
+  activeHubProfileId: string;
   status: ConnectionStatus;
   message: string;
   fetchedAt: number;
@@ -353,6 +371,7 @@ export interface MonitorState {
   formError: string;
   connectionEpoch: number;
   limitsPrefs: LimitsPrefs;
+  displayPrefs: DisplayPrefs;
 }
 
 export interface SessionConversationMessage {

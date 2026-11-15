@@ -69,7 +69,7 @@ final class WidgetLayoutPolicy {
             case "mcode" -> "MiniMax Code";
             case "mistral" -> "Mistral";
             case "hark" -> "Hark";
-            case "qoder" -> "Qoder";
+            case "qoder", "qodercn" -> "Qoder";
             case "mimo" -> "MiMo";
             case "gemini" -> "Gemini";
             case "prime-agent" -> "Prime Agent";
@@ -96,6 +96,7 @@ final class WidgetLayoutPolicy {
     static String clientLabel(String client) {
         if ("gemini".equals(client)) return "Gemini CLI";
         if ("mistral".equals(client)) return "Mistral Vibe";
+        if ("qodercn".equals(client)) return "Qoder CN";
         return providerLabel(client, "");
     }
 

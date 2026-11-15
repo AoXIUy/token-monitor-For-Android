@@ -23,7 +23,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
     private final String scope;
 
     LimitsHistoryStore(Context context, String scope) {
-        super(context, DATABASE, null, 1);
+        super(context, DATABASE, null, 2);
         this.scope = scope;
         setWriteAheadLoggingEnabled(true);
     }
@@ -36,10 +36,16 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX runs_stream_end ON runs(stream,end_at)");
         db.execSQL("CREATE TABLE origins(stream TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE, source TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(stream,source))");
         db.execSQL("CREATE TABLE daily(stream TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE, day TEXT NOT NULL, value REAL, observations INTEGER NOT NULL DEFAULT 0, uncertain INTEGER NOT NULL DEFAULT 0, unallocated REAL NOT NULL DEFAULT 0, resets INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(stream,day))");
+        db.execSQL("CREATE TABLE adoptions(legacy TEXT PRIMARY KEY, canonical TEXT NOT NULL)");
         db.execSQL("CREATE TABLE maintenance(day TEXT PRIMARY KEY)");
     }
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported quota history database");
+        if (oldVersion == 1 && newVersion == 2) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS adoptions(legacy TEXT PRIMARY KEY, canonical TEXT NOT NULL)");
+            db.execSQL("UPDATE streams SET guarded=0 WHERE guarded!=0");
+        } else {
+            throw new IllegalStateException("Unsupported quota history database");
+        }
     }
 
     static String day(long at) { return Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalDate().toString(); }
@@ -61,15 +67,21 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
     }
     private static String hash(JSONArray parts) { return ConnectionSpec.digest(parts.toString()); }
 
+    private static boolean isAnonymous(JSONObject provider) {
+        String id = provider.optString("provider"), key = provider.optString("accountKey");
+        String source = provider.optString("source");
+        return key.isEmpty()
+                || "antigravity".equals(id) && provider.optString("accountEmail").isEmpty()
+                || "kiro".equals(id) && "cli".equals(source) && provider.optString("accountEmail").isEmpty()
+                || "claude".equals(id) && "cli".equals(source) && UNIDENTIFIED_CLAUDE.equals(key);
+    }
+
     // Mirrors upstream historyIdentity.historyAccountKey. A reporting device is
     // provenance for a verified account, and ownership for an anonymous account.
     static String accountIdentity(JSONObject provider, String device) {
         String id = provider.optString("provider"), key = provider.optString("accountKey");
         String source = provider.optString("source");
-        boolean anonymous = key.isEmpty()
-                || "antigravity".equals(id) && provider.optString("accountEmail").isEmpty()
-                || "kiro".equals(id) && "cli".equals(source) && provider.optString("accountEmail").isEmpty()
-                || "claude".equals(id) && "cli".equals(source) && UNIDENTIFIED_CLAUDE.equals(key);
+        boolean anonymous = isAnonymous(provider);
         JSONArray parts = new JSONArray().put(id).put(provider.optString("adapterId"))
                 .put(key.isEmpty() ? new JSONArray().put(provider.optString("accountEmail")).put(provider.optString("accountName")) : key)
                 .put(provider.optString("region")).put(provider.optString("workspaceKind"));
@@ -189,8 +201,13 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
-            recordLimits(db, stats.optJSONObject("limits"), "", false, now);
+            adoptLimitsAliases(db, stats.optJSONObject("limits"), "");
             JSONArray devices = stats.optJSONArray("devices");
+            for (int i = 0; devices != null && i < devices.length(); i++) {
+                JSONObject device = devices.optJSONObject(i);
+                if (device != null) adoptLimitsAliases(db, device.optJSONObject("limits"), device.optString("deviceId"));
+            }
+            recordLimits(db, stats.optJSONObject("limits"), "", false, now);
             for (int i = 0; devices != null && i < devices.length(); i++) {
                 JSONObject device = devices.optJSONObject(i);
                 if (device != null) recordLimits(db, device.optJSONObject("limits"), device.optString("deviceId"), device.optBoolean("stale"), now);
@@ -253,13 +270,161 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
                 if (!readings.isEmpty() && !"pp".equals(readings.get(0).unit)) {
                     String percentage = stream(account, window, "pp");
                     present.add(percentage);
-                    missing(db, percentage, source, at, now, 2);
+                    missing(db, percentage, source, at, interval, now, 2);
                 }
             }
             try (Cursor c = db.rawQuery("SELECT id FROM streams WHERE account=? AND source=?", new String[]{account, source})) {
-                while (c.moveToNext()) if (!present.contains(c.getString(0))) missing(db, c.getString(0), source, at, now, 1);
+                while (c.moveToNext()) if (!present.contains(c.getString(0))) missing(db, c.getString(0), source, at, interval, now, 1);
             }
         }
+    }
+
+    private void adoptLimitsAliases(SQLiteDatabase db, JSONObject limits, String device) throws Exception {
+        JSONArray providers = limits == null ? null : limits.optJSONArray("providers");
+        for (int i = 0; providers != null && i < providers.length(); i++) {
+            JSONObject provider = providers.optJSONObject(i);
+            if (provider != null) adoptProviderAliases(db, provider, device);
+        }
+    }
+
+    private boolean hasPendingAdoption(SQLiteDatabase db, JSONObject provider, String device) throws Exception {
+        for (String[] pair : adoptionPairs(provider, device)) {
+            if (!isAdopted(db, pair[1]) && streamExists(db, pair[1])) return true;
+        }
+        return false;
+    }
+
+    private void adoptProviderAliases(SQLiteDatabase db, JSONObject provider, String device) throws Exception {
+        List<String[]> pairs = adoptionPairs(provider, device);
+        for (String[] pair : pairs) {
+            String canonicalAccount = pair[0], legacyId = pair[1], canonicalId = pair[2];
+            if (isAdopted(db, legacyId) || !streamExists(db, legacyId)) continue;
+            adoptStream(db, canonicalId, canonicalAccount, legacyId);
+        }
+    }
+
+    private List<String[]> adoptionPairs(JSONObject provider, String device) throws Exception {
+        List<String[]> pairs = new ArrayList<>();
+        String id = provider.optString("provider");
+        // OpenCode's aliases represent still-live identities across separate devices.
+        if ("opencode".equals(id) || isAnonymous(provider)) return pairs;
+        JSONArray rawAliases = provider.optJSONArray("accountKeyAliases");
+        if (rawAliases == null || rawAliases.length() == 0) return pairs;
+        String canonicalKey = provider.optString("accountKey");
+        List<String> aliases = new ArrayList<>();
+        for (int i = 0; i < rawAliases.length(); i++) {
+            String alias = rawAliases.optString(i, "").trim();
+            if (!alias.isEmpty() && !alias.equals(canonicalKey) && !aliases.contains(alias)) aliases.add(alias);
+        }
+        if (aliases.isEmpty()) return pairs;
+        String observerDevice = provider.optString("sourceDeviceId", device);
+        String canonicalAccount = provider.has("androidHistoryAccount")
+                ? provider.getString("androidHistoryAccount")
+                : account(provider, observerDevice);
+        JSONArray windows = provider.optJSONArray("windows");
+        for (int j = 0; windows != null && j < windows.length(); j++) {
+            JSONObject window = windows.optJSONObject(j);
+            if (window == null || window.optString("kind").isEmpty()) continue;
+            List<Point> points = readings(window);
+            if (points.isEmpty()) continue;
+            Set<String> units = new java.util.LinkedHashSet<>();
+            for (Point point : points) units.add(point.unit);
+            String metric = window.optString("metric");
+            if ("credits".equals(metric) || "spend".equals(metric)) units.add("pp");
+            for (String alias : aliases) {
+                JSONObject aliasProvider = new JSONObject(provider.toString()).put("accountKey", alias);
+                aliasProvider.remove("accountKeyAliases");
+                aliasProvider.remove("androidHistoryAccount");
+                String legacyAccount = account(aliasProvider, observerDevice);
+                for (String unit : units) {
+                    String legacyId = stream(legacyAccount, window, unit);
+                    String canonicalId = stream(canonicalAccount, window, unit);
+                    if (!legacyId.equals(canonicalId)) {
+                        pairs.add(new String[]{canonicalAccount, legacyId, canonicalId});
+                    }
+                }
+            }
+        }
+        return pairs;
+    }
+
+    private static boolean isAdopted(SQLiteDatabase db, String legacyId) {
+        try (Cursor c = db.rawQuery("SELECT 1 FROM adoptions WHERE legacy=?", new String[]{legacyId})) {
+            return c.moveToFirst();
+        }
+    }
+
+    private static boolean streamExists(SQLiteDatabase db, String streamId) {
+        try (Cursor c = db.rawQuery("SELECT 1 FROM streams WHERE id=?", new String[]{streamId})) {
+            return c.moveToFirst();
+        }
+    }
+
+    private static void adoptStream(SQLiteDatabase db, String canonicalId, String canonicalAccount, String legacyId) {
+        String legacySource = "";
+        int legacyFailed = 0;
+        try (Cursor c = db.rawQuery("SELECT source,failed FROM streams WHERE id=?", new String[]{legacyId})) {
+            if (!c.moveToFirst()) return;
+            legacySource = c.getString(0);
+            legacyFailed = c.getInt(1);
+        }
+        if (!streamExists(db, canonicalId)) {
+            db.execSQL("INSERT INTO streams(id,account,source,guarded,failed) VALUES(?,?,?,0,?)",
+                    new Object[]{canonicalId, canonicalAccount, legacySource, legacyFailed});
+            db.execSQL("INSERT INTO runs(stream,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until) "
+                    + "SELECT ?,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until "
+                    + "FROM runs WHERE stream=? ORDER BY start_at,id", new Object[]{canonicalId, legacyId});
+            db.execSQL("INSERT OR REPLACE INTO origins(stream,source,at) SELECT ?,source,at FROM origins WHERE stream=?",
+                    new Object[]{canonicalId, legacyId});
+            db.execSQL("INSERT OR REPLACE INTO daily(stream,day,value,observations,uncertain,unallocated,resets) "
+                    + "SELECT ?,day,value,observations,uncertain,unallocated,resets FROM daily WHERE stream=?",
+                    new Object[]{canonicalId, legacyId});
+        } else {
+            try (Cursor orig = db.rawQuery("SELECT source,at FROM origins WHERE stream=?", new String[]{legacyId})) {
+                while (orig.moveToNext()) {
+                    String src = orig.getString(0);
+                    long at = orig.getLong(1);
+                    if (at > observed(db, canonicalId, src)) origin(db, canonicalId, src, at);
+                }
+            }
+            try (Cursor d = db.rawQuery("SELECT day,value,observations,uncertain,unallocated,resets FROM daily WHERE stream=?", new String[]{legacyId})) {
+                while (d.moveToNext()) {
+                    String day = d.getString(0);
+                    Double lVal = d.isNull(1) ? null : d.getDouble(1);
+                    int lObs = d.getInt(2), lUnc = d.getInt(3);
+                    double lUnalloc = d.getDouble(4);
+                    int lResets = d.getInt(5);
+                    try (Cursor existing = db.rawQuery("SELECT observations,resets FROM daily WHERE stream=? AND day=?", new String[]{canonicalId, day})) {
+                        if (!existing.moveToFirst()) {
+                            db.execSQL("INSERT INTO daily(stream,day,value,observations,uncertain,unallocated,resets) VALUES(?,?,?,?,?,?,?)",
+                                    new Object[]{canonicalId, day, lVal, lObs, lUnc, lUnalloc, lResets});
+                        } else {
+                            db.execSQL("UPDATE daily SET value=NULL,observations=?,uncertain=1,unallocated=0,resets=? WHERE stream=? AND day=?",
+                                    new Object[]{existing.getInt(0) + lObs, existing.getInt(1) + lResets, canonicalId, day});
+                        }
+                    }
+                }
+            }
+            long canonMinStart = Long.MAX_VALUE;
+            long canonFirstRunId = -1;
+            try (Cursor bounds = db.rawQuery("SELECT id,start_at FROM runs WHERE stream=? ORDER BY start_at ASC,id ASC LIMIT 1", new String[]{canonicalId})) {
+                if (bounds.moveToFirst()) {
+                    canonFirstRunId = bounds.getLong(0);
+                    canonMinStart = bounds.getLong(1);
+                }
+            }
+            if (canonFirstRunId == -1) {
+                db.execSQL("INSERT INTO runs(stream,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until) "
+                        + "SELECT ?,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until "
+                        + "FROM runs WHERE stream=? ORDER BY start_at,id", new Object[]{canonicalId, legacyId});
+            } else {
+                db.execSQL("INSERT INTO runs(stream,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until) "
+                        + "SELECT ?,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,break_after,uncertain_before,uncertain_until "
+                        + "FROM runs WHERE stream=? AND end_at<? ORDER BY start_at,id", new Object[]{canonicalId, legacyId, canonMinStart});
+                db.execSQL("UPDATE runs SET uncertain_before=1 WHERE id=?", new Object[]{canonFirstRunId});
+            }
+        }
+        db.execSQL("INSERT OR IGNORE INTO adoptions(legacy,canonical) VALUES(?,?)", new Object[]{legacyId, canonicalId});
     }
 
     private static void origin(SQLiteDatabase db, String id, String source, long at) {
@@ -270,17 +435,19 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
             return c.moveToFirst() ? c.getLong(0) : 0;
         }
     }
-    private static void missing(SQLiteDatabase db, String id, String source, long at, long now, int reason) {
+    private static void missing(SQLiteDatabase db, String id, String source, long at, long interval, long now, int reason) {
         Point tail = latest(db, id);
         if (tail == null || at <= tail.at || at <= observed(db, id, source)) return;
         try (Cursor head = db.rawQuery("SELECT source,failed FROM streams WHERE id=?", new String[]{id})) {
             if (!head.moveToFirst()) return;
-            boolean healthy = head.getInt(1) == 0 && at - tail.at <= tail.interval * 2.5;
-            if (!source.equals(head.getString(0)) && healthy) return;
+            String owner = head.getString(0);
+            long ownerSeen = Math.max(tail.at, observed(db, id, owner));
+            boolean healthy = head.getInt(1) == 0 && at - ownerSeen <= Math.max(tail.interval, interval) * 2.5;
+            if (!source.equals(owner) && healthy) return;
         }
         origin(db, id, source, at);
         interrupt(db, id, tail, at, now, reason);
-        db.execSQL("UPDATE streams SET source=?,failed=1 WHERE id=?", new Object[]{source, id});
+        db.execSQL("UPDATE streams SET source=?,guarded=0,failed=1 WHERE id=?", new Object[]{source, id});
     }
 
     private static void accept(SQLiteDatabase db, String account, String source, String id, Point p, long now) {
@@ -289,11 +456,11 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         origin(db, id, source, p.at);
         Point tail = latest(db, id);
         String observer;
-        int guarded;
         boolean failed;
-        try (Cursor c = db.rawQuery("SELECT source,guarded,failed FROM streams WHERE id=?", new String[]{id})) {
-            c.moveToFirst(); observer = c.getString(0); guarded = c.getInt(1); failed = c.getInt(2) != 0;
+        try (Cursor c = db.rawQuery("SELECT source,failed FROM streams WHERE id=?", new String[]{id})) {
+            c.moveToFirst(); observer = c.getString(0); failed = c.getInt(1) != 0;
         }
+        if (tail != null && p.at <= tail.at) return;
         boolean consistent = tail == null || sameCycle(tail, p);
         boolean missingBasis = tail != null && !tail.basis.isEmpty() && p.basis.isEmpty();
         if (missingBasis) {
@@ -301,29 +468,39 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
             withBasis.unit = p.unit; withBasis.balance = p.balance; withBasis.basis = tail.basis;
             missingBasis = sameCycle(tail, withBasis);
         }
-        if (tail != null && p.at <= tail.at) {
-            if (p.at == tail.at && (p.value != tail.value || !consistent) && !(missingBasis && p.value == tail.value && !source.equals(observer))) {
-                interrupt(db, id, tail, p.at, now, 1);
-                db.execSQL("UPDATE streams SET guarded=1 WHERE id=?", new Object[]{id});
-            }
-            return;
+        boolean basisReturned = tail != null && tail.basis.isEmpty() && !p.basis.isEmpty();
+        if (basisReturned) {
+            Point tailWithBasis = new Point(); tailWithBasis.value = tail.value; tailWithBasis.at = tail.at;
+            tailWithBasis.reset = tail.reset; tailWithBasis.unit = tail.unit; tailWithBasis.balance = tail.balance;
+            tailWithBasis.basis = p.basis;
+            basisReturned = sameCycle(tailWithBasis, p);
         }
         boolean switched = tail != null && !source.equals(observer);
-        boolean healthy = tail != null && !failed && p.at - tail.at <= Math.max(tail.interval, p.interval) * 2.5;
+        long ownerSeen = switched ? observed(db, id, observer) : 0;
+        boolean current = switched && ownerSeen > 0 && !failed && p.at - ownerSeen <= Math.max(tail.interval, p.interval) * 2.5;
         boolean basisChanged = tail != null && !tail.basis.equals(p.basis);
-        LimitsHistoryPolicy.Decision decision = LimitsHistoryPolicy.handoff(guarded, switched, healthy, consistent, basisChanged, missingBasis);
+        boolean lateDeadline = tail != null && !consistent && !missingBasis && !basisReturned
+                && tail.reset > 0 && p.reset > 0 && tail.reset - p.reset > 1000 && p.reset <= p.at;
+        boolean jitter = false;
+        if (tail != null && !consistent && !missingBasis && !basisReturned && !lateDeadline
+                && p.reset > 0 && "pp".equals(p.unit) && tail.value - p.value < LimitsHistoryPolicy.JITTER_PP) {
+            Point withTailValue = new Point(); withTailValue.value = tail.value; withTailValue.at = p.at;
+            withTailValue.reset = p.reset; withTailValue.unit = p.unit; withTailValue.balance = p.balance;
+            withTailValue.basis = p.basis;
+            jitter = sameCycle(tail, withTailValue);
+        }
+        boolean laterDeadline = tail != null && !consistent && !missingBasis && !basisReturned
+                && tail.reset > 0 && p.reset > 0 && p.reset - tail.reset > 1000;
+        LimitsHistoryPolicy.Decision decision = LimitsHistoryPolicy.evaluate(
+                tail != null, switched, current, consistent, missingBasis, basisReturned,
+                lateDeadline, jitter, laterDeadline, basisChanged);
         if (!decision.accept) {
-            if (decision.conflict) {
-                interrupt(db, id, tail, p.at, now, 1);
-                db.execSQL("UPDATE streams SET guarded=1 WHERE id=?", new Object[]{id});
+            if (decision.refreshOwner) {
+                db.execSQL("UPDATE streams SET source=?,guarded=0,failed=0 WHERE id=?", new Object[]{source, id});
             }
             return;
         }
         boolean ambiguous = decision.ambiguous;
-        if (decision.breakBefore) {
-            interrupt(db, id, tail, p.at, now, 1);
-            tail.broken |= 1; tail.uncertainUntil = Math.max(tail.uncertainUntil, p.at);
-        }
         String date = day(p.at);
         db.execSQL("INSERT OR IGNORE INTO daily(stream,day) VALUES(?,?)", new Object[]{id, date});
         db.execSQL("UPDATE daily SET observations=observations+1 WHERE stream=? AND day=?", new Object[]{id, date});
@@ -347,7 +524,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         if (extend) db.execSQL("UPDATE runs SET end_at=? WHERE id=?", new Object[]{p.at, tail.id});
         else db.execSQL("INSERT INTO runs(stream,start_at,end_at,value,unit,balance,reset_at,basis,interval_ms,uncertain_before) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 new Object[]{id, p.at, p.at, p.value, p.unit, p.balance ? 1 : 0, p.reset == 0 ? null : p.reset, p.basis, p.interval, ambiguous ? 1 : 0});
-        db.execSQL("UPDATE streams SET source=?,guarded=?,failed=0 WHERE id=?", new Object[]{source, decision.guard, id});
+        db.execSQL("UPDATE streams SET source=?,guarded=0,failed=0 WHERE id=?", new Object[]{source, id});
     }
 
     private static JSONObject json(Point p, long at) throws Exception {
@@ -359,8 +536,24 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
     }
 
     JSONObject query(JSONObject provider, long now) throws Exception {
+        String observerDevice = provider.optString("sourceDeviceId");
+        String account = provider.has("androidHistoryAccount")
+                ? provider.getString("androidHistoryAccount")
+                : account(provider, observerDevice);
+        String historyKey = provider.has("androidHistoryKey")
+                ? provider.getString("androidHistoryKey")
+                : hash(new JSONArray().put(account).put(""));
+        if (hasPendingAdoption(getReadableDatabase(), provider, observerDevice)) {
+            SQLiteDatabase writable = getWritableDatabase();
+            writable.beginTransaction();
+            try {
+                adoptProviderAliases(writable, provider, observerDevice);
+                writable.setTransactionSuccessful();
+            } finally {
+                writable.endTransaction();
+            }
+        }
         SQLiteDatabase db = getReadableDatabase();
-        String account = provider.getString("androidHistoryAccount");
         JSONArray result = new JSONArray(), windows = provider.optJSONArray("windows");
         for (int i = 0; windows != null && i < windows.length(); i++) {
             JSONObject window = windows.optJSONObject(i);
@@ -407,7 +600,7 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
             result.put(new JSONObject().put("key", queryKey).put("window", window).put("unit", reading.unit).put("balance", reading.balance)
                     .put("points", points).put("distribution", new JSONObject().put("buckets", buckets).put("unallocated", unallocated).put("resets", resets)));
         }
-        return new JSONObject().put("key", provider.getString("androidHistoryKey")).put("windows", result).put("persistent", true).put("now", now);
+        return new JSONObject().put("key", historyKey).put("windows", result).put("persistent", true).put("now", now);
     }
 
     private static void appendPoints(JSONArray points, Point p, Point previous, boolean sampled) throws Exception {

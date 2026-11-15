@@ -15,6 +15,8 @@ public final class WidgetPolicyChecks {
         check("Mistral".equals(WidgetLayoutPolicy.providerLabel("mistral", "web")));
         check("Prime Agent".equals(WidgetLayoutPolicy.clientLabel("prime-agent")));
         check("Jcode".equals(WidgetLayoutPolicy.clientLabel("jcode")));
+        check("Qoder".equals(WidgetLayoutPolicy.clientLabel("qoder")));
+        check("Qoder CN".equals(WidgetLayoutPolicy.clientLabel("qodercn")));
         check("其他".equals(WidgetLayoutPolicy.clientLabel("arbitrary-user-string")));
         check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("minimax", "oauth")));
         check("MiniMax API".equals(WidgetLayoutPolicy.providerLabel("minimax", "api")));
@@ -63,6 +65,7 @@ public final class WidgetPolicyChecks {
         check("Codex".equals(WidgetLayoutPolicy.providerLabel(" CODEX ", null)));
         check("Hark".equals(WidgetLayoutPolicy.providerLabel("hark", "web")));
         check("Qoder".equals(WidgetLayoutPolicy.providerLabel("qoder", "web")));
+        check("Qoder".equals(WidgetLayoutPolicy.providerLabel("qodercn", "web")));
         check("Muse (Meta)".equals(WidgetLayoutPolicy.providerLabel("muse", "web")));
         check("Muse Code".equals(WidgetLayoutPolicy.providerLabel("muse", "cli")));
         check("其他".equals(WidgetLayoutPolicy.providerLabel("user@example.com", null)));

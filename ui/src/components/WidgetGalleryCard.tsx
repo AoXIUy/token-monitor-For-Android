@@ -19,6 +19,7 @@ interface WidgetGalleryCardProps {
   stats: MonitorStats | null;
   connected: boolean;
   fetchedAt: number;
+  separateQoderClients?: boolean;
 }
 
 const KIND_META: Array<{
@@ -83,6 +84,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
   stats,
   connected,
   fetchedAt,
+  separateQoderClients = false,
 }) => {
   const [kind, setKind] = useState<WidgetKindId>('today');
   const [size, setSize] = useState<WidgetSizeId>('4x2');
@@ -134,7 +136,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
     const sevenDayStr = hasData && history.sevenDayTokens !== null ? MonitorModel.compact(history.sevenDayTokens) : '—';
     const peakDayStr = hasData && history.peakDayTokens !== null ? MonitorModel.compact(history.peakDayTokens) : '—';
 
-    const clientRows = hasData && today ? MonitorModel.breakdown(today, 'clients').slice(0, 3) : [];
+    const clientRows = hasData && today ? MonitorModel.breakdown(today, 'clients', { separateQoderClients }).slice(0, 3) : [];
     const topToolsStr =
       clientRows.length > 0
         ? clientRows
@@ -213,7 +215,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
       alertAccounts,
       quotaRows: quotaRows.slice(0, 3),
     };
-  }, [stats, connected, fetchedAt]);
+  }, [stats, connected, fetchedAt, separateQoderClients]);
 
   return (
     <section id="widget-gallery" className="glass-panel rounded-3xl p-5 space-y-3.5">

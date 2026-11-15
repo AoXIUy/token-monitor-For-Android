@@ -16,6 +16,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -154,14 +155,55 @@ public final class MainActivity extends Activity {
         notificationState();
     }
 
+    private JSONArray serializedProfiles() {
+        JSONArray list = new JSONArray();
+        try {
+            for (ConnectionStore.ProfileSummary profile : store.listProfiles()) {
+                list.put(new JSONObject()
+                        .put("id", profile.id)
+                        .put("name", profile.name)
+                        .put("url", profile.url)
+                        .put("allowHttp", profile.allowHttp));
+            }
+        } catch (Exception ignored) { }
+        return list;
+    }
+
+    private String currentActiveProfileId() {
+        if (spec == null) return "";
+        try { return store.activeProfileId(); }
+        catch (Exception ignored) { return ""; }
+    }
+
+    private void hubProfilesChanged() {
+        try {
+            emit(event("hubProfiles")
+                    .put("activeHubProfileId", currentActiveProfileId())
+                    .put("hubProfiles", serializedProfiles()));
+        } catch (Exception ignored) { }
+    }
+
+    private void activateConnection(ConnectionSpec next) {
+        cancel();
+        spec = next;
+        failures = 0;
+        subscriptionVersion = null;
+        connectionChanged();
+        MainActivity.this.refresh(true);
+    }
+
     private void connectionChanged() {
         latestStats = null;
         historyError = "";
         historyBusy = false;
         pendingHistoryKey = null;
         try {
-            emit(event("connection").put("url", spec == null ? "" : spec.url)
-                    .put("allowHttp", spec != null && spec.allowHttp).put("error", initialError));
+            emit(event("connection")
+                    .put("url", spec == null ? "" : spec.url)
+                    .put("allowHttp", spec != null && spec.allowHttp)
+                    .put("activeHubProfileId", currentActiveProfileId())
+                    .put("hubProfiles", serializedProfiles())
+                    .put("error", initialError));
             initialError = "";
             notificationState();
             approvalAlertsState();
@@ -181,6 +223,12 @@ public final class MainActivity extends Activity {
                     .put("showRemaining", saved.optBoolean("showRemaining", false))
                     .put("hiddenAccountHashes", sanitizeHiddenAccountHashes(saved.optJSONArray("hiddenAccountHashes")));
             emit(payload);
+        } catch (Exception ignored) { }
+    }
+
+    private void displayPrefsChanged() {
+        try {
+            emit(DisplayPrefs.load(this).put("type", "displayPrefs"));
         } catch (Exception ignored) { }
     }
 
@@ -486,9 +534,21 @@ public final class MainActivity extends Activity {
     private final class Bridge {
         @JavascriptInterface public void ready() {
             main.post(() -> {
-                ready = true; foregroundChanged(); limitsPrefsChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
+                ready = true; foregroundChanged(); limitsPrefsChanged(); displayPrefsChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
                 if (foreground) updates.resume(); else updates.send();
                 downloads.send();
+            });
+        }
+        @JavascriptInterface public void saveDisplayPrefs(String serialized) {
+            if (serialized == null || serialized.length() > 8192) return;
+            main.post(() -> {
+                if (DisplayPrefs.save(MainActivity.this, serialized)) {
+                    displayPrefsChanged();
+                    if (latestStats != null && spec != null) {
+                        long now = System.currentTimeMillis();
+                        UsageWidgetStore.publish(MainActivity.this, store.binding(), latestStats, now, now);
+                    }
+                }
             });
         }
         @JavascriptInterface public void saveLimitsPrefs(String serialized) {
@@ -504,22 +564,63 @@ public final class MainActivity extends Activity {
                 } catch (Exception ignored) { }
             });
         }
-        @JavascriptInterface public void connect(String address, String secret, boolean allowHttp) {
+        private interface ProfileMutation {
+            ConnectionSpec apply() throws Exception;
+        }
+
+        private void applyProfileMutation(ProfileMutation mutation, String genericError) {
             main.post(() -> {
                 try {
-                    ConnectionSpec candidate = new ConnectionSpec(address, secret, allowHttp);
+                    ConnectionSpec next = mutation.apply();
                     SessionMonitorService.stop(MainActivity.this, "连接已变更，请重新开启完成提醒", true);
-                    store.save(candidate);
-                    cancel();
-                    spec = candidate;
-                    failures = 0;
-                    subscriptionVersion = null;
-                    connectionChanged();
-                    MainActivity.this.refresh(true);
+                    activateConnection(next);
                 } catch (IllegalArgumentException error) {
                     try { emit(event("formError").put("message", error.getMessage())); } catch (Exception ignored) { }
                 } catch (Exception error) {
-                    try { emit(event("formError").put("message", "无法加密保存连接，请检查设备存储后重试")); } catch (Exception ignored) { }
+                    try { emit(event("formError").put("message", genericError)); } catch (Exception ignored) { }
+                }
+            });
+        }
+
+        @JavascriptInterface public void connect(String address, String secret, boolean allowHttp) {
+            applyProfileMutation(() -> {
+                ConnectionSpec candidate = new ConnectionSpec(address, secret, allowHttp);
+                store.save(candidate);
+                return candidate;
+            }, "无法加密保存连接，请检查设备存储后重试");
+        }
+
+        @JavascriptInterface public void selectHubProfile(String id) {
+            applyProfileMutation(() -> store.selectProfile(id), "无法读取已保存的连接，请重新输入 Hub 和密钥");
+        }
+
+        @JavascriptInterface public void addHubProfile(String name, String address, String secret, boolean allowHttp) {
+            applyProfileMutation(() -> store.addProfile(name, address, secret, allowHttp), "无法加密保存连接，请检查设备存储后重试");
+        }
+
+        @JavascriptInterface public void saveHubProfile(String id, String name, String address, String secret, boolean allowHttp) {
+            applyProfileMutation(() -> store.saveProfile(id, name, address, secret, allowHttp), "无法加密保存连接，请检查设备存储后重试");
+        }
+
+        @JavascriptInterface public void deleteHubProfile(String id) {
+            main.post(() -> {
+                boolean wasActive;
+                try {
+                    if (id != null && !id.isEmpty() && id.equals(currentActiveProfileId())) {
+                        SessionMonitorService.stop(MainActivity.this, "Hub 已断开，完成提醒已关闭", true);
+                    }
+                    wasActive = store.deleteProfile(id);
+                } catch (Exception error) {
+                    try { emit(event("formError").put("message", "无法删除已保存的连接，请检查设备存储")); } catch (Exception ignored) { }
+                    return;
+                }
+                if (wasActive) {
+                    cancel();
+                    spec = null;
+                    subscriptionVersion = null;
+                    connectionChanged();
+                } else {
+                    hubProfilesChanged();
                 }
             });
         }
@@ -583,8 +684,8 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void disconnect() {
             main.post(() -> {
-                try { SessionMonitorService.stop(MainActivity.this, "Hub 已断开，完成提醒已关闭", true); store.clear(); }
-                catch (Exception error) { status("offline", "无法清除已保存的连接，请检查设备存储"); return; }
+                try { SessionMonitorService.stop(MainActivity.this, "Hub 已断开，完成提醒已关闭", true); store.disconnectActive(); }
+                catch (Exception error) { status("offline", "无法断开或清理当前连接，请检查设备存储"); return; }
                 cancel();
                 spec = null;
                 subscriptionVersion = null;
