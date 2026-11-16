@@ -18,6 +18,8 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 2026-11-15 增量同步主线 `v0.93.0`（**`a88c69504b63f5fd7f36f87a32f4c762c7b36120`**）的 `src/shared/clientCatalog.js`（新增 `qodercn` 条目），并同步适配 Qoder 默认合并展示与分开显示开关、本地额度历史观测时间合并、`accountKeyAliases` 自动迁移与多 Hub 已保存连接。
 
+2026-11-16 增量核对与同步主线 `v0.93.1`（**`55cd6bfb0e404cac25ac2ba5590c8a82ca16acbb`**）。完成全部 6 项更新的只读适配核对：New API 作用域令牌（未授予 `usage:read` 时缺失时段支出不捏造零支出）、Muse Web 动态 chunk 路径与刷新兼容、Tokscale 4.23.0 与 OpenClaw 会话/工具归属识别（`clientCatalog.js` 及原生微件标签）、Git worktree 项目合并统计消费、limits 类型声明与桌面 Edge Dock 动画连续性。确认主线 `v0.93.1` 未变更 `src/shared/` 与 `docs/upstream-files.json` 中跟踪的任何共享计算模块（9 个与主线对齐的模块与 `upstream/v0.93.1` 保持逐字节一致，3 个适配/分支保留模块保持各自既有快照与来源无漂移）。
+
 独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
 这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js`；v0.90 更新 `limits/windowText.js` 与 `limits/historyModel.js`；v0.93 更新 `clientCatalog.js`（新增 `qodercn`）。前者与固定上游提交字节一致，后者仅保留上述导入路径调整；其余文件保留各自快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。

@@ -313,5 +313,13 @@ public final class UsageWidgetTest {
         assertEquals("Qoder CN", separateTop.getJSONObject(1).getString("label"));
         assertEquals("80K", separateTop.getJSONObject(1).getString("tokens"));
         assertEquals("Claude", separateTop.getJSONObject(2).getString("label"));
+
+        source.getJSONObject("periods").getJSONObject("today").put("clients", new JSONObject()
+                .put("openclaw", 150_000)
+                .put("codex", 50_000));
+        JSONObject openclawSummary = UsageWidgetSnapshot.project(source, 2000L, 1900L, false);
+        JSONArray openclawTop = openclawSummary.getJSONArray("topClients");
+        assertEquals("OpenClaw", openclawTop.getJSONObject(0).getString("label"));
+        assertEquals("150K", openclawTop.getJSONObject(0).getString("tokens"));
     }
 }

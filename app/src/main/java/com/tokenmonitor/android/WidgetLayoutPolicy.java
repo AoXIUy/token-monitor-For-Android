@@ -76,6 +76,7 @@ final class WidgetLayoutPolicy {
             case "jcode" -> "Jcode";
             case "opendesign" -> "OpenDesign";
             case "senpi" -> "Senpi";
+            case "openclaw" -> "OpenClaw";
             default -> "其他";
         };
     }
@@ -97,6 +98,7 @@ final class WidgetLayoutPolicy {
         if ("gemini".equals(client)) return "Gemini CLI";
         if ("mistral".equals(client)) return "Mistral Vibe";
         if ("qodercn".equals(client)) return "Qoder CN";
+        if ("openclaw".equals(client)) return "OpenClaw";
         return providerLabel(client, "");
     }
 

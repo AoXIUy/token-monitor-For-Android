@@ -17,6 +17,8 @@ public final class WidgetPolicyChecks {
         check("Jcode".equals(WidgetLayoutPolicy.clientLabel("jcode")));
         check("Qoder".equals(WidgetLayoutPolicy.clientLabel("qoder")));
         check("Qoder CN".equals(WidgetLayoutPolicy.clientLabel("qodercn")));
+        check("OpenClaw".equals(WidgetLayoutPolicy.clientLabel("openclaw")));
+        check("OpenClaw".equals(WidgetLayoutPolicy.providerLabel("openclaw", "")));
         check("其他".equals(WidgetLayoutPolicy.clientLabel("arbitrary-user-string")));
         check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("minimax", "oauth")));
         check("MiniMax API".equals(WidgetLayoutPolicy.providerLabel("minimax", "api")));
