@@ -397,6 +397,57 @@ export interface ReportListItem {
   totalTokens: number;
   knownCostUsd: number;
   projectCount: number;
+  hasAiAnalysis?: boolean;
+}
+
+export interface ReportAiAnalysis {
+  schemaVersion: number;
+  generatedAt: string;
+  protocol: string;
+  providerLabel: string;
+  model: string;
+  language: string;
+  question?: string | null;
+  summaryMarkdown: string;
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null;
+  basedOnSignature?: string;
+  stale?: boolean;
+}
+
+export interface ReportIntegrationsStatus {
+  ai: {
+    enabled: boolean;
+    protocol: string;
+    providerLabel: string;
+    model: string;
+    language: string;
+    autoAnalyzeOnRollover: boolean;
+    apiKeyConfigured: boolean;
+  };
+  openclaw: {
+    enabled: boolean;
+    mode: string;
+    channel: string;
+    to: string;
+    pushOnRollover: boolean;
+    includeAiAnalysis: boolean;
+    includeLimits: boolean;
+    hookTokenConfigured: boolean;
+  };
+  lastPush?: {
+    at: string;
+    ok: boolean;
+    error?: string | null;
+    message?: string | null;
+    statusCode?: number | null;
+    reportId?: string | null;
+    channel?: string | null;
+    mode?: string | null;
+  } | null;
 }
 
 export interface UsageReportProject {
@@ -547,11 +598,13 @@ export interface ReportsState {
   listError: string;
   listRequestId: string;
   config: HubReportConfig | null;
+  integrations: ReportIntegrationsStatus | null;
   items: ReportListItem[];
   detailLoading: boolean;
   detailError: string;
   detailRequestId: string;
   report: UsageReportData | null;
+  aiAnalysis: ReportAiAnalysis | null;
   markdown: string;
 }
 

@@ -1180,13 +1180,23 @@ public final class StartupTest {
                                     + "\"projects\":[{\"key\":\"token-monitor\",\"label\":\"token-monitor\",\"tokens\":5000,\"costUsd\":0.15,\"tokenSharePct\":100,\"costSharePct\":100,"
                                     + "\"clients\":[{\"client\":\"codex\",\"tokens\":5000,\"sharePct\":100}],\"models\":[{\"model\":\"gpt-5\",\"tokens\":5000,\"sharePct\":100}]}],"
                                     + "\"clients\":[],\"models\":[],\"devices\":[],\"timeline\":[],\"signals\":[]},"
+                                    + "\"aiAnalysis\":{\"schemaVersion\":1,\"generatedAt\":\"2026-11-16T14:05:00Z\",\"protocol\":\"openai-compatible\","
+                                    + "\"providerLabel\":\"DeepSeek\",\"model\":\"deepseek-chat\",\"language\":\"zh-CN\",\"summaryMarkdown\":\"AI 结论：codex 效率良好，Team New API 余额充足。\",\"stale\":false},"
                                     + "\"markdown\":\"# Weekly Report 2026-W47\\n\\n<img id=unsafe-report>\"}";
                         } else if (first.contains("/api/reports?")) {
                             body = "{\"ok\":true,\"config\":{\"enabled\":true,\"daily\":true,\"weekly\":true,\"monthly\":true},"
+                                    + "\"integrations\":{\"ai\":{\"enabled\":true,\"protocol\":\"openai-compatible\",\"providerLabel\":\"DeepSeek\",\"model\":\"deepseek-chat\",\"apiKeyConfigured\":true},"
+                                    + "\"openclaw\":{\"enabled\":true,\"mode\":\"openclaw-agent\",\"channel\":\"openclaw-weixin\",\"pushOnRollover\":true,\"hookTokenConfigured\":true},"
+                                    + "\"lastPush\":{\"at\":\"2026-11-16T14:06:00Z\",\"ok\":true,\"channel\":\"openclaw-weixin\",\"reportId\":\"weekly:2026-W47\"}},"
                                     + "\"reports\":[{\"reportId\":\"weekly:2026-W47\",\"granularity\":\"weekly\",\"periodKey\":\"2026-W47\","
-                                    + "\"label\":\"2026-W47\",\"startDate\":\"2026-11-16\",\"endDate\":\"2026-11-22\",\"totalTokens\":5000,\"knownCostUsd\":0.15,\"projectCount\":1}]}";
+                                    + "\"label\":\"2026-W47\",\"startDate\":\"2026-11-16\",\"endDate\":\"2026-11-22\",\"totalTokens\":5000,\"knownCostUsd\":0.15,\"projectCount\":1,\"hasAiAnalysis\":true}]}";
                         } else {
-                            body = testStats(false);
+                            body = new org.json.JSONObject(testStats(false))
+                                    .put("limits", new org.json.JSONObject().put("providers", new org.json.JSONArray().put(
+                                            new org.json.JSONObject().put("provider", "thirdparty").put("adapterId", "newapi-account")
+                                                    .put("accountLabel", "Team New API").put("status", "ok")
+                                                    .put("balance", new org.json.JSONObject().put("amount", 42.5).put("currency", "USD").put("monthSpend", 12.3)))))
+                                    .toString();
                         }
                         byte[] payload = body.getBytes(StandardCharsets.UTF_8);
                         socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
@@ -1207,6 +1217,10 @@ public final class StartupTest {
                 awaitScript("document.getElementById('page-title').textContent === '分析报告'");
                 awaitScript("document.querySelector('[data-report-project=\"token-monitor\"]')");
                 assertEquals("true", evaluate("document.getElementById('reports-summary-card').textContent.includes('2026-W47')"));
+                awaitScript("document.getElementById('reports-openclaw-status') && document.getElementById('reports-ai-analysis') && document.getElementById('reports-thirdparty-quotas')");
+                assertEquals("true", evaluate("document.getElementById('reports-openclaw-status').textContent.includes('openclaw-weixin')"));
+                assertEquals("true", evaluate("document.getElementById('reports-ai-analysis').textContent.includes('deepseek-chat')"));
+                assertEquals("true", evaluate("document.getElementById('reports-thirdparty-quotas').textContent.includes('Team New API')"));
                 evaluate("document.querySelector('[data-report-view-mode=\"markdown\"]').click()");
                 awaitScript("document.getElementById('reports-markdown-pre').textContent.includes('# Weekly Report 2026-W47')");
                 assertEquals("true", evaluate("document.getElementById('reports-markdown-pre').textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report')"));

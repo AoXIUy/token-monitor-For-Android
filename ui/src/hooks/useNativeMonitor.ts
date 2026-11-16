@@ -46,7 +46,7 @@ export function useNativeMonitor() {
         type: 'reportsList',
         granularity,
         requestId,
-        data: { ok: true, config: demo.config, reports: filtered },
+        data: { ok: true, config: demo.config, integrations: demo.integrations, reports: filtered },
       }));
     } else {
       update(previous => receiveNativeMessage(previous, {
@@ -71,7 +71,7 @@ export function useNativeMonitor() {
         granularity,
         periodKey,
         requestId,
-        ...(entry ? { data: { ok: true, report: entry.report, markdown: entry.markdown } } : { error: 'not_found' }),
+        ...(entry ? { data: { ok: true, report: entry.report, markdown: entry.markdown, aiAnalysis: entry.aiAnalysis } } : { error: 'not_found' }),
       }));
     } else {
       update(previous => receiveNativeMessage(previous, {

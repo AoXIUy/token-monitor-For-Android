@@ -115,8 +115,80 @@ test('connection switches and background lifecycle clear or halt pending reports
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://other-hub.test' });
   assert.equal(state.reports.report, null);
   assert.equal(state.reports.markdown, '');
+  assert.equal(state.reports.aiAnalysis, null);
+  assert.equal(state.reports.integrations, null);
   assert.deepEqual(state.reports.items, []);
   assert.equal(state.reports.config, null);
+});
+
+test('reportsState sanitizes third-party AI analysis and OpenClaw WeChat integrations status cleanly', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const { beginReportsList, beginReportDetail } = await reportsModule;
+
+  let state = createInitialState();
+  state = { ...state, reports: beginReportsList(state.reports, { granularity: '', requestId: 'rl-int' }) };
+  state = receiveNativeMessage(state, {
+    type: 'reportsList',
+    requestId: 'rl-int',
+    data: {
+      ok: true,
+      config: { enabled: true, daily: true, weekly: true, monthly: true },
+      integrations: {
+        ai: {
+          enabled: true,
+          protocol: 'openai-compatible',
+          providerLabel: 'DeepSeek',
+          model: 'deepseek-chat',
+          apiKeyConfigured: true,
+        },
+        openclaw: {
+          enabled: true,
+          mode: 'openclaw-agent',
+          channel: 'openclaw-weixin',
+          pushOnRollover: true,
+          hookTokenConfigured: true,
+        },
+        lastPush: {
+          at: '2026-11-16T22:00:00Z',
+          ok: true,
+          channel: 'openclaw-weixin',
+          reportId: 'daily:2026-11-16',
+        },
+      },
+      reports: [
+        { reportId: 'daily:2026-11-16', granularity: 'daily', periodKey: '2026-11-16', hasAiAnalysis: true, totalTokens: 1000, knownCostUsd: 0.2, projectCount: 1 },
+      ],
+    },
+  });
+
+  assert.equal(state.reports.integrations?.ai.providerLabel, 'DeepSeek');
+  assert.equal(state.reports.integrations?.openclaw.channel, 'openclaw-weixin');
+  assert.equal(state.reports.integrations?.lastPush?.ok, true);
+  assert.equal(state.reports.items[0].hasAiAnalysis, true);
+
+  state = { ...state, reports: beginReportDetail(state.reports, { granularity: 'daily', periodKey: '2026-11-16', requestId: 'rd-int' }) };
+  state = receiveNativeMessage(state, {
+    type: 'reportDetail',
+    requestId: 'rd-int',
+    data: {
+      ok: true,
+      report: { granularity: 'daily', period: { key: '2026-11-16' }, summary: { totalTokens: 1000 } },
+      aiAnalysis: {
+        schemaVersion: 1,
+        generatedAt: '2026-11-16T22:01:00Z',
+        protocol: 'openai-compatible',
+        providerLabel: 'DeepSeek',
+        model: 'deepseek-chat',
+        language: 'zh-CN',
+        summaryMarkdown: '今日用量稳定，New API 余额充足。',
+        stale: false,
+      },
+      markdown: '# Daily',
+    },
+  });
+
+  assert.equal(state.reports.aiAnalysis?.model, 'deepseek-chat');
+  assert.match(state.reports.aiAnalysis?.summaryMarkdown || '', /New API/);
 });
 
 test('malformed report payloads fail closed without throwing', async () => {

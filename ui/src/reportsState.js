@@ -33,11 +33,13 @@ export function createInitialReportsState() {
     listError: '',
     listRequestId: '',
     config: null,
+    integrations: null,
     items: [],
     detailLoading: false,
     detailError: '',
     detailRequestId: '',
     report: null,
+    aiAnalysis: null,
     markdown: '',
   };
 }
@@ -73,6 +75,7 @@ export function beginReportDetail(previous, query) {
     detailError: '',
     detailRequestId: cleanText(query.requestId, 80),
     report: sameTarget ? previous.report : null,
+    aiAnalysis: sameTarget ? previous.aiAnalysis : null,
     markdown: sameTarget ? previous.markdown : '',
   };
 }
@@ -86,6 +89,80 @@ function sanitizeConfig(raw) {
     daily: obj.daily !== false,
     weekly: obj.weekly !== false,
     monthly: obj.monthly !== false,
+  };
+}
+
+/** @param {unknown} raw @returns {import('./types/monitor').ReportIntegrationsStatus | null} */
+function sanitizeIntegrations(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = /** @type {Record<string, unknown>} */ (raw);
+  const aiObj = obj.ai && typeof obj.ai === 'object' && !Array.isArray(obj.ai)
+    ? /** @type {Record<string, unknown>} */ (obj.ai)
+    : {};
+  const ocObj = obj.openclaw && typeof obj.openclaw === 'object' && !Array.isArray(obj.openclaw)
+    ? /** @type {Record<string, unknown>} */ (obj.openclaw)
+    : {};
+  const lpObj = obj.lastPush && typeof obj.lastPush === 'object' && !Array.isArray(obj.lastPush)
+    ? /** @type {Record<string, unknown>} */ (obj.lastPush)
+    : null;
+  return {
+    ai: {
+      enabled: aiObj.enabled === true,
+      protocol: cleanText(aiObj.protocol, 40) || 'openai-compatible',
+      providerLabel: cleanText(aiObj.providerLabel, 64),
+      model: cleanText(aiObj.model, 160),
+      language: cleanText(aiObj.language, 16) || 'zh-CN',
+      autoAnalyzeOnRollover: aiObj.autoAnalyzeOnRollover === true,
+      apiKeyConfigured: aiObj.apiKeyConfigured === true,
+    },
+    openclaw: {
+      enabled: ocObj.enabled === true,
+      mode: cleanText(ocObj.mode, 40) || 'openclaw-agent',
+      channel: cleanText(ocObj.channel, 64) || 'openclaw-weixin',
+      to: cleanText(ocObj.to, 128),
+      pushOnRollover: ocObj.pushOnRollover === true,
+      includeAiAnalysis: ocObj.includeAiAnalysis !== false,
+      includeLimits: ocObj.includeLimits !== false,
+      hookTokenConfigured: ocObj.hookTokenConfigured === true,
+    },
+    lastPush: lpObj ? {
+      at: cleanText(lpObj.at, 48),
+      ok: lpObj.ok === true,
+      error: cleanText(lpObj.error, 64) || null,
+      message: cleanText(lpObj.message, 240) || null,
+      statusCode: typeof lpObj.statusCode === 'number' && Number.isFinite(lpObj.statusCode) ? lpObj.statusCode : null,
+      reportId: cleanText(lpObj.reportId, 64) || null,
+      channel: cleanText(lpObj.channel, 64) || null,
+      mode: cleanText(lpObj.mode, 40) || null,
+    } : null,
+  };
+}
+
+/** @param {unknown} raw @returns {import('./types/monitor').ReportAiAnalysis | null} */
+function sanitizeAiAnalysis(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = /** @type {Record<string, unknown>} */ (raw);
+  const summaryMarkdown = cleanText(obj.summaryMarkdown, 32_768);
+  if (!summaryMarkdown) return null;
+  const usageObj = obj.tokenUsage && typeof obj.tokenUsage === 'object' && !Array.isArray(obj.tokenUsage)
+    ? /** @type {Record<string, unknown>} */ (obj.tokenUsage)
+    : null;
+  return {
+    schemaVersion: Math.max(1, Math.floor(finiteNum(obj.schemaVersion, 1))),
+    generatedAt: cleanText(obj.generatedAt, 48),
+    protocol: cleanText(obj.protocol, 40),
+    providerLabel: cleanText(obj.providerLabel, 64),
+    model: cleanText(obj.model, 160),
+    language: cleanText(obj.language, 16) || 'zh-CN',
+    question: cleanText(obj.question, 1000) || null,
+    summaryMarkdown,
+    tokenUsage: usageObj ? {
+      inputTokens: Math.max(0, Math.floor(finiteNum(usageObj.inputTokens))),
+      outputTokens: Math.max(0, Math.floor(finiteNum(usageObj.outputTokens))),
+      totalTokens: Math.max(0, Math.floor(finiteNum(usageObj.totalTokens))),
+    } : null,
+    basedOnSignature: cleanText(obj.basedOnSignature, 128) || undefined,
+    stale: obj.stale === true,
   };
 }
 
@@ -116,6 +193,7 @@ function sanitizeReportItems(raw) {
       totalTokens: Math.max(0, finiteNum(item.totalTokens)),
       knownCostUsd: Math.max(0, finiteNum(item.knownCostUsd)),
       projectCount: Math.max(0, Math.floor(finiteNum(item.projectCount))),
+      hasAiAnalysis: item.hasAiAnalysis === true,
     });
     if (items.length >= 120) break;
   }
@@ -304,6 +382,7 @@ export function receiveReportsList(current, message) {
     listLoading: false,
     listError: '',
     config: sanitizeConfig(data.config) ?? current.config,
+    integrations: sanitizeIntegrations(data.integrations) ?? current.integrations,
     items: sanitizeReportItems(data.reports),
   };
 }
@@ -330,12 +409,14 @@ export function receiveReportDetail(current, message) {
   if (!report) {
     return { ...current, detailLoading: false, detailError: 'invalid_response' };
   }
+  const rawAi = data.aiAnalysis ?? /** @type {Record<string, unknown>} */ (data.report)?.aiAnalysis;
   const markdown = cleanText(data.markdown, 512 * 1024);
   return {
     ...current,
     detailLoading: false,
     detailError: '',
     report,
+    aiAnalysis: sanitizeAiAnalysis(rawAi),
     markdown,
   };
 }

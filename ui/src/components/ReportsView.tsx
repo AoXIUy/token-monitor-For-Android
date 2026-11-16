@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  Bot,
   Check,
   Copy,
   FileText,
@@ -10,18 +11,21 @@ import {
   Info,
   Laptop,
   Layers,
+  MessageCircle,
   RefreshCw,
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Wallet,
 } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import { reportErrorLabel } from '../reportsState';
-import type { ReportGranularity, ReportsState } from '../types/monitor';
-import { clientName, clientTone, copyTextToClipboard, formatExact, formatShortTime } from '../utils/formatters';
+import type { LimitProvider, ReportGranularity, ReportsState } from '../types/monitor';
+import { clientName, clientTone, copyTextToClipboard, formatExact, formatShortTime, providerName } from '../utils/formatters';
 
 interface ReportsViewProps {
   reports: ReportsState;
+  providers?: LimitProvider[];
   connected: boolean;
   foreground: boolean;
   onBack: () => void;
@@ -62,6 +66,7 @@ function formatDurationMs(ms: number): string {
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
   reports,
+  providers = [],
   connected,
   foreground,
   onBack,
@@ -72,6 +77,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'structured' | 'markdown'>('structured');
   const [copied, setCopied] = useState(false);
+  const [aiCopied, setAiCopied] = useState(false);
 
   useEffect(() => {
     if (!foreground) return;
@@ -109,6 +115,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       window.setTimeout(() => setCopied(false), 1800);
     }
   };
+
+  const handleCopyAiSummary = async () => {
+    if (!reports.aiAnalysis?.summaryMarkdown) return;
+    const ok = await copyTextToClipboard(reports.aiAnalysis.summaryMarkdown);
+    if (ok) {
+      setAiCopied(true);
+      window.setTimeout(() => setAiCopied(false), 1800);
+    }
+  };
+
+  const thirdPartyProviders = useMemo(
+    () => providers.filter((p) => p.provider === 'thirdparty' || (p.balance && p.balance.amount !== null && p.balance.amount !== undefined)),
+    [providers],
+  );
 
   const timelineMaxTokens = useMemo(() => {
     if (!report?.timeline?.length) return 0;
@@ -241,6 +261,42 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* OpenClaw 微信接入状态 */}
+      {reports.integrations?.openclaw?.enabled && (
+        <div
+          id="reports-openclaw-status"
+          className="rounded-2xl bg-emerald-500/10 border border-emerald-400/25 px-3.5 py-2.5 text-xs text-emerald-100 flex items-center justify-between gap-2.5"
+        >
+          <div className="flex items-start gap-2 min-w-0">
+            <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 space-y-0.5">
+              <p className="font-semibold text-emerald-200 truncate">
+                OpenClaw 微信通道已接入 · {reports.integrations.openclaw.channel || 'openclaw-weixin'}
+                {reports.integrations.openclaw.pushOnRollover ? '（周期自动推送）' : ''}
+              </p>
+              {reports.integrations.lastPush && (
+                <p className="text-[11px] text-emerald-200/80 font-mono-tabular truncate">
+                  {reports.integrations.lastPush.ok
+                    ? `最近推送成功 · ${formatShortTime(reports.integrations.lastPush.at)}`
+                    : `最近推送失败：${reports.integrations.lastPush.message || reports.integrations.lastPush.error || 'error'}`}
+                </p>
+              )}
+            </div>
+          </div>
+          {reports.integrations.lastPush && (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 border ${
+                reports.integrations.lastPush.ok
+                  ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30'
+                  : 'bg-rose-500/15 text-rose-300 border-rose-400/30'
+              }`}
+            >
+              {reports.integrations.lastPush.ok ? '已触达' : '待排查'}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 主 Hub 自动报告状态提示 */}
       {reports.config && !reports.config.enabled && (
@@ -420,6 +476,106 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               </div>
             )}
           </section>
+
+          {/* 1.5 第三方 AI API 智能分析总结 */}
+          {(reports.aiAnalysis || reports.integrations?.ai?.enabled) && (
+            <section id="reports-ai-analysis" className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 space-y-0.5">
+                  <h3 className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+                    <Bot className="w-4 h-4 text-violet-300 shrink-0" />
+                    <span>第三方 AI 智能分析</span>
+                    {reports.aiAnalysis?.stale && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/25">
+                        数据已更新
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono-tabular truncate">
+                    {reports.aiAnalysis
+                      ? `${reports.aiAnalysis.providerLabel || reports.aiAnalysis.protocol} · ${reports.aiAnalysis.model} · ${formatShortTime(reports.aiAnalysis.generatedAt)}`
+                      : `${reports.integrations?.ai?.providerLabel || reports.integrations?.ai?.protocol || 'AI'} · ${reports.integrations?.ai?.model || '未配置模型'}`}
+                  </p>
+                </div>
+                {reports.aiAnalysis?.summaryMarkdown && (
+                  <button
+                    type="button"
+                    onClick={handleCopyAiSummary}
+                    className="px-2.5 py-1 rounded-xl bg-violet-400/15 hover:bg-violet-400/25 border border-violet-400/30 text-[11px] font-semibold text-violet-200 shrink-0 inline-flex items-center gap-1"
+                  >
+                    {aiCopied ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
+                    <span>{aiCopied ? '已复制' : '复制分析'}</span>
+                  </button>
+                )}
+              </div>
+
+              {reports.aiAnalysis?.summaryMarkdown ? (
+                <div className="glass-inset rounded-2xl p-3.5 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                  {reports.aiAnalysis.summaryMarkdown}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  当前周期暂无缓存的 AI 分析结果；可在桌面端设置或 OpenClaw / MCP 对话中触发「AI 智能分析」。
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* 1.8 第三方 AI API 与余额快照 */}
+          {thirdPartyProviders.length > 0 && (
+            <section id="reports-thirdparty-quotas" className="glass-panel rounded-3xl p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+                  <Wallet className="w-4 h-4 text-emerald-400" />
+                  <span>第三方 AI API 与余额快照</span>
+                </h3>
+                <span className="text-[11px] text-slate-400 font-mono-tabular">
+                  {thirdPartyProviders.length} 个账户
+                </span>
+              </div>
+              <div className="space-y-2">
+                {thirdPartyProviders.slice(0, 6).map((prov, idx) => {
+                  const title = prov.accountLabel || prov.planLabel || prov.accountName || providerName(prov.provider);
+                  const currency = prov.balance?.currency || 'USD';
+                  const symbol = currency === 'CNY' || currency === 'RMB' ? '¥' : '$';
+                  const balAmt = prov.balance?.amount;
+                  const monthSpend = prov.balance?.monthSpend;
+                  const todaySpend = prov.balance?.todaySpend;
+                  return (
+                    <div
+                      key={`${prov.provider}-${prov.accountKey || title}-${idx}`}
+                      className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-100 truncate">
+                          {title}
+                          {prov.adapterId ? (
+                            <span className="ml-1.5 text-[10px] font-mono-tabular text-sky-300/80">
+                              [{prov.adapterId}]
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono-tabular mt-0.5">
+                          {todaySpend !== null && todaySpend !== undefined ? `今日 ${symbol}${todaySpend.toFixed(2)}` : ''}
+                          {todaySpend !== null && todaySpend !== undefined && monthSpend !== null && monthSpend !== undefined ? ' · ' : ''}
+                          {monthSpend !== null && monthSpend !== undefined ? `本月 ${symbol}${monthSpend.toFixed(2)}` : ''}
+                          {prov.stale ? ' · 已过期' : ''}
+                        </p>
+                      </div>
+                      <div className="text-right font-mono-tabular shrink-0">
+                        <p className="font-semibold text-emerald-300">
+                          {balAmt !== null && balAmt !== undefined ? `${symbol}${balAmt.toFixed(2)}` : prov.status || 'ok'}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {prov.status === 'ok' ? '正常' : prov.status || 'unknown'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* 2. 自动化信号 */}
           {report.signals.length > 0 && (

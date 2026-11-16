@@ -5,7 +5,9 @@ import type {
   MonitorStats,
   NotificationState,
   QuotaHistoryPayload,
+  ReportAiAnalysis,
   ReportGranularity,
+  ReportIntegrationsStatus,
   ReportListItem,
   SubscriptionsPayload,
   UsageReportData,
@@ -535,6 +537,20 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       status: 'disabled',
       windows: [],
     },
+    {
+      provider: 'thirdparty',
+      adapterId: 'newapi-account',
+      sourceDeviceId: 'mbp-m4-max',
+      accountLabel: 'Team New API',
+      planLabel: 'New API',
+      source: 'api',
+      status: 'ok',
+      updatedAt: nowIso,
+      balance: { amount: 42.5, currency: 'USD', todaySpend: 1.84, monthSpend: 18.4, allTimeSpend: 112.0 },
+      windows: [
+        { kind: 'billing', label: 'Balance', metric: 'credits', remaining: 42.5, currency: 'USD', usedPercent: 30.2, remainingPercent: 69.8 },
+      ],
+    },
   ];
 
   const stats: MonitorStats = {
@@ -799,8 +815,9 @@ export function createDemoPayload(nowMs: number = Date.now()): {
 
 export function createDemoReports(nowMs: number = Date.now()): {
   config: HubReportConfig;
+  integrations: ReportIntegrationsStatus;
   items: ReportListItem[];
-  details: Record<string, { report: UsageReportData; markdown: string }>;
+  details: Record<string, { report: UsageReportData; markdown: string; aiAnalysis?: ReportAiAnalysis }>;
 } {
   const now = new Date(nowMs);
   const nowIso = now.toISOString();
@@ -816,7 +833,7 @@ export function createDemoReports(nowMs: number = Date.now()): {
     endDate: string,
     scale: number,
     activeDays: number,
-  ): { report: UsageReportData; markdown: string } => {
+  ): { report: UsageReportData; markdown: string; aiAnalysis: ReportAiAnalysis } => {
     const totalTokens = Math.round(4285600 * scale);
     const knownCostUsd = Number((16.42 * scale).toFixed(2));
     const inputTokens = Math.round(925600 * scale);
@@ -1118,7 +1135,25 @@ export function createDemoReports(nowMs: number = Date.now()): {
       ),
     ].join('\n');
 
-    return { report, markdown };
+    const aiAnalysis: ReportAiAnalysis = {
+      schemaVersion: 1,
+      generatedAt: nowIso,
+      protocol: 'openai-compatible',
+      providerLabel: 'DeepSeek',
+      model: 'deepseek-chat',
+      language: 'zh-CN',
+      question: null,
+      summaryMarkdown: [
+        '### 核心结论',
+        `- 本周期总消耗 **${totalTokens.toLocaleString('en-US')} tokens**，已知费用 **$${knownCostUsd.toFixed(2)}**，整体缓存命中率 **75.4%**。`,
+        '- **token-monitor-core** 占总用量 50% 以上，主力工具为 Claude Code 与 Antigravity。',
+        '- **Team New API** 第三方余额 **$42.50**（本月已用 $18.40），建议保持高缓存命中率以控制长上下文费用。',
+      ].join('\n'),
+      tokenUsage: { inputTokens: 820, outputTokens: 195, totalTokens: 1015 },
+      stale: false,
+    };
+
+    return { report, markdown, aiAnalysis };
   };
 
   const daily = makeDetail('daily', todayKey, `${todayKey} (今日)`, todayKey, todayKey, 1, 1);
@@ -1127,6 +1162,34 @@ export function createDemoReports(nowMs: number = Date.now()): {
 
   return {
     config: { enabled: true, daily: true, weekly: true, monthly: true },
+    integrations: {
+      ai: {
+        enabled: true,
+        protocol: 'openai-compatible',
+        providerLabel: 'DeepSeek',
+        model: 'deepseek-chat',
+        language: 'zh-CN',
+        autoAnalyzeOnRollover: true,
+        apiKeyConfigured: true,
+      },
+      openclaw: {
+        enabled: true,
+        mode: 'openclaw-agent',
+        channel: 'openclaw-weixin',
+        to: 'wxid_demo_user',
+        pushOnRollover: true,
+        includeAiAnalysis: true,
+        includeLimits: true,
+        hookTokenConfigured: true,
+      },
+      lastPush: {
+        at: nowIso,
+        ok: true,
+        reportId: daily.report.reportId,
+        channel: 'openclaw-weixin',
+        mode: 'openclaw-agent',
+      },
+    },
     items: [
       {
         reportId: daily.report.reportId,
@@ -1139,6 +1202,7 @@ export function createDemoReports(nowMs: number = Date.now()): {
         totalTokens: daily.report.summary.totalTokens,
         knownCostUsd: daily.report.summary.knownCostUsd,
         projectCount: daily.report.projects.length,
+        hasAiAnalysis: true,
       },
       {
         reportId: weekly.report.reportId,
@@ -1151,6 +1215,7 @@ export function createDemoReports(nowMs: number = Date.now()): {
         totalTokens: weekly.report.summary.totalTokens,
         knownCostUsd: weekly.report.summary.knownCostUsd,
         projectCount: weekly.report.projects.length,
+        hasAiAnalysis: true,
       },
       {
         reportId: monthly.report.reportId,
@@ -1163,6 +1228,7 @@ export function createDemoReports(nowMs: number = Date.now()): {
         totalTokens: monthly.report.summary.totalTokens,
         knownCostUsd: monthly.report.summary.knownCostUsd,
         projectCount: monthly.report.projects.length,
+        hasAiAnalysis: true,
       },
     ],
     details: {

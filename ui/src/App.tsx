@@ -1003,6 +1003,7 @@ function Dashboard({
               {page === 'reports' && (
                 <ReportsView
                   reports={state.reports}
+                  providers={selected.providers}
                   connected={Boolean(connection)}
                   foreground={foreground}
                   onBack={() => setPage('overview')}
