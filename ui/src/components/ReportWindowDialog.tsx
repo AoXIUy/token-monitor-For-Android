@@ -161,6 +161,7 @@ export const ReportWindowDialog: React.FC<ReportWindowDialogProps> = ({
 
   const showLoadingSkeleton = reports.detailLoading && !activeSource;
   const showErrorState = Boolean(reports.detailError) && !activeSource && !reports.detailLoading;
+  const showInlineErrorBanner = Boolean(reports.detailError) && Boolean(activeSource) && !reports.detailLoading;
 
   return (
     <dialog
@@ -371,69 +372,87 @@ export const ReportWindowDialog: React.FC<ReportWindowDialogProps> = ({
               </div>
             </div>
           ) : showErrorState ? (
-            <div className="rounded-2xl bg-rose-500/12 border border-rose-400/30 p-4 text-xs text-rose-200 flex items-start gap-2.5 leading-relaxed">
+            <div
+              id="report-window-error"
+              role="status"
+              className="rounded-2xl bg-rose-500/12 border border-rose-400/30 p-4 text-xs text-rose-200 flex items-start gap-2.5 leading-relaxed"
+            >
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <span>{reportErrorLabel(reports.detailError)}</span>
             </div>
-          ) : activeTab === 'ai' ? (
-            aiMarkdown ? (
-              <div className="space-y-3">
-                {reports.aiAnalysis?.question && (
-                  <div className="rounded-2xl bg-violet-500/10 border border-violet-400/25 px-3.5 py-2.5 text-xs text-violet-100 leading-relaxed">
-                    <span className="font-semibold text-violet-300">分析提问：</span>
-                    <span>{reports.aiAnalysis.question}</span>
+          ) : (
+            <>
+              {showInlineErrorBanner && (
+                <div
+                  id="report-window-error"
+                  role="status"
+                  className="mb-3 rounded-2xl bg-rose-500/12 border border-rose-400/30 px-3.5 py-2.5 text-xs text-rose-200 flex items-start gap-2 leading-relaxed"
+                >
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>{reportErrorLabel(reports.detailError)}</span>
+                </div>
+              )}
+              {activeTab === 'ai' ? (
+                aiMarkdown ? (
+                  <div className="space-y-3">
+                    {reports.aiAnalysis?.question && (
+                      <div className="rounded-2xl bg-violet-500/10 border border-violet-400/25 px-3.5 py-2.5 text-xs text-violet-100 leading-relaxed">
+                        <span className="font-semibold text-violet-300">分析提问：</span>
+                        <span>{reports.aiAnalysis.question}</span>
+                      </div>
+                    )}
+                    <MarkdownRenderer
+                      markdown={aiMarkdown}
+                      variant="reader"
+                      fontScale={fontScale}
+                      accent="violet"
+                      idPrefix="report-win"
+                    />
                   </div>
-                )}
+                ) : (
+                  <div className="glass-inset rounded-2xl p-5 text-center space-y-3">
+                    <div className="w-10 h-10 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300 mx-auto">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-100">当前周期暂无 AI 智能分析</p>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        可在桌面端「报告设置」或 OpenClaw / MCP 对话中触发本周期 AI 深度分析；Android 端仅作只读展示。
+                      </p>
+                    </div>
+                    {docMarkdown && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeTab('rendered')}
+                        className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 border border-sky-400/30 text-xs font-semibold text-sky-200 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>切换阅读完整排版报告</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              ) : activeTab === 'rendered' ? (
                 <MarkdownRenderer
-                  markdown={aiMarkdown}
+                  markdown={docMarkdown}
                   variant="reader"
                   fontScale={fontScale}
-                  accent="violet"
+                  accent="sky"
+                  showFrontmatter
                   idPrefix="report-win"
+                  emptyText="当前响应未包含 Markdown 文本。"
                 />
-              </div>
-            ) : (
-              <div className="glass-inset rounded-2xl p-5 text-center space-y-3">
-                <div className="w-10 h-10 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300 mx-auto">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-100">当前周期暂无 AI 智能分析</p>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    可在桌面端「报告设置」或 OpenClaw / MCP 对话中触发本周期 AI 深度分析；Android 端仅作只读展示。
-                  </p>
-                </div>
-                {docMarkdown && (
-                  <button
-                    type="button"
-                    onClick={() => onChangeTab('rendered')}
-                    className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 border border-sky-400/30 text-xs font-semibold text-sky-200 inline-flex items-center gap-1.5 transition-colors"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>切换阅读完整排版报告</span>
-                  </button>
-                )}
-              </div>
-            )
-          ) : activeTab === 'rendered' ? (
-            <MarkdownRenderer
-              markdown={docMarkdown}
-              variant="reader"
-              fontScale={fontScale}
-              accent="sky"
-              showFrontmatter
-              idPrefix="report-win"
-              emptyText="当前响应未包含 Markdown 文本。"
-            />
-          ) : (
-            <pre
-              id="report-window-source-pre"
-              className={`glass-inset rounded-2xl p-3.5 leading-relaxed font-mono-tabular text-slate-200 whitespace-pre-wrap break-words select-text ${
-                fontScale === 'lg' ? 'text-[12.5px]' : 'text-[11px]'
-              }`}
-            >
-              {docMarkdown || '当前响应未包含 Markdown 文本。'}
-            </pre>
+              ) : (
+                <pre
+                  id="report-window-source-pre"
+                  className={`glass-inset rounded-2xl p-3.5 leading-relaxed font-mono-tabular text-slate-200 whitespace-pre-wrap break-words select-text ${
+                    fontScale === 'lg' ? 'text-[12.5px]' : 'text-[11px]'
+                  }`}
+                >
+                  {docMarkdown || '当前响应未包含 Markdown 文本。'}
+                </pre>
+              )}
+            </>
           )}
         </div>
       </div>

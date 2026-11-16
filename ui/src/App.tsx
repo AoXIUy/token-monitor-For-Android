@@ -179,15 +179,25 @@ function Dashboard({
     setDevicePickerOpen(false);
     setReportWindowTab(tab);
     setReportWindowOpen(openWindow);
-    update((previous) => ({
-      ...previous,
-      page: 'reports',
-      reports: {
-        ...previous.reports,
-        granularity,
-        periodKey: 'current',
-      },
-    }));
+    update((previous) => {
+      const sameTarget =
+        previous.reports.granularity === granularity &&
+        previous.reports.periodKey === 'current';
+      return {
+        ...previous,
+        page: 'reports',
+        reports: {
+          ...previous.reports,
+          granularity,
+          periodKey: 'current',
+          listError: '',
+          detailError: '',
+          report: sameTarget ? previous.reports.report : null,
+          aiAnalysis: sameTarget ? previous.reports.aiAnalysis : null,
+          markdown: sameTarget ? previous.reports.markdown : '',
+        },
+      };
+    });
     window.scrollTo(0, 0);
   };
   const setPeriod = (next: PeriodId) => {

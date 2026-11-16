@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const stateModule = import('../../ui/src/nativeState.js');
 const reportsModule = import('../../ui/src/reportsState.js');
 
@@ -279,4 +281,62 @@ test('sanitizeUsageReport normalizes upstream signals[] project and percentage f
 
   assert.equal(report.signals[5].project, 'Explicit Project');
   assert.equal(report.signals[5].valuePct, 45);
+});
+
+test('entering reports zone across granularities clears stale report detail and errors', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const { beginReportDetail } = await reportsModule;
+
+  let state = createInitialState();
+  state = {
+    ...state,
+    reports: beginReportDetail(state.reports, { granularity: 'weekly', periodKey: 'current', requestId: 'rd-w' }),
+  };
+  state = receiveNativeMessage(state, {
+    type: 'reportDetail',
+    requestId: 'rd-w',
+    data: {
+      ok: true,
+      report: { granularity: 'weekly', period: { key: '2026-W47' }, summary: { totalTokens: 5000 } },
+      aiAnalysis: {
+        schemaVersion: 1,
+        generatedAt: '2026-11-16T14:05:00Z',
+        protocol: 'openai-compatible',
+        providerLabel: 'DeepSeek',
+        model: 'deepseek-chat',
+        summaryMarkdown: '# Weekly AI',
+      },
+      markdown: '# Weekly Report 2026-W47',
+    },
+  });
+  assert.equal(state.reports.report?.period.key, '2026-W47');
+
+  // Switching granularity clears previous report/AI/markdown/error immediately
+  const nextDaily = beginReportDetail(state.reports, { granularity: 'daily', periodKey: 'current', requestId: 'rd-d' });
+  assert.equal(nextDaily.granularity, 'daily');
+  assert.equal(nextDaily.periodKey, 'current');
+  assert.equal(nextDaily.report, null);
+  assert.equal(nextDaily.aiAnalysis, null);
+  assert.equal(nextDaily.markdown, '');
+  assert.equal(nextDaily.detailError, '');
+
+  // Same target retains cached data while clearing stale detailError
+  const erroredSameTarget = receiveNativeMessage(
+    { ...state, reports: beginReportDetail(state.reports, { granularity: 'weekly', periodKey: 'current', requestId: 'rd-w2' }) },
+    { type: 'reportDetail', requestId: 'rd-w2', error: 'read_failed' },
+  );
+  assert.equal(erroredSameTarget.reports.detailError, 'read_failed');
+  const retrySameTarget = beginReportDetail(erroredSameTarget.reports, { granularity: 'weekly', periodKey: 'current', requestId: 'rd-w3' });
+  assert.equal(retrySameTarget.detailError, '');
+  assert.equal(retrySameTarget.report?.period.key, '2026-W47');
+
+  // App.tsx openReportsZone must guard sameTarget before preserving report/aiAnalysis/markdown
+  const appSource = fs.readFileSync(path.resolve(__dirname, '../../ui/src/App.tsx'), 'utf8');
+  const zoneMatch = /const openReportsZone =[\s\S]*?window\.scrollTo\(0, 0\);/.exec(appSource);
+  assert.ok(zoneMatch, 'openReportsZone handler must exist in ui/src/App.tsx');
+  assert.match(zoneMatch[0], /sameTarget/);
+  assert.match(zoneMatch[0], /report:\s*sameTarget\s*\?\s*previous\.reports\.report\s*:\s*null/);
+  assert.match(zoneMatch[0], /aiAnalysis:\s*sameTarget\s*\?\s*previous\.reports\.aiAnalysis\s*:\s*null/);
+  assert.match(zoneMatch[0], /markdown:\s*sameTarget\s*\?\s*previous\.reports\.markdown\s*:\s*''/);
+  assert.match(zoneMatch[0], /detailError:\s*''/);
 });
