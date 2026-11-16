@@ -1181,7 +1181,8 @@ public final class StartupTest {
                                     + "\"clients\":[{\"client\":\"codex\",\"tokens\":5000,\"sharePct\":100}],\"models\":[{\"model\":\"gpt-5\",\"tokens\":5000,\"sharePct\":100}]}],"
                                     + "\"clients\":[],\"models\":[],\"devices\":[],\"timeline\":[],\"signals\":[]},"
                                     + "\"aiAnalysis\":{\"schemaVersion\":1,\"generatedAt\":\"2026-11-16T14:05:00Z\",\"protocol\":\"openai-compatible\","
-                                    + "\"providerLabel\":\"DeepSeek\",\"model\":\"deepseek-chat\",\"language\":\"zh-CN\",\"summaryMarkdown\":\"AI 结论：codex 效率良好，Team New API 余额充足。\",\"stale\":false},"
+                                    + "\"providerLabel\":\"DeepSeek\",\"model\":\"deepseek-chat\",\"language\":\"zh-CN\","
+                                    + "\"summaryMarkdown\":\"## 核心结论\\n\\n- 主力工具 **codex** 消耗 **5.00K** tokens，Team New API 余额 **$42.50**。\\n- 缓存命中率 **80.0%**，效率良好。\\n\\n| 项目 | Tokens | 占比 |\\n| --- | ---: | ---: |\\n| token-monitor | 5,000 | 100.0% |\\n\\n<img id=unsafe-ai>\",\"stale\":false},"
                                     + "\"markdown\":\"# Weekly Report 2026-W47\\n\\n<img id=unsafe-report>\"}";
                         } else if (first.contains("/api/reports?")) {
                             body = "{\"ok\":true,\"config\":{\"enabled\":true,\"daily\":true,\"weekly\":true,\"monthly\":true},"
@@ -1212,18 +1213,81 @@ public final class StartupTest {
             responder.start();
             try {
                 evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'reports-test-secret', true)");
-                awaitScript("document.querySelector('[data-open-report=\"weekly\"]')");
+                awaitScript("document.querySelector('[data-open-report=\"weekly\"]') && document.getElementById('header-reports-button')");
+                assertEquals("true", evaluate("(() => {"
+                        + " const header = document.querySelector('header');"
+                        + " const reportsBtn = document.getElementById('header-reports-button');"
+                        + " const connBtn = document.getElementById('connection-button');"
+                        + " if (!header || !reportsBtn || !connBtn) return false;"
+                        + " const h = header.getBoundingClientRect();"
+                        + " const r = reportsBtn.getBoundingClientRect();"
+                        + " const c = connBtn.getBoundingClientRect();"
+                        + " return header.scrollWidth <= header.clientWidth + 1"
+                        + " && r.width > 0 && r.left >= h.left - 1 && r.right <= h.right + 1 && r.right <= window.innerWidth + 1"
+                        + " && c.width > 0 && c.left >= h.left - 1 && c.right <= h.right + 1 && c.right <= window.innerWidth + 1"
+                        + " && r.right <= c.left + 1 && Math.abs(r.top - c.top) <= 4;"
+                        + " })()"));
                 evaluate("document.querySelector('[data-open-report=\"weekly\"]').click()");
                 awaitScript("document.getElementById('page-title').textContent === '分析报告'");
                 awaitScript("document.querySelector('[data-report-project=\"token-monitor\"]')");
                 assertEquals("true", evaluate("document.getElementById('reports-summary-card').textContent.includes('2026-W47')"));
                 awaitScript("document.getElementById('reports-openclaw-status') && document.getElementById('reports-ai-analysis') && document.getElementById('reports-thirdparty-quotas')");
                 assertEquals("true", evaluate("document.getElementById('reports-openclaw-status').textContent.includes('openclaw-weixin')"));
-                assertEquals("true", evaluate("document.getElementById('reports-ai-analysis').textContent.includes('deepseek-chat')"));
                 assertEquals("true", evaluate("document.getElementById('reports-thirdparty-quotas').textContent.includes('Team New API')"));
+                assertEquals("true", evaluate("(() => {"
+                        + " const ai = document.getElementById('reports-ai-analysis');"
+                        + " if (!ai) return false;"
+                        + " const h2 = ai.querySelector('h2');"
+                        + " const table = ai.querySelector('table');"
+                        + " const strongs = ai.querySelectorAll('strong');"
+                        + " const items = ai.querySelectorAll('li');"
+                        + " return ai.textContent.includes('deepseek-chat')"
+                        + " && Boolean(h2) && h2.textContent.includes('核心结论')"
+                        + " && Boolean(table) && table.querySelectorAll('th').length === 3 && table.textContent.includes('token-monitor')"
+                        + " && strongs.length >= 4 && items.length >= 2"
+                        + " && !ai.textContent.includes('**') && !ai.textContent.includes('|---|') && !ai.textContent.includes('| --- |')"
+                        + " && ai.textContent.includes('<img id=unsafe-ai>') && !document.getElementById('unsafe-ai');"
+                        + " })()"));
+
+                evaluate("document.getElementById('reports-open-ai-window').click()");
+                awaitScript("document.querySelector('#report-window-dialog[open]') && document.getElementById('report-win-核心结论') && document.querySelector('#report-window-dialog table')");
+                assertEquals("true", evaluate("(() => {"
+                        + " const dlg = document.querySelector('#report-window-dialog[open]');"
+                        + " if (!dlg) return false;"
+                        + " const rect = dlg.getBoundingClientRect();"
+                        + " const aiH2 = document.getElementById('report-win-核心结论');"
+                        + " return rect.width > 0 && rect.height > 0 && getComputedStyle(dlg).display !== 'none'"
+                        + " && Boolean(aiH2) && aiH2.tagName === 'H2' && aiH2.textContent.includes('核心结论')"
+                        + " && dlg.querySelector('table').textContent.includes('token-monitor')"
+                        + " && dlg.textContent.includes('<img id=unsafe-ai>') && !document.getElementById('unsafe-ai');"
+                        + " })()"));
+
+                evaluate("document.querySelector('[data-report-window-tab=\"rendered\"]').click()");
+                awaitScript("document.querySelector('[data-report-window-tab=\"rendered\"]').getAttribute('aria-selected') === 'true' && document.querySelector('#report-window-dialog h1')");
+                assertEquals("true", evaluate("(() => {"
+                        + " const dlg = document.getElementById('report-window-dialog');"
+                        + " const h1 = dlg ? dlg.querySelector('h1') : null;"
+                        + " return Boolean(h1) && h1.textContent.trim() === 'Weekly Report 2026-W47'"
+                        + " && dlg.textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report');"
+                        + " })()"));
+
+                evaluate("document.querySelector('[data-report-font-scale=\"lg\"]').click()");
+                awaitScript("document.querySelector('[data-report-font-scale=\"lg\"]').getAttribute('aria-pressed') === 'true'");
+                evaluate("document.querySelector('[data-report-window-tab=\"source\"]').click()");
+                awaitScript("document.getElementById('report-window-source-pre') && document.getElementById('report-window-source-pre').textContent.includes('# Weekly Report 2026-W47')");
+                assertEquals("true", evaluate("document.getElementById('report-window-source-pre').className.includes('text-[12.5px]') && document.getElementById('report-window-source-pre').textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report')"));
+
+                assertEquals("true", evaluate("window.handleBackNavigation()"));
+                awaitScript("!document.querySelector('#report-window-dialog[open]')");
+                assertEquals("true", evaluate("document.getElementById('page-title').textContent === '分析报告' && Boolean(document.getElementById('reports-view'))"));
+
                 evaluate("document.querySelector('[data-report-view-mode=\"markdown\"]').click()");
-                awaitScript("document.getElementById('reports-markdown-pre').textContent.includes('# Weekly Report 2026-W47')");
+                awaitScript("document.getElementById('reports-markdown-rendered') && document.querySelector('#reports-markdown-rendered h1')");
+                assertEquals("true", evaluate("document.querySelector('#reports-markdown-rendered h1').textContent.trim() === 'Weekly Report 2026-W47' && document.getElementById('reports-markdown-rendered').textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report')"));
+                evaluate("document.getElementById('reports-markdown-source-toggle').click()");
+                awaitScript("document.getElementById('reports-markdown-pre') && document.getElementById('reports-markdown-pre').textContent.includes('# Weekly Report 2026-W47')");
                 assertEquals("true", evaluate("document.getElementById('reports-markdown-pre').textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report')"));
+
                 assertEquals("true", evaluate("window.handleBackNavigation()"));
                 awaitScript("document.getElementById('page-title').textContent === '用量总览' && !document.getElementById('reports-view')");
                 assertTrue(requests.stream().anyMatch(line -> line.startsWith("GET /api/reports?")));
