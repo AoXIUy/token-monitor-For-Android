@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock,
   Download,
+  FileText,
   LayoutGrid,
   Laptop,
   MessageSquare,
@@ -22,6 +23,7 @@ import { DevicesView } from './components/DevicesView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LimitsView } from './components/LimitsView';
 import { OverviewView } from './components/OverviewView';
+import { ReportWindowDialog, type ReportWindowTab } from './components/ReportWindowDialog';
 import { ReportsView } from './components/ReportsView';
 import { SessionDetailView } from './components/SessionDetailView';
 import { SessionsView } from './components/SessionsView';
@@ -116,6 +118,8 @@ function Dashboard({
   const [deadlineTick, setDeadlineTick] = useState(0);
   const [revealAppUpdate, setRevealAppUpdate] = useState(false);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [reportWindowOpen, setReportWindowOpen] = useState(false);
+  const [reportWindowTab, setReportWindowTab] = useState<ReportWindowTab>('ai');
   const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
@@ -123,6 +127,12 @@ function Dashboard({
       setBreakdownKind('clients');
     }
   }, [device, breakdownKind]);
+
+  useEffect(() => {
+    if ((!connection || page !== 'reports') && reportWindowOpen) {
+      setReportWindowOpen(false);
+    }
+  }, [connection, page, reportWindowOpen]);
 
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
@@ -152,12 +162,32 @@ function Dashboard({
 
   const setPage = (next: PageId) => {
     setDevicePickerOpen(false);
+    if (next !== 'reports') setReportWindowOpen(false);
     update((previous) => ({ ...previous, page: next }));
     setOpenSessions(new Set());
     setSessionLimit(40);
     if (next === 'limits' && quotaTab === 'subscriptions') {
       window.HubNative?.subscriptions?.();
     }
+    window.scrollTo(0, 0);
+  };
+  const openReportsZone = (
+    granularity: ReportGranularity = 'daily',
+    openWindow = false,
+    tab: ReportWindowTab = 'ai',
+  ) => {
+    setDevicePickerOpen(false);
+    setReportWindowTab(tab);
+    setReportWindowOpen(openWindow);
+    update((previous) => ({
+      ...previous,
+      page: 'reports',
+      reports: {
+        ...previous.reports,
+        granularity,
+        periodKey: 'current',
+      },
+    }));
     window.scrollTo(0, 0);
   };
   const setPeriod = (next: PeriodId) => {
@@ -510,13 +540,13 @@ function Dashboard({
       />
 
       <div className="max-w-[440px] mx-auto min-h-screen flex flex-col relative z-10">
-        <header className="sticky top-0 z-30 min-h-14 py-1.5 px-4 flex items-center justify-between gap-4 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
+        <header className="sticky top-0 z-30 min-h-14 py-1.5 px-4 flex items-center justify-between gap-2 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
           <button
             type="button"
             onClick={() => setPage('overview')}
-            className="flex items-center gap-2.5 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] shrink-0 group"
+            className="flex items-center gap-2 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] shrink-0 group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.22)] group-hover:border-sky-400/50 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.22)] group-hover:border-sky-400/50 transition-colors shrink-0">
               <Activity className="w-4 h-4" />
             </div>
             <span className="text-sm font-bold tracking-tight text-white whitespace-nowrap">
@@ -524,16 +554,31 @@ function Dashboard({
             </span>
           </button>
 
-          <button
-            id="connection-button"
-            type="button"
-            onClick={() => setPage('settings')}
-            aria-label="连接设置"
-            className="min-h-[40px] px-3.5 py-1.5 rounded-full glass-pill-bar hover:border-white/25 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
-          >
-            <i id="status-dot" className={`w-2 h-2 rounded-full ${statusDotColor}`} />
-            <span id="status-label">{statusLabel}</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {connection && page !== 'reports' && (
+              <button
+                id="header-reports-button"
+                type="button"
+                aria-label="打开报告专区"
+                onClick={() => openReportsZone('daily', false)}
+                className="min-h-[40px] px-2.5 py-1.5 rounded-full glass-pill-bar hover:border-sky-400/35 inline-flex items-center gap-1 text-xs font-semibold text-sky-200 transition-colors whitespace-nowrap shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+                <span>报告</span>
+              </button>
+            )}
+
+            <button
+              id="connection-button"
+              type="button"
+              onClick={() => setPage('settings')}
+              aria-label="连接设置"
+              className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+            >
+              <i id="status-dot" className={`w-2 h-2 rounded-full shrink-0 ${statusDotColor}`} />
+              <span id="status-label">{statusLabel}</span>
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 px-4 pt-4 pb-24">
@@ -543,7 +588,11 @@ function Dashboard({
                 id="eyebrow"
                 className="text-[11px] font-medium tracking-wide text-sky-400 mb-0.5"
               >
-                {page === 'settings' ? '多设备同步与安全凭据' : 'AI 遥测与额度监控'}
+                {page === 'settings'
+                  ? '多设备同步与安全凭据'
+                  : page === 'reports'
+                    ? '智能分析 · 周期报告专区'
+                    : 'AI 遥测与额度监控'}
               </p>
               <h1 id="page-title" className="text-2xl font-bold tracking-tight text-white">
                 {PAGE_LABELS[page]}
@@ -832,6 +881,32 @@ function Dashboard({
                 isBrowserPreview ? handleSimulateAutoUpdateToggle : undefined
               }
             />
+          ) : page === 'reports' ? (
+            <div id="content">
+              <ReportsView
+                reports={state.reports}
+                providers={selected.providers}
+                connected={Boolean(connection)}
+                foreground={foreground}
+                onBack={() => setPage('overview')}
+                onSelectGranularity={(granularity) => {
+                  queryReportsList('', 50);
+                  queryReportDetail(granularity, 'current');
+                }}
+                onSelectPeriodKey={(granularity, periodKey) => {
+                  queryReportDetail(granularity, periodKey);
+                }}
+                onRefresh={(granularity, periodKey) => {
+                  queryReportsList('', 50);
+                  queryReportDetail(granularity, periodKey);
+                }}
+                onOpenWindow={(tab) => {
+                  setReportWindowTab(tab);
+                  setReportWindowOpen(true);
+                }}
+                onCancel={clearReports}
+              />
+            </div>
           ) : !stats ? (
             <>
               {page === 'overview' && connection && (
@@ -909,17 +984,10 @@ function Dashboard({
                     setSessionTool(toolId);
                   }}
                   onOpenReports={(granularity: ReportGranularity) => {
-                    setDevicePickerOpen(false);
-                    update((previous) => ({
-                      ...previous,
-                      page: 'reports',
-                      reports: {
-                        ...previous.reports,
-                        granularity,
-                        periodKey: 'current',
-                      },
-                    }));
-                    window.scrollTo(0, 0);
+                    openReportsZone(granularity, false);
+                  }}
+                  onOpenReportWindow={(granularity: ReportGranularity = 'daily') => {
+                    openReportsZone(granularity, true, 'ai');
                   }}
                 />
                 </>
@@ -999,28 +1067,6 @@ function Dashboard({
                   onClearConversation={clearConversation}
                 />
               )}
-
-              {page === 'reports' && (
-                <ReportsView
-                  reports={state.reports}
-                  providers={selected.providers}
-                  connected={Boolean(connection)}
-                  foreground={foreground}
-                  onBack={() => setPage('overview')}
-                  onSelectGranularity={(granularity) => {
-                    queryReportsList('', 50);
-                    queryReportDetail(granularity, 'current');
-                  }}
-                  onSelectPeriodKey={(granularity, periodKey) => {
-                    queryReportDetail(granularity, periodKey);
-                  }}
-                  onRefresh={(granularity, periodKey) => {
-                    queryReportsList('', 50);
-                    queryReportDetail(granularity, periodKey);
-                  }}
-                  onCancel={clearReports}
-                />
-              )}
             </div>
           )}
         </main>
@@ -1040,6 +1086,14 @@ function Dashboard({
           }}
           onOpenDevicesPage={() => setPage('devices')}
           onClose={() => setDevicePickerOpen(false)}
+        />
+
+        <ReportWindowDialog
+          open={reportWindowOpen && page === 'reports' && Boolean(connection)}
+          activeTab={reportWindowTab}
+          onChangeTab={setReportWindowTab}
+          onClose={() => setReportWindowOpen(false)}
+          reports={state.reports}
         />
 
         <nav

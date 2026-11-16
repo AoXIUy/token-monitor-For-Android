@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
+  ArrowUpRight,
   BarChart3,
+  BookOpen,
   Bot,
   Check,
+  Code2,
   Copy,
   FileText,
   FolderGit2,
@@ -22,6 +26,8 @@ import { MonitorModel } from '../model/monitorModel';
 import { reportErrorLabel } from '../reportsState';
 import type { LimitProvider, ReportGranularity, ReportsState } from '../types/monitor';
 import { clientName, clientTone, copyTextToClipboard, formatExact, formatShortTime, providerName } from '../utils/formatters';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import type { ReportWindowTab } from './ReportWindowDialog';
 
 interface ReportsViewProps {
   reports: ReportsState;
@@ -32,6 +38,7 @@ interface ReportsViewProps {
   onSelectGranularity: (granularity: ReportGranularity) => void;
   onSelectPeriodKey: (granularity: ReportGranularity, periodKey: string) => void;
   onRefresh: (granularity: ReportGranularity, periodKey: string) => void;
+  onOpenWindow: (tab: ReportWindowTab) => void;
   onCancel: () => void;
 }
 
@@ -73,11 +80,15 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   onSelectGranularity,
   onSelectPeriodKey,
   onRefresh,
+  onOpenWindow,
   onCancel,
 }) => {
   const [viewMode, setViewMode] = useState<'structured' | 'markdown'>('structured');
+  const [markdownSubMode, setMarkdownSubMode] = useState<'rendered' | 'source'>('rendered');
   const [copied, setCopied] = useState(false);
   const [aiCopied, setAiCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  const aiCopyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!foreground) return;
@@ -85,34 +96,60 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     return () => {
       onCancel();
     };
-    // Trigger on entry / granularity / periodKey / connection changes via explicit callbacks
+    // Trigger on entry / connection / foreground changes via explicit callbacks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foreground, connected]);
 
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      if (aiCopyTimerRef.current !== null) window.clearTimeout(aiCopyTimerRef.current);
+    };
+  }, []);
+
+  const matchingArchiveItems = useMemo(
+    () => reports.items.filter((item) => item.granularity === reports.granularity),
+    [reports.items, reports.granularity],
+  );
+
+  const aiReadyArchiveCount = useMemo(
+    () => matchingArchiveItems.filter((item) => item.hasAiAnalysis).length,
+    [matchingArchiveItems],
+  );
+
   const periodChoices = useMemo(() => {
-    const matching = reports.items.filter((item) => item.granularity === reports.granularity);
-    const choices: Array<{ key: string; label: string; isCurrentOption?: boolean }> = [
-      { key: 'current', label: '当期实时', isCurrentOption: true },
-    ];
+    const choices: Array<{
+      key: string;
+      label: string;
+      isCurrentOption?: boolean;
+      hasAiAnalysis?: boolean;
+    }> = [{ key: 'current', label: '当期实时', isCurrentOption: true }];
     const seen = new Set<string>(['current']);
-    for (const item of matching) {
+    for (const item of matchingArchiveItems) {
       if (seen.has(item.periodKey)) continue;
       seen.add(item.periodKey);
-      choices.push({ key: item.periodKey, label: item.periodKey });
+      choices.push({
+        key: item.periodKey,
+        label: item.periodKey,
+        hasAiAnalysis: Boolean(item.hasAiAnalysis),
+      });
     }
     return choices;
-  }, [reports.items, reports.granularity]);
+  }, [matchingArchiveItems]);
 
   const report = reports.report;
   const isLoading = reports.detailLoading || reports.listLoading;
   const activeError = reports.detailError || (!report && reports.listError ? reports.listError : '');
+  const activeGranularityLabel =
+    GRANULARITY_TABS.find((t) => t.id === reports.granularity)?.label || reports.granularity;
 
   const handleCopyMarkdown = async () => {
     if (!reports.markdown) return;
     const ok = await copyTextToClipboard(reports.markdown);
     if (ok) {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1800);
     }
   };
 
@@ -121,12 +158,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     const ok = await copyTextToClipboard(reports.aiAnalysis.summaryMarkdown);
     if (ok) {
       setAiCopied(true);
-      window.setTimeout(() => setAiCopied(false), 1800);
+      if (aiCopyTimerRef.current !== null) window.clearTimeout(aiCopyTimerRef.current);
+      aiCopyTimerRef.current = window.setTimeout(() => setAiCopied(false), 1800);
     }
   };
 
   const thirdPartyProviders = useMemo(
-    () => providers.filter((p) => p.provider === 'thirdparty' || (p.balance && p.balance.amount !== null && p.balance.amount !== undefined)),
+    () =>
+      providers.filter(
+        (p) =>
+          p.provider === 'thirdparty' ||
+          (p.balance && p.balance.amount !== null && p.balance.amount !== undefined),
+      ),
     [providers],
   );
 
@@ -134,6 +177,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     if (!report?.timeline?.length) return 0;
     return Math.max(1, ...report.timeline.map((row) => row.tokens));
   }, [report]);
+
+  const preferredWindowTab: ReportWindowTab =
+    viewMode === 'markdown'
+      ? 'rendered'
+      : reports.aiAnalysis?.summaryMarkdown
+        ? 'ai'
+        : 'rendered';
 
   return (
     <div id="reports-view" className="space-y-3.5">
@@ -143,31 +193,30 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           id="reports-back"
           type="button"
           onClick={onBack}
-          className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 transition-colors"
+          className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 transition-colors whitespace-nowrap shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>返回总览</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          {reports.markdown && (
-            <button
-              id="reports-copy-markdown"
-              type="button"
-              onClick={handleCopyMarkdown}
-              className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-sky-400/40 inline-flex items-center gap-1.5 text-xs font-semibold text-sky-300 transition-colors"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? '已复制 MD' : '复制 MD'}</span>
-            </button>
-          )}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button
+            id="reports-open-window"
+            type="button"
+            onClick={() => onOpenWindow(preferredWindowTab)}
+            className="min-h-[40px] px-3.5 py-1.5 rounded-full bg-gradient-to-r from-violet-500/25 via-sky-500/20 to-emerald-400/15 hover:from-violet-500/35 hover:to-sky-500/30 border border-sky-400/35 inline-flex items-center gap-1.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(56,189,248,0.16)] transition-all whitespace-nowrap shrink-0"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-sky-300" />
+            <span>报告窗口</span>
+          </button>
+
           <button
             id="reports-refresh"
             type="button"
             disabled={isLoading}
             onClick={() => onRefresh(reports.granularity, reports.periodKey || 'current')}
             aria-label="刷新分析报告"
-            className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 disabled:opacity-45 transition-colors"
+            className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 disabled:opacity-45 transition-colors whitespace-nowrap shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-sky-400' : ''}`} />
             <span>刷新</span>
@@ -205,60 +254,89 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       </div>
 
       {/* 期次选择与视图切换 */}
-      <div className="flex items-center justify-between gap-2">
-        <div
-          id="reports-period-chips"
-          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0"
-        >
-          {periodChoices.map((choice) => {
-            const active = (reports.periodKey || 'current') === choice.key;
-            return (
-              <button
-                key={choice.key}
-                type="button"
-                data-report-period={choice.key}
-                onClick={() => onSelectPeriodKey(reports.granularity, choice.key)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors border ${
-                  active
-                    ? 'bg-sky-400/20 text-sky-200 border-sky-400/40'
-                    : 'bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-slate-200'
-                }`}
-              >
-                {choice.label}
-              </button>
-            );
-          })}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div
+            id="reports-period-chips"
+            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0"
+          >
+            {periodChoices.map((choice) => {
+              const active = (reports.periodKey || 'current') === choice.key;
+              return (
+                <button
+                  key={choice.key}
+                  type="button"
+                  data-report-period={choice.key}
+                  onClick={() => onSelectPeriodKey(reports.granularity, choice.key)}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors border inline-flex items-center gap-1.5 ${
+                    active
+                      ? 'bg-sky-400/20 text-sky-200 border-sky-400/40'
+                      : 'bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-slate-200'
+                  }`}
+                >
+                  {choice.hasAiAnalysis && (
+                    <i
+                      aria-hidden="true"
+                      title="包含 AI 智能分析"
+                      className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(167,139,250,0.8)] shrink-0"
+                    />
+                  )}
+                  <span>{choice.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="inline-flex rounded-xl bg-white/[0.04] border border-white/[0.08] p-0.5 shrink-0">
+            <button
+              type="button"
+              data-report-view-mode="structured"
+              aria-pressed={viewMode === 'structured'}
+              onClick={() => setViewMode('structured')}
+              className={`min-h-[30px] px-2.5 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1 transition-colors ${
+                viewMode === 'structured'
+                  ? 'bg-sky-400/20 text-sky-200 border border-sky-400/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BarChart3 className="w-3 h-3" />
+              <span>图表</span>
+            </button>
+            <button
+              type="button"
+              data-report-view-mode="markdown"
+              aria-pressed={viewMode === 'markdown'}
+              onClick={() => setViewMode('markdown')}
+              className={`min-h-[30px] px-2.5 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1 transition-colors ${
+                viewMode === 'markdown'
+                  ? 'bg-sky-400/20 text-sky-200 border border-sky-400/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-3 h-3" />
+              <span>排版报告</span>
+            </button>
+          </div>
         </div>
 
-        <div className="inline-flex rounded-xl bg-white/[0.04] border border-white/[0.08] p-0.5 shrink-0">
-          <button
-            type="button"
-            data-report-view-mode="structured"
-            aria-pressed={viewMode === 'structured'}
-            onClick={() => setViewMode('structured')}
-            className={`min-h-[30px] px-2.5 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1 transition-colors ${
-              viewMode === 'structured'
-                ? 'bg-sky-400/20 text-sky-200 border border-sky-400/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <BarChart3 className="w-3 h-3" />
-            <span>图表</span>
-          </button>
-          <button
-            type="button"
-            data-report-view-mode="markdown"
-            aria-pressed={viewMode === 'markdown'}
-            onClick={() => setViewMode('markdown')}
-            className={`min-h-[30px] px-2.5 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1 transition-colors ${
-              viewMode === 'markdown'
-                ? 'bg-sky-400/20 text-sky-200 border border-sky-400/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FileText className="w-3 h-3" />
-            <span>原文</span>
-          </button>
+        {/* 归档与 AI 覆盖率摘要条 */}
+        <div
+          id="reports-archive-summary"
+          className="rounded-2xl bg-white/[0.025] border border-white/[0.07] px-3 py-2 flex items-center justify-between gap-2 text-[11px] text-slate-400"
+        >
+          <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
+            <Archive className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="font-mono-tabular truncate">
+              {activeGranularityLabel}已归档{' '}
+              <strong className="text-slate-200 font-semibold">{matchingArchiveItems.length}</strong> 期 ·{' '}
+              AI 已分析{' '}
+              <strong className="text-violet-300 font-semibold">{aiReadyArchiveCount}</strong> 期
+            </span>
+          </span>
+          <span className="text-[10px] text-slate-400 shrink-0 inline-flex items-center gap-1">
+            <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+            <span>含 AI 总结</span>
+          </span>
         </div>
       </div>
 
@@ -328,33 +406,92 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       )}
 
-      {/* Markdown 原文模式 */}
+      {/* 排版报告 / Markdown 模式 */}
       {report && viewMode === 'markdown' && (
         <section className="glass-panel rounded-3xl p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-xs font-semibold text-slate-100 truncate">
                 标准 Markdown 报告 ({report.reportId})
               </h2>
-              <p className="text-[11px] text-slate-400 font-mono-tabular">
-                {report.schema} · 可复制用于 AI MCP / Obsidian 分析
+              <p className="text-[11px] text-slate-400 font-mono-tabular truncate">
+                {report.schema} · 支持排版精读与源码复制
               </p>
             </div>
             <button
+              id="reports-open-doc-window"
               type="button"
-              onClick={handleCopyMarkdown}
-              className="px-3 py-1.5 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 border border-sky-400/30 text-xs font-semibold text-sky-200 shrink-0 inline-flex items-center gap-1"
+              onClick={() => onOpenWindow('rendered')}
+              className="min-h-[32px] px-2.5 py-1 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 border border-sky-400/30 text-[11px] font-semibold text-sky-200 shrink-0 inline-flex items-center gap-1 transition-colors"
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>窗口阅读</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="inline-flex rounded-xl bg-white/[0.04] border border-white/[0.08] p-0.5">
+              <button
+                id="reports-markdown-rendered-toggle"
+                type="button"
+                aria-pressed={markdownSubMode === 'rendered'}
+                onClick={() => setMarkdownSubMode('rendered')}
+                className={`min-h-[30px] px-2.5 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors ${
+                  markdownSubMode === 'rendered'
+                    ? 'bg-sky-400/20 text-sky-100 border border-sky-400/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>排版阅读</span>
+              </button>
+              <button
+                id="reports-markdown-source-toggle"
+                type="button"
+                aria-pressed={markdownSubMode === 'source'}
+                onClick={() => setMarkdownSubMode('source')}
+                className={`min-h-[30px] px-2.5 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors ${
+                  markdownSubMode === 'source'
+                    ? 'bg-sky-400/20 text-sky-100 border border-sky-400/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Code2 className="w-3 h-3" />
+                <span>原始 MD</span>
+              </button>
+            </div>
+
+            <button
+              id="reports-copy-markdown"
+              type="button"
+              disabled={!reports.markdown}
+              onClick={handleCopyMarkdown}
+              className="min-h-[30px] px-3 py-1 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-[11px] font-semibold text-slate-200 disabled:opacity-40 shrink-0 inline-flex items-center gap-1 transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5 text-sky-300" />}
               <span>{copied ? '已复制' : '复制全文'}</span>
             </button>
           </div>
-          <pre
-            id="reports-markdown-pre"
-            className="glass-inset rounded-2xl p-3.5 text-[11px] leading-relaxed font-mono-tabular text-slate-200 overflow-x-auto whitespace-pre-wrap break-words max-h-[65vh]"
-          >
-            {reports.markdown || '当前响应未包含 Markdown 文本。'}
-          </pre>
+
+          {markdownSubMode === 'rendered' ? (
+            <div id="reports-markdown-rendered" className="glass-inset rounded-2xl p-3.5 sm:p-4">
+              <MarkdownRenderer
+                markdown={reports.markdown}
+                variant="reader"
+                showFrontmatter
+                accent="sky"
+                idPrefix="reports-doc"
+                emptyText="当前响应未包含 Markdown 文本。"
+              />
+            </div>
+          ) : (
+            <pre
+              id="reports-markdown-pre"
+              className="glass-inset rounded-2xl p-3.5 text-[11px] leading-relaxed font-mono-tabular text-slate-200 overflow-x-auto whitespace-pre-wrap break-words max-h-[65vh] select-text"
+            >
+              {reports.markdown || '当前响应未包含 Markdown 文本。'}
+            </pre>
+          )}
         </section>
       )}
 
@@ -367,7 +504,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-400/15 text-sky-300 border border-sky-400/25">
-                    {GRANULARITY_TABS.find((t) => t.id === report.granularity)?.label || report.granularity}
+                    {activeGranularityLabel}
                   </span>
                   {report.period.isCurrent && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-400/15 text-emerald-300 border border-emerald-400/25">
@@ -479,40 +616,90 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
           {/* 1.5 第三方 AI API 智能分析总结 */}
           {(reports.aiAnalysis || reports.integrations?.ai?.enabled) && (
-            <section id="reports-ai-analysis" className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 space-y-0.5">
-                  <h3 className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+            <section
+              id="reports-ai-analysis"
+              className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3 border-violet-400/20"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                     <Bot className="w-4 h-4 text-violet-300 shrink-0" />
-                    <span>第三方 AI 智能分析</span>
+                    <h3 className="text-xs font-semibold text-slate-100">第三方 AI 智能分析</h3>
                     {reports.aiAnalysis?.stale && (
                       <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/25">
                         数据已更新
                       </span>
                     )}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 font-mono-tabular truncate">
+                    {reports.aiAnalysis?.tokenUsage && (
+                      <span
+                        title={`输入 ${formatExact(reports.aiAnalysis.tokenUsage.inputTokens)} · 输出 ${formatExact(reports.aiAnalysis.tokenUsage.outputTokens)}`}
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold font-mono-tabular bg-violet-400/15 text-violet-200 border border-violet-400/25"
+                      >
+                        {MonitorModel.compact(reports.aiAnalysis.tokenUsage.totalTokens)} tok
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-[11px] text-slate-400 font-mono-tabular truncate min-w-0 flex-1">
                     {reports.aiAnalysis
                       ? `${reports.aiAnalysis.providerLabel || reports.aiAnalysis.protocol} · ${reports.aiAnalysis.model} · ${formatShortTime(reports.aiAnalysis.generatedAt)}`
                       : `${reports.integrations?.ai?.providerLabel || reports.integrations?.ai?.protocol || 'AI'} · ${reports.integrations?.ai?.model || '未配置模型'}`}
                   </p>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      id="reports-open-ai-window"
+                      type="button"
+                      onClick={() => onOpenWindow('ai')}
+                      className="min-h-[30px] px-2.5 py-1 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/35 text-[11px] font-semibold text-violet-100 inline-flex items-center gap-1 transition-colors"
+                    >
+                      <BookOpen className="w-3 h-3" />
+                      <span>窗口精读</span>
+                    </button>
+                    {reports.aiAnalysis?.summaryMarkdown && (
+                      <button
+                        id="reports-copy-ai"
+                        type="button"
+                        onClick={handleCopyAiSummary}
+                        className="min-h-[30px] px-2.5 py-1 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-[11px] font-semibold text-slate-200 inline-flex items-center gap-1 transition-colors"
+                      >
+                        {aiCopied ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3 text-violet-300" />}
+                        <span>{aiCopied ? '已复制' : '复制分析'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {reports.aiAnalysis?.summaryMarkdown && (
-                  <button
-                    type="button"
-                    onClick={handleCopyAiSummary}
-                    className="px-2.5 py-1 rounded-xl bg-violet-400/15 hover:bg-violet-400/25 border border-violet-400/30 text-[11px] font-semibold text-violet-200 shrink-0 inline-flex items-center gap-1"
-                  >
-                    {aiCopied ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
-                    <span>{aiCopied ? '已复制' : '复制分析'}</span>
-                  </button>
-                )}
               </div>
 
-              {reports.aiAnalysis?.summaryMarkdown ? (
-                <div className="glass-inset rounded-2xl p-3.5 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                  {reports.aiAnalysis.summaryMarkdown}
+              {reports.aiAnalysis?.question && (
+                <div className="rounded-2xl bg-violet-500/10 border border-violet-400/25 px-3 py-2 text-[11px] text-violet-100 leading-relaxed">
+                  <span className="font-semibold text-violet-300">分析提问：</span>
+                  <span>{reports.aiAnalysis.question}</span>
                 </div>
+              )}
+
+              {reports.aiAnalysis?.summaryMarkdown ? (
+                <>
+                  <div className="glass-inset rounded-2xl p-3.5">
+                    <MarkdownRenderer
+                      markdown={reports.aiAnalysis.summaryMarkdown}
+                      variant="compact"
+                      accent="violet"
+                      idPrefix="reports-ai"
+                    />
+                  </div>
+                  <button
+                    id="reports-ai-window-cta"
+                    type="button"
+                    onClick={() => onOpenWindow('ai')}
+                    className="w-full min-h-[38px] px-3.5 py-2 rounded-2xl bg-violet-500/12 hover:bg-violet-500/20 border border-violet-400/25 text-[11px] font-semibold text-violet-200 flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <span className="truncate">在独立报告窗口精读 · 支持大字排版与目录跳转</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-violet-300 shrink-0" />
+                  </button>
+                </>
               ) : (
                 <p className="text-xs text-slate-400 leading-relaxed">
                   当前周期暂无缓存的 AI 分析结果；可在桌面端设置或 OpenClaw / MCP 对话中触发「AI 智能分析」。
@@ -587,6 +774,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <div className="space-y-2">
                 {report.signals.map((signal, idx) => {
                   const isWarn = signal.severity === 'warning' || signal.severity === 'alert';
+                  const hasValuePct =
+                    signal.valuePct !== undefined &&
+                    signal.valuePct !== null &&
+                    Number.isFinite(signal.valuePct);
                   return (
                     <div
                       key={`${signal.code}-${idx}`}
@@ -601,7 +792,36 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       ) : (
                         <Info className="w-3.5 h-3.5 text-sky-300 shrink-0 mt-0.5" />
                       )}
-                      <span>{signal.summary}</span>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {(signal.project || signal.model || hasValuePct) && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {signal.project && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono-tabular font-semibold bg-white/[0.08] text-white/95 max-w-[190px] truncate">
+                                {signal.project}
+                              </span>
+                            )}
+                            {signal.model && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono-tabular bg-white/[0.07] text-slate-200 max-w-[170px] truncate">
+                                {signal.model}
+                              </span>
+                            )}
+                            {hasValuePct && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono-tabular font-semibold ${
+                                  isWarn
+                                    ? 'bg-amber-400/20 text-amber-100'
+                                    : 'bg-sky-400/20 text-sky-100'
+                                }`}
+                              >
+                                {signal.valuePct! > 0 && signal.code.includes('delta')
+                                  ? `+${signal.valuePct!.toFixed(1)}%`
+                                  : `${signal.valuePct!.toFixed(1)}%`}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <p className="break-words">{signal.summary}</p>
+                      </div>
                     </div>
                   );
                 })}
