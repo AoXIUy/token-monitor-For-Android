@@ -180,6 +180,10 @@ export function useNativeMonitor() {
         window.dispatchEvent(new CustomEvent('tm-close-device-picker'));
         return true;
       }
+      if (document.querySelector('#report-window-dialog[open]')) {
+        window.dispatchEvent(new CustomEvent('tm-close-report-window'));
+        return true;
+      }
       if (current.current.page === 'reports') {
         update(previous => ({ ...previous, page: 'overview' }));
         window.scrollTo(0, 0);

@@ -208,3 +208,75 @@ test('malformed report payloads fail closed without throwing', async () => {
   assert.equal(state.reports.detailError, 'invalid_response');
   assert.equal(state.reports.report, null);
 });
+
+test('sanitizeUsageReport normalizes upstream signals[] project and percentage fields', async () => {
+  const { sanitizeUsageReport } = await reportsModule;
+
+  const report = sanitizeUsageReport({
+    granularity: 'weekly',
+    period: { key: '2026-W47' },
+    signals: [
+      {
+        code: 'top-project-concentration',
+        severity: 'warning',
+        projectKey: 'token-monitor-core',
+        projectLabel: 'Token Monitor Core',
+        tokenSharePct: 82.4,
+        summary: 'Top project "Token Monitor Core" accounts for 82.4% of total period tokens.',
+      },
+      {
+        code: 'project-key-fallback',
+        severity: 'info',
+        projectKey: 'fallback-repo',
+        tokenSharePct: 0,
+        summary: 'Fallback to projectKey with zero share preserved.',
+      },
+      {
+        code: 'low-cache-hit-rate',
+        severity: 'info',
+        cacheHitRatePct: 14.2,
+        summary: 'Cache hit rate is 14.2%.',
+      },
+      {
+        code: 'period-usage-drop',
+        severity: 'info',
+        tokenDeltaPct: -61.5,
+        summary: 'Token usage decreased by 61.5%.',
+      },
+      {
+        code: 'unpriced-tokens-present',
+        severity: 'warning',
+        unpricedSharePct: 12.8,
+        summary: '12.8% of tokens lack pricing data.',
+      },
+      {
+        code: 'explicit-precedence',
+        severity: 'info',
+        project: 'Explicit Project',
+        projectLabel: 'Ignored Label',
+        projectKey: 'ignored-key',
+        valuePct: 45,
+        tokenSharePct: 90,
+        summary: 'Explicit project and valuePct take precedence.',
+      },
+    ],
+  });
+
+  assert.ok(report);
+  assert.equal(report.signals.length, 6);
+
+  assert.equal(report.signals[0].project, 'Token Monitor Core');
+  assert.equal(report.signals[0].valuePct, 82.4);
+
+  assert.equal(report.signals[1].project, 'fallback-repo');
+  assert.equal(report.signals[1].valuePct, 0);
+
+  assert.equal(report.signals[2].project, undefined);
+  assert.equal(report.signals[2].valuePct, 14.2);
+
+  assert.equal(report.signals[3].valuePct, -61.5);
+  assert.equal(report.signals[4].valuePct, 12.8);
+
+  assert.equal(report.signals[5].project, 'Explicit Project');
+  assert.equal(report.signals[5].valuePct, 45);
+});

@@ -351,9 +351,14 @@ export function sanitizeUsageReport(raw) {
     signals: boundedArray(src.signals, 30).map((entry) => ({
       code: cleanText(entry?.code, 64),
       severity: cleanText(entry?.severity, 16) || 'info',
-      project: cleanText(entry?.project, 120) || undefined,
+      project: cleanText(entry?.project, 120) || cleanText(entry?.projectLabel, 120) || cleanText(entry?.projectKey, 120) || undefined,
       model: cleanText(entry?.model, 120) || undefined,
-      valuePct: nullableNum(entry?.valuePct) ?? undefined,
+      valuePct: nullableNum(entry?.valuePct)
+        ?? nullableNum(entry?.tokenSharePct)
+        ?? nullableNum(entry?.cacheHitRatePct)
+        ?? nullableNum(entry?.tokenDeltaPct)
+        ?? nullableNum(entry?.unpricedSharePct)
+        ?? undefined,
       summary: cleanText(entry?.summary, 400),
     })).filter((s) => Boolean(s.summary)),
   };

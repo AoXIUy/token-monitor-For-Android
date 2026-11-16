@@ -1105,15 +1105,23 @@ export function createDemoReports(nowMs: number = Date.now()): {
       ],
     };
 
+    const [p1, p2, p3] = report.projects;
+    const formatMinutes = (ms: number): string => {
+      const mins = Math.max(1, Math.round(ms / 60000));
+      if (mins < 60) return `${mins}m`;
+      const hours = Math.floor(mins / 60);
+      return `${hours}h ${mins % 60}m`;
+    };
+
     const markdown = [
       '---',
-      `schema: ${report.schema}`,
-      `reportId: ${report.reportId}`,
-      `granularity: ${granularity}`,
-      `periodKey: ${key}`,
-      `startDate: ${startDate}`,
-      `endDate: ${endDate}`,
-      `generatedAt: ${nowIso}`,
+      `schema: ${JSON.stringify(report.schema)}`,
+      `reportId: ${JSON.stringify(report.reportId)}`,
+      `granularity: ${JSON.stringify(granularity)}`,
+      `periodKey: ${JSON.stringify(key)}`,
+      `startDate: ${JSON.stringify(startDate)}`,
+      `endDate: ${JSON.stringify(endDate)}`,
+      `generatedAt: ${JSON.stringify(nowIso)}`,
       `totalTokens: ${totalTokens}`,
       `knownCostUsd: ${knownCostUsd}`,
       `projectCount: ${report.projects.length}`,
@@ -1121,17 +1129,72 @@ export function createDemoReports(nowMs: number = Date.now()): {
       '',
       `# Token Monitor ${granularity.toUpperCase()} 分析报告 · ${label}`,
       '',
+      `报告 ID: \`${report.reportId}\` · 时区: \`Asia/Shanghai\` · 活跃设备: ${report.hub.activeDeviceCount}/${report.hub.deviceCount}`,
+      '',
       '## 一、核心总览（Executive Summary）',
-      `- 总 Token：${totalTokens.toLocaleString('en-US')}`,
-      `- 已知费用：$${knownCostUsd.toFixed(2)}`,
-      `- 缓存命中率：75.43%`,
-      `- 活跃项目：${report.projects.length} 个`,
+      '',
+      '| 指标 | 数值 |',
+      '| --- | ---: |',
+      `| 总 Token 消耗 | ${totalTokens.toLocaleString('en-US')} |`,
+      `| 已知费用 (USD) | $${knownCostUsd.toFixed(2)} |`,
+      `| 输入 / 输出 Token | ${inputTokens.toLocaleString('en-US')} / ${outputTokens.toLocaleString('en-US')} |`,
+      `| 缓存读取 / 写入 | ${cacheReadTokens.toLocaleString('en-US')} / ${cacheWriteTokens.toLocaleString('en-US')} |`,
+      `| 缓存命中率 | 75.43% |`,
+      `| 消息 / 会话数 | ${report.summary.messageCount} / ${report.summary.sessionCount} |`,
+      `| 活跃项目 / 天数 | ${report.projects.length} / ${activeDays} |`,
+      `| 活跃时长 / 平均速率 | ${formatMinutes(report.summary.activeTimeMs)} / 76.6 tok/s |`,
+      `| 环比变化 (${report.summary.comparison?.previousPeriodKey || '上期'}) | +19.1% Tokens |`,
       '',
       '## 二、项目使用深度分析（Project Usage Analysis）',
+      '',
+      `归因来源: \`${report.coverage.projectAttributionSource}\` · 完整性: \`${report.coverage.projectsComplete}\``,
+      '',
       '| 排名 | 项目 | Token | 占比 | 已知费用 | 主力工具 | 主力模型 |',
       '| --- | --- | ---: | ---: | ---: | --- | --- |',
       ...report.projects.map((p, idx) =>
-        `| ${idx + 1} | ${p.label} | ${p.tokens.toLocaleString('en-US')} | ${p.tokenSharePct}% | $${p.costUsd.toFixed(2)} | ${p.clients[0]?.client || '-'} | ${p.models[0]?.model || '-'} |`
+        `| ${idx + 1} | \`${p.label}\` | ${p.tokens.toLocaleString('en-US')} | ${p.tokenSharePct.toFixed(1)}% | $${p.costUsd.toFixed(2)} | ${p.clients[0]?.client || '-'} | ${p.models[0]?.model || '-'} |`
+      ),
+      '',
+      '## 三、工具与模型效率（Tools & Models Efficiency）',
+      '',
+      '### AI 编程工具（Clients）',
+      '',
+      '| 工具 | Token | 占比 | 已知费用 | 缓存命中率 | 输出 Token | 消息数 |',
+      '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+      ...report.clients.map((c) =>
+        `| ${c.client} | ${c.tokens.toLocaleString('en-US')} | ${c.tokenSharePct.toFixed(1)}% | $${c.costUsd.toFixed(2)} | ${c.cacheHitRatePct !== null ? `${c.cacheHitRatePct.toFixed(1)}%` : '—'} | ${c.outputTokens.toLocaleString('en-US')} | ${c.messageCount} |`
+      ),
+      '',
+      '### 主力模型（Models）',
+      '',
+      '| 模型 | Token | 占比 | 已知费用 | 缓存命中率 | 速率 (tok/s) |',
+      '| --- | ---: | ---: | ---: | ---: | ---: |',
+      ...report.models.map((m) =>
+        `| \`${m.model}\` | ${m.tokens.toLocaleString('en-US')} | ${m.tokenSharePct.toFixed(1)}% | $${m.costUsd.toFixed(2)} | ${m.cacheHitRatePct !== null ? `${m.cacheHitRatePct.toFixed(1)}%` : '—'} | ${m.avgOutputTokensPerSec ?? '—'} |`
+      ),
+      '',
+      '## 四、时间趋势与多设备分布（Timeline & Devices）',
+      '',
+      '### 逐日用量趋势',
+      '',
+      '| 日期 | Token | 已知费用 | 活跃时长 | 主力工具 | 主力模型 |',
+      '| --- | ---: | ---: | ---: | --- | --- |',
+      ...report.timeline.map((row) =>
+        `| ${row.date} | ${row.tokens.toLocaleString('en-US')} | $${row.costUsd.toFixed(2)} | ${formatMinutes(row.activeTimeMs)} | ${row.topClient} | ${row.topModel} |`
+      ),
+      '',
+      '### 设备贡献（Devices）',
+      '',
+      '| 设备 ID | 主机名 | 系统 | 状态 | Token | 占比 | 已知费用 |',
+      '| --- | --- | --- | --- | ---: | ---: | ---: |',
+      ...report.devices.map((d) =>
+        `| \`${d.deviceId}\` | ${d.hostname} | ${d.platform} | ${d.stale ? 'stale' : 'active'} | ${d.tokens.toLocaleString('en-US')} | ${d.tokenSharePct.toFixed(1)}% | $${d.costUsd.toFixed(2)} |`
+      ),
+      '',
+      '## 五、自动化信号（Automated Signals）',
+      '',
+      ...report.signals.map((sig) =>
+        `- **[${sig.severity.toUpperCase()}] \`${sig.code}\`**: ${sig.summary}`
       ),
     ].join('\n');
 
@@ -1144,12 +1207,28 @@ export function createDemoReports(nowMs: number = Date.now()): {
       language: 'zh-CN',
       question: null,
       summaryMarkdown: [
-        '### 核心结论',
-        `- 本周期总消耗 **${totalTokens.toLocaleString('en-US')} tokens**，已知费用 **$${knownCostUsd.toFixed(2)}**，整体缓存命中率 **75.4%**。`,
-        '- **token-monitor-core** 占总用量 50% 以上，主力工具为 Claude Code 与 Antigravity。',
-        '- **Team New API** 第三方余额 **$42.50**（本月已用 $18.40），建议保持高缓存命中率以控制长上下文费用。',
+        `# ${label} · AI 用量深度分析`,
+        '',
+        '## 核心结论',
+        `- 本周期共消耗 **${totalTokens.toLocaleString('en-US')} tokens**，已知费用 **$${knownCostUsd.toFixed(2)}**（环比上期 **+19.1%**），整体缓存命中率 **75.4%**。`,
+        `- 核心工作量集中于 \`${p1.label}\` 与 \`${p2.label}\`，合计贡献 **${(p1.tokenSharePct + p2.tokenSharePct).toFixed(1)}%** 的 Token 消耗。`,
+        '- **Team New API** 第三方余额 **$42.50**（本月已用 **$18.40**），`DeepSeek Platform` 与订阅配额余量充足。',
+        '',
+        '## 项目与研发重点',
+        '| 项目 | Tokens | 成本 | 占比 | 观察 |',
+        '| --- | ---: | ---: | ---: | --- |',
+        `| \`${p1.label}\` | ${p1.tokens.toLocaleString('en-US')} | $${p1.costUsd.toFixed(2)} | ${p1.tokenSharePct.toFixed(1)}% | Claude Code + Codex 协同推进，上下文复用稳定 |`,
+        `| \`${p2.label}\` | ${p2.tokens.toLocaleString('en-US')} | $${p2.costUsd.toFixed(2)} | ${p2.tokenSharePct.toFixed(1)}% | Antigravity + \`gemini-2.5-pro\` 聚焦采集链路调试 |`,
+        `| \`${p3.label}\` | ${p3.tokens.toLocaleString('en-US')} | $${p3.costUsd.toFixed(2)} | ${p3.tokenSharePct.toFixed(1)}% | Cursor + \`deepseek-r1\` 含少量未定价推理调用 |`,
+        '',
+        '> **诊断提示**：`claude-sonnet-4-20250514` 缓存命中率达到 **81.9%**（输出速率 **82.4 tok/s**），长对话边际成本控制理想；但 `cursor` 工具链缓存命中仅 **50.3%**，存在会话切分过碎的优化空间。',
+        '',
+        '## 效率与额度建议',
+        `1. **收敛短会话碎片**：在 \`${p3.label}\` 网关调试中尽量延续同一上下文窗口，避免反复重建全量提示词。`,
+        `2. **补全模型定价映射**：当前包含 **${report.summary.unpricedTokens.toLocaleString('en-US')}** 个未定价 Token，建议在桌面端费率表中补充 \`deepseek-r1\` 私有路由单价。`,
+        '3. **保持双端与推送协同**：`MacBook Pro M4 Max`（66.3%）与 `Ubuntu Workstation`（33.7%）在线稳定，可继续通过 `openclaw-weixin` 自动接收周期复盘。',
       ].join('\n'),
-      tokenUsage: { inputTokens: 820, outputTokens: 195, totalTokens: 1015 },
+      tokenUsage: { inputTokens: 960, outputTokens: 340, totalTokens: 1300 },
       stale: false,
     };
 

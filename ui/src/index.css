@@ -104,6 +104,17 @@
   border-radius: 9999px;
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* The native parent sizes the whole WebView inside the safe area, including
    fixed controls. Do not add CSS safe-area padding a second time. */
 button, input, select, summary {
@@ -138,7 +149,8 @@ input, textarea, dd {
   }
 }
 
-.device-picker-sheet[open] {
+.device-picker-sheet[open],
+.report-window-dialog[open] {
   animation: sheet-rise 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
