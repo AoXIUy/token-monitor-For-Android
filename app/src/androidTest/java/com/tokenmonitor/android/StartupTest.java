@@ -1149,6 +1149,81 @@ public final class StartupTest {
         assertEquals("true", evaluate("document.querySelector('[data-limits-mode-toggle]').getAttribute('aria-pressed') === 'true'"));
     }
 
+    @Test public void reportsViewFetchesAuthenticatedHubReportsAndHandlesBackNavigation() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            if (header.startsWith("Authorization: ")) authorizations.add(header);
+                        }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/reports/weekly/current?format=both")) {
+                            body = "{\"ok\":true,\"report\":{\"schemaVersion\":1,\"schema\":\"token-monitor-report/v1\","
+                                    + "\"reportId\":\"weekly:2026-W47\",\"granularity\":\"weekly\","
+                                    + "\"period\":{\"key\":\"2026-W47\",\"label\":\"2026-W47 (2026-11-16 ~ 2026-11-22)\","
+                                    + "\"startDate\":\"2026-11-16\",\"endDate\":\"2026-11-22\",\"isCurrent\":true,\"generatedAt\":\"2026-11-16T14:00:00Z\"},"
+                                    + "\"hub\":{\"runtime\":\"node-hub\",\"deviceCount\":1,\"activeDeviceCount\":1,\"staleDeviceCount\":0},"
+                                    + "\"coverage\":{\"tokenComponentsComplete\":true,\"projectsComplete\":true,\"projectAttributionSource\":\"daily-snapshots\",\"historyComplete\":true},"
+                                    + "\"summary\":{\"totalTokens\":5000,\"knownCostUsd\":0.15,\"cacheHitRatePct\":80,\"activeDays\":1,\"projectCount\":1,\"throughput\":{\"avgOutputTokensPerSec\":50}},"
+                                    + "\"projects\":[{\"key\":\"token-monitor\",\"label\":\"token-monitor\",\"tokens\":5000,\"costUsd\":0.15,\"tokenSharePct\":100,\"costSharePct\":100,"
+                                    + "\"clients\":[{\"client\":\"codex\",\"tokens\":5000,\"sharePct\":100}],\"models\":[{\"model\":\"gpt-5\",\"tokens\":5000,\"sharePct\":100}]}],"
+                                    + "\"clients\":[],\"models\":[],\"devices\":[],\"timeline\":[],\"signals\":[]},"
+                                    + "\"markdown\":\"# Weekly Report 2026-W47\\n\\n<img id=unsafe-report>\"}";
+                        } else if (first.contains("/api/reports?")) {
+                            body = "{\"ok\":true,\"config\":{\"enabled\":true,\"daily\":true,\"weekly\":true,\"monthly\":true},"
+                                    + "\"reports\":[{\"reportId\":\"weekly:2026-W47\",\"granularity\":\"weekly\",\"periodKey\":\"2026-W47\","
+                                    + "\"label\":\"2026-W47\",\"startDate\":\"2026-11-16\",\"endDate\":\"2026-11-22\",\"totalTokens\":5000,\"knownCostUsd\":0.15,\"projectCount\":1}]}";
+                        } else {
+                            body = testStats(false);
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-reports-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'reports-test-secret', true)");
+                awaitScript("document.querySelector('[data-open-report=\"weekly\"]')");
+                evaluate("document.querySelector('[data-open-report=\"weekly\"]').click()");
+                awaitScript("document.getElementById('page-title').textContent === '分析报告'");
+                awaitScript("document.querySelector('[data-report-project=\"token-monitor\"]')");
+                assertEquals("true", evaluate("document.getElementById('reports-summary-card').textContent.includes('2026-W47')"));
+                evaluate("document.querySelector('[data-report-view-mode=\"markdown\"]').click()");
+                awaitScript("document.getElementById('reports-markdown-pre').textContent.includes('# Weekly Report 2026-W47')");
+                assertEquals("true", evaluate("document.getElementById('reports-markdown-pre').textContent.includes('<img id=unsafe-report>') && !document.getElementById('unsafe-report')"));
+                assertEquals("true", evaluate("window.handleBackNavigation()"));
+                awaitScript("document.getElementById('page-title').textContent === '用量总览' && !document.getElementById('reports-view')");
+                assertTrue(requests.stream().anyMatch(line -> line.startsWith("GET /api/reports?")));
+                assertTrue(requests.stream().anyMatch(line -> line.startsWith("GET /api/reports/weekly/current?format=both")));
+                assertTrue(requests.stream().allMatch(line -> line.startsWith("GET ")));
+                assertFalse(authorizations.isEmpty());
+                assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer reports-test-secret")));
+            } finally {
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
     private static String testStats(boolean completed) throws Exception {
         String now = java.time.Instant.now().toString();
         org.json.JSONObject session = new org.json.JSONObject()

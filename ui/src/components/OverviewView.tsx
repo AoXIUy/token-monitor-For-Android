@@ -22,6 +22,7 @@ import {
   PageId,
   PeriodData,
   PeriodId,
+  ReportGranularity,
 } from '../types/monitor';
 import { clientTone, formatExact, PERIOD_LABELS, clientName, providerName } from '../utils/formatters';
 
@@ -45,6 +46,7 @@ interface OverviewViewProps {
   onNavigate?: (page: PageId) => void;
   onOpenSessionDetail?: (key: string) => void;
   onSelectToolSessions?: (tool: string) => void;
+  onOpenReports?: (granularity: ReportGranularity) => void;
   separateQoderClients?: boolean;
 }
 
@@ -300,6 +302,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onNavigate,
   onOpenSessionDetail,
   onSelectToolSessions,
+  onOpenReports,
   separateQoderClients = false,
 }) => {
   const breakdownSectionRef = useRef<HTMLDivElement>(null);
@@ -1734,6 +1737,47 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             )}
         </section>
       </div>
+
+      {onOpenReports && (
+        <section id="overview-reports-card" className="glass-panel rounded-3xl p-4 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-100">周期与项目分析报告</h3>
+              <p className="text-[11px] text-slate-400">
+                查看主 Hub 按天 / 按周 / 按月生成的项目使用报告与 Markdown
+              </p>
+            </div>
+            <button
+              type="button"
+              id="open-reports-button"
+              onClick={() => onOpenReports('daily')}
+              className="px-3 py-1.5 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 border border-sky-400/30 text-[11px] font-semibold text-sky-200 inline-flex items-center gap-1 shrink-0 transition-colors"
+            >
+              <span>查看</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ['daily', '日报'],
+                ['weekly', '周报'],
+                ['monthly', '月报'],
+              ] as Array<[ReportGranularity, string]>
+            ).map(([granularity, label]) => (
+              <button
+                key={granularity}
+                type="button"
+                data-open-report={granularity}
+                onClick={() => onOpenReports(granularity)}
+                className="min-h-[36px] rounded-xl bg-white/[0.04] hover:bg-sky-400/12 border border-white/[0.08] text-xs font-semibold text-slate-200 transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <p className="text-[11px] text-slate-400/80 text-center leading-relaxed pt-3 pb-2">
         数据来自 Hub · 保留离线设备历史

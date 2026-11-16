@@ -1,5 +1,6 @@
-export type PageId = 'overview' | 'devices' | 'limits' | 'sessions' | 'sessionDetail' | 'settings';
+export type PageId = 'overview' | 'devices' | 'limits' | 'sessions' | 'sessionDetail' | 'reports' | 'settings';
 export type PeriodId = 'today' | 'month' | 'allTime';
+export type ReportGranularity = 'daily' | 'weekly' | 'monthly';
 export type BreakdownKind = 'clients' | 'devices' | 'models' | 'projects';
 export type QuotaTabId = 'limits' | 'subscriptions';
 export type ConnectionStatus = 'online' | 'offline' | 'loading' | 'disconnected';
@@ -293,6 +294,9 @@ export interface HubNativeBridge {
   dismissAppUpdatePrompt?: () => void;
   saveLimitsPrefs?: (serialized: string) => void;
   saveDisplayPrefs?: (serialized: string) => void;
+  listReports?: (granularity: string, limit: number, requestId: string) => void;
+  getReport?: (granularity: string, periodKey: string, requestId: string) => void;
+  cancelReports?: () => void;
 }
 
 export interface DisplayPrefs {
@@ -372,6 +376,183 @@ export interface MonitorState {
   connectionEpoch: number;
   limitsPrefs: LimitsPrefs;
   displayPrefs: DisplayPrefs;
+  reports: ReportsState;
+}
+
+export interface HubReportConfig {
+  enabled: boolean;
+  daily: boolean;
+  weekly: boolean;
+  monthly: boolean;
+}
+
+export interface ReportListItem {
+  reportId: string;
+  granularity: ReportGranularity;
+  periodKey: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  generatedAt: string;
+  totalTokens: number;
+  knownCostUsd: number;
+  projectCount: number;
+}
+
+export interface UsageReportProject {
+  key: string;
+  label: string;
+  tokens: number;
+  costUsd: number;
+  unpricedTokens: number;
+  tokenSharePct: number;
+  costSharePct: number;
+  sessionCount: number;
+  clients: Array<{ client: string; tokens: number; sharePct: number }>;
+  models: Array<{ model: string; tokens: number; sharePct: number }>;
+}
+
+export interface UsageReportClient {
+  client: string;
+  tokens: number;
+  costUsd: number;
+  unpricedTokens: number;
+  tokenSharePct: number;
+  costSharePct: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+  inputTokens: number;
+  unclassifiedTokens: number;
+  cacheHitRatePct: number | null;
+  messageCount: number;
+}
+
+export interface UsageReportModel {
+  model: string;
+  tokens: number;
+  costUsd: number;
+  unpricedTokens: number;
+  tokenSharePct: number;
+  costSharePct: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+  inputTokens: number;
+  unclassifiedTokens: number;
+  cacheHitRatePct: number | null;
+  avgOutputTokensPerSec: number | null;
+}
+
+export interface UsageReportDevice {
+  deviceId: string;
+  hostname: string;
+  platform: string;
+  stale: boolean;
+  tokens: number;
+  costUsd: number;
+  tokenSharePct: number;
+  projectCount: number;
+}
+
+export interface UsageReportTimelineRow {
+  date: string;
+  tokens: number;
+  costUsd: number;
+  activeTimeMs: number;
+  topClient: string;
+  topModel: string;
+}
+
+export interface UsageReportSignal {
+  code: string;
+  severity: 'info' | 'warning' | 'alert' | string;
+  project?: string;
+  model?: string;
+  valuePct?: number;
+  summary: string;
+}
+
+export interface UsageReportData {
+  schemaVersion: number;
+  schema: string;
+  reportId: string;
+  granularity: ReportGranularity;
+  period: {
+    key: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    timeZone: string;
+    isCurrent: boolean;
+    generatedAt: string;
+    previousPeriodKey?: string;
+  };
+  hub: {
+    runtime: string;
+    deviceCount: number;
+    activeDeviceCount: number;
+    staleDeviceCount: number;
+  };
+  coverage: {
+    tokenComponentsComplete: boolean;
+    projectsComplete: boolean;
+    projectAttributionSource: string;
+    historyComplete: boolean;
+  };
+  summary: {
+    totalTokens: number;
+    knownCostUsd: number;
+    unpricedTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    unclassifiedTokens: number;
+    cacheHitRatePct: number | null;
+    messageCount: number;
+    sessionCount: number;
+    projectCount: number;
+    activeDays: number;
+    activeTimeMs: number;
+    peakDay: { date: string; tokens: number; costUsd: number } | null;
+    throughput: {
+      timedTokens: number;
+      timedOutputTokens: number;
+      timedDurationMs: number;
+      avgOutputTokensPerSec: number | null;
+    };
+    comparison: {
+      previousPeriodKey: string;
+      previousTokens: number;
+      previousCostUsd: number;
+      tokenDelta: number;
+      tokenDeltaPct: number | null;
+      costDelta: number;
+      costDeltaPct: number | null;
+    } | null;
+  };
+  projects: UsageReportProject[];
+  clients: UsageReportClient[];
+  models: UsageReportModel[];
+  devices: UsageReportDevice[];
+  timeline: UsageReportTimelineRow[];
+  signals: UsageReportSignal[];
+}
+
+export interface ReportsState {
+  granularity: ReportGranularity;
+  periodKey: string;
+  listLoading: boolean;
+  listError: string;
+  listRequestId: string;
+  config: HubReportConfig | null;
+  items: ReportListItem[];
+  detailLoading: boolean;
+  detailError: string;
+  detailRequestId: string;
+  report: UsageReportData | null;
+  markdown: string;
 }
 
 export interface SessionConversationMessage {

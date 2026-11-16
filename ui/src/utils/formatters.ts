@@ -7,6 +7,7 @@ export const PAGE_LABELS: Record<PageId, string> = {
   limits: '额度与订阅',
   sessions: '会话与状态',
   sessionDetail: '会话详情',
+  reports: '分析报告',
   settings: '连接 Hub',
 };
 

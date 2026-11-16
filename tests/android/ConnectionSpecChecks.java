@@ -47,6 +47,35 @@ public final class ConnectionSpecChecks {
             throw new AssertionError("Invalid local approval alerts endpoint: " + local.approvalAlertsEndpoint());
         }
         checks++;
+        if (!prefixed.reportsListEndpoint("", 50).equals("https://monitor.example.com/proxy/api/reports?limit=50")) {
+            throw new AssertionError("Invalid reports list endpoint: " + prefixed.reportsListEndpoint("", 50));
+        }
+        checks++;
+        if (!prefixed.reportsListEndpoint("weekly", 999).equals("https://monitor.example.com/proxy/api/reports?limit=100&granularity=weekly")) {
+            throw new AssertionError("Invalid filtered reports list endpoint");
+        }
+        checks++;
+        if (!prefixed.reportDetailEndpoint("weekly", "2026-W47", "both").equals("https://monitor.example.com/proxy/api/reports/weekly/2026-W47?format=both")) {
+            throw new AssertionError("Invalid weekly report endpoint");
+        }
+        checks++;
+        if (!local.reportDetailEndpoint("daily", "current", "markdown").equals("http://[::1]:17321/api/reports/daily/current?format=markdown")) {
+            throw new AssertionError("Invalid daily current report endpoint");
+        }
+        checks++;
+        for (String[] bad : new String[][] {
+                {"all", "current", "both"},
+                {"daily", "../../secret", "both"},
+                {"daily", "2026-W47", "both"},
+                {"weekly", "2026-11-16", "both"},
+                {"monthly", "2026-11-16", "both"},
+                {"daily", "current", "html"}
+        }) {
+            try { prefixed.reportDetailEndpoint(bad[0], bad[1], bad[2]); throw new AssertionError("Accepted invalid report endpoint"); }
+            catch (IllegalArgumentException expected) { checks++; }
+        }
+        try { prefixed.reportsListEndpoint("yearly", 20); throw new AssertionError("Accepted invalid report granularity"); }
+        catch (IllegalArgumentException expected) { checks++; }
         System.out.println(checks + " connection checks passed");
     }
 }

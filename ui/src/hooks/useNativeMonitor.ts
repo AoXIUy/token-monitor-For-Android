@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
-import type { DisplayPrefs, LimitsPrefs, MonitorState } from '../types/monitor';
-import { createDemoPayload } from '../utils/demoData';
+import type { DisplayPrefs, LimitsPrefs, MonitorState, ReportGranularity } from '../types/monitor';
+import { createDemoPayload, createDemoReports } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
+import { beginReportDetail, beginReportsList } from '../reportsState';
 import { loadBrowserLimitsPrefs, saveBrowserLimitsPrefs, sanitizeLimitsPrefs } from '../utils/limitsPrefs';
 import { loadBrowserDisplayPrefs, saveBrowserDisplayPrefs, sanitizeDisplayPrefs } from '../utils/displayPrefs';
 
@@ -10,6 +11,7 @@ export function useNativeMonitor() {
   const [state, setState] = useState<MonitorState>(createInitialState);
   const current = useRef(state);
   const conversationSequence = useRef(0);
+  const reportsSequence = useRef(0);
   const isBrowserPreview = typeof window !== 'undefined' && !window.HubNative;
 
   const update = useCallback((change: (previous: MonitorState) => MonitorState) => {
@@ -24,6 +26,63 @@ export function useNativeMonitor() {
     window.HubNative?.cancelConversation?.();
     update(previous => previous.conversation ? { ...previous, conversation: null } : previous);
   }, [update]);
+
+  const clearReports = useCallback(() => {
+    window.HubNative?.cancelReports?.();
+    update(previous => (previous.reports.listLoading || previous.reports.detailLoading)
+      ? { ...previous, reports: { ...previous.reports, listLoading: false, detailLoading: false } }
+      : previous);
+  }, [update]);
+
+  const queryReportsList = useCallback((granularity: '' | ReportGranularity = '', limit = 50) => {
+    const requestId = `rl-${Date.now()}-${++reportsSequence.current}`;
+    update(previous => ({ ...previous, reports: beginReportsList(previous.reports, { granularity, requestId }) }));
+    if (window.HubNative?.listReports) {
+      window.HubNative.listReports(granularity, limit, requestId);
+    } else if (isBrowserPreview) {
+      const demo = createDemoReports();
+      const filtered = granularity ? demo.items.filter(item => item.granularity === granularity) : demo.items;
+      update(previous => receiveNativeMessage(previous, {
+        type: 'reportsList',
+        granularity,
+        requestId,
+        data: { ok: true, config: demo.config, reports: filtered },
+      }));
+    } else {
+      update(previous => receiveNativeMessage(previous, {
+        type: 'reportsList',
+        granularity,
+        requestId,
+        error: 'unsupported_hub',
+      }));
+    }
+  }, [update, isBrowserPreview]);
+
+  const queryReportDetail = useCallback((granularity: ReportGranularity, periodKey = 'current') => {
+    const requestId = `rd-${Date.now()}-${++reportsSequence.current}`;
+    update(previous => ({ ...previous, reports: beginReportDetail(previous.reports, { granularity, periodKey, requestId }) }));
+    if (window.HubNative?.getReport) {
+      window.HubNative.getReport(granularity, periodKey, requestId);
+    } else if (isBrowserPreview) {
+      const demo = createDemoReports();
+      const entry = demo.details[`${granularity}:${periodKey}`] || demo.details[`${granularity}:current`];
+      update(previous => receiveNativeMessage(previous, {
+        type: 'reportDetail',
+        granularity,
+        periodKey,
+        requestId,
+        ...(entry ? { data: { ok: true, report: entry.report, markdown: entry.markdown } } : { error: 'not_found' }),
+      }));
+    } else {
+      update(previous => receiveNativeMessage(previous, {
+        type: 'reportDetail',
+        granularity,
+        periodKey,
+        requestId,
+        error: 'unsupported_hub',
+      }));
+    }
+  }, [update, isBrowserPreview]);
 
   const queryConversation = useCallback((deviceId: string, key: string, cursor = '') => {
     const query = { deviceId, key, cursor, requestId: `${Date.now()}-${++conversationSequence.current}` };
@@ -121,6 +180,11 @@ export function useNativeMonitor() {
         window.dispatchEvent(new CustomEvent('tm-close-device-picker'));
         return true;
       }
+      if (current.current.page === 'reports') {
+        update(previous => ({ ...previous, page: 'overview' }));
+        window.scrollTo(0, 0);
+        return true;
+      }
       if (current.current.page !== 'sessionDetail') return false;
       update(previous => ({ ...previous, page: 'sessions' }));
       window.scrollTo(0, 0);
@@ -146,5 +210,17 @@ export function useNativeMonitor() {
     };
   }, [update, loadBrowserDemo]);
 
-  return { state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs, saveDisplayPrefs };
+  return {
+    state,
+    update,
+    isBrowserPreview,
+    loadBrowserDemo,
+    queryConversation,
+    clearConversation,
+    queryReportsList,
+    queryReportDetail,
+    clearReports,
+    saveLimitsPrefs,
+    saveDisplayPrefs,
+  };
 }

@@ -1,4 +1,15 @@
-import type { AppUpdateState, ApprovalsState, MonitorStats, NotificationState, SubscriptionsPayload, QuotaHistoryPayload } from '../types/monitor';
+import type {
+  AppUpdateState,
+  ApprovalsState,
+  HubReportConfig,
+  MonitorStats,
+  NotificationState,
+  QuotaHistoryPayload,
+  ReportGranularity,
+  ReportListItem,
+  SubscriptionsPayload,
+  UsageReportData,
+} from '../types/monitor';
 
 export function createDemoPayload(nowMs: number = Date.now()): {
   connectionUrl: string;
@@ -782,6 +793,385 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       error: '',
       promptToken: '',
       download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' },
+    },
+  };
+}
+
+export function createDemoReports(nowMs: number = Date.now()): {
+  config: HubReportConfig;
+  items: ReportListItem[];
+  details: Record<string, { report: UsageReportData; markdown: string }>;
+} {
+  const now = new Date(nowMs);
+  const nowIso = now.toISOString();
+  const todayKey = nowIso.slice(0, 10);
+  const monthKey = nowIso.slice(0, 7);
+  const weekKey = '2026-W47';
+
+  const makeDetail = (
+    granularity: ReportGranularity,
+    key: string,
+    label: string,
+    startDate: string,
+    endDate: string,
+    scale: number,
+    activeDays: number,
+  ): { report: UsageReportData; markdown: string } => {
+    const totalTokens = Math.round(4285600 * scale);
+    const knownCostUsd = Number((16.42 * scale).toFixed(2));
+    const inputTokens = Math.round(925600 * scale);
+    const outputTokens = Math.round(318400 * scale);
+    const cacheReadTokens = Math.round(2841600 * scale);
+    const cacheWriteTokens = Math.round(200000 * scale);
+    const proj1Tokens = Math.round(2150000 * scale);
+    const proj2Tokens = Math.round(1320000 * scale);
+    const proj3Tokens = Math.max(0, totalTokens - proj1Tokens - proj2Tokens);
+    const report: UsageReportData = {
+      schemaVersion: 1,
+      schema: 'token-monitor-report/v1',
+      reportId: `${granularity}:${key}`,
+      granularity,
+      period: {
+        key,
+        label,
+        startDate,
+        endDate,
+        timeZone: 'Asia/Shanghai',
+        isCurrent: true,
+        generatedAt: nowIso,
+      },
+      hub: {
+        runtime: 'node-hub',
+        deviceCount: 3,
+        activeDeviceCount: 2,
+        staleDeviceCount: 1,
+      },
+      coverage: {
+        tokenComponentsComplete: true,
+        projectsComplete: true,
+        projectAttributionSource: granularity === 'daily' ? 'live-period' : 'daily-snapshots',
+        historyComplete: true,
+      },
+      summary: {
+        totalTokens,
+        knownCostUsd,
+        unpricedTokens: Math.round(42000 * scale),
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+        unclassifiedTokens: 0,
+        cacheHitRatePct: 75.43,
+        messageCount: Math.round(96 * scale),
+        sessionCount: Math.round(14 * scale),
+        projectCount: 3,
+        activeDays,
+        activeTimeMs: Math.round(9800000 * scale),
+        peakDay: { date: todayKey, tokens: 4285600, costUsd: 16.42 },
+        throughput: {
+          timedTokens: Math.round(3900000 * scale),
+          timedOutputTokens: Math.round(295000 * scale),
+          timedDurationMs: Math.round(3850000 * scale),
+          avgOutputTokensPerSec: 76.6,
+        },
+        comparison: {
+          previousPeriodKey: granularity === 'daily' ? '昨日' : granularity === 'weekly' ? '上周' : '上月',
+          previousTokens: Math.round(totalTokens * 0.84),
+          previousCostUsd: Number((knownCostUsd * 0.85).toFixed(2)),
+          tokenDelta: Math.round(totalTokens * 0.16),
+          tokenDeltaPct: 19.05,
+          costDelta: Number((knownCostUsd * 0.15).toFixed(2)),
+          costDeltaPct: 17.65,
+        },
+      },
+      projects: [
+        {
+          key: 'token-monitor-android',
+          label: 'token-monitor-android',
+          tokens: proj1Tokens,
+          costUsd: Number((knownCostUsd * 0.5).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: Number(((proj1Tokens / totalTokens) * 100).toFixed(2)),
+          costSharePct: 50,
+          sessionCount: Math.max(1, Math.round(6 * scale)),
+          clients: [
+            { client: 'claude', tokens: Math.round(proj1Tokens * 0.62), sharePct: 62 },
+            { client: 'codex', tokens: Math.round(proj1Tokens * 0.38), sharePct: 38 },
+          ],
+          models: [
+            { model: 'claude-sonnet-4-20250514', tokens: Math.round(proj1Tokens * 0.62), sharePct: 62 },
+            { model: 'gpt-5', tokens: Math.round(proj1Tokens * 0.38), sharePct: 38 },
+          ],
+        },
+        {
+          key: 'hub-telemetry-collector',
+          label: 'hub-telemetry-collector',
+          tokens: proj2Tokens,
+          costUsd: Number((knownCostUsd * 0.31).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: Number(((proj2Tokens / totalTokens) * 100).toFixed(2)),
+          costSharePct: 31,
+          sessionCount: Math.max(1, Math.round(5 * scale)),
+          clients: [{ client: 'antigravity', tokens: proj2Tokens, sharePct: 100 }],
+          models: [{ model: 'gemini-2.5-pro', tokens: proj2Tokens, sharePct: 100 }],
+        },
+        {
+          key: 'distributed-inference-gateway',
+          label: 'distributed-inference-gateway',
+          tokens: proj3Tokens,
+          costUsd: Number((knownCostUsd * 0.19).toFixed(2)),
+          unpricedTokens: Math.round(42000 * scale),
+          tokenSharePct: Number(((proj3Tokens / totalTokens) * 100).toFixed(2)),
+          costSharePct: 19,
+          sessionCount: Math.max(1, Math.round(3 * scale)),
+          clients: [{ client: 'cursor', tokens: proj3Tokens, sharePct: 100 }],
+          models: [{ model: 'deepseek-r1', tokens: proj3Tokens, sharePct: 100 }],
+        },
+      ],
+      clients: [
+        {
+          client: 'claude',
+          tokens: Math.round(1940000 * scale),
+          costUsd: Number((7.85 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 45.27,
+          costSharePct: 47.81,
+          cacheReadTokens: Math.round(1380000 * scale),
+          cacheWriteTokens: Math.round(90000 * scale),
+          outputTokens: Math.round(145000 * scale),
+          inputTokens: Math.round(325000 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 80.94,
+          messageCount: Math.round(42 * scale),
+        },
+        {
+          client: 'antigravity',
+          tokens: Math.round(1265600 * scale),
+          costUsd: Number((4.92 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 29.53,
+          costSharePct: 29.96,
+          cacheReadTokens: Math.round(840000 * scale),
+          cacheWriteTokens: Math.round(60000 * scale),
+          outputTokens: Math.round(98000 * scale),
+          inputTokens: Math.round(267600 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 75.84,
+          messageCount: Math.round(28 * scale),
+        },
+        {
+          client: 'codex',
+          tokens: Math.round(680000 * scale),
+          costUsd: Number((2.45 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 15.87,
+          costSharePct: 14.92,
+          cacheReadTokens: Math.round(441600 * scale),
+          cacheWriteTokens: Math.round(35000 * scale),
+          outputTokens: Math.round(48400 * scale),
+          inputTokens: Math.round(155000 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 74.02,
+          messageCount: Math.round(16 * scale),
+        },
+        {
+          client: 'cursor',
+          tokens: Math.round(400000 * scale),
+          costUsd: Number((1.2 * scale).toFixed(2)),
+          unpricedTokens: Math.round(42000 * scale),
+          tokenSharePct: 9.33,
+          costSharePct: 7.31,
+          cacheReadTokens: Math.round(180000 * scale),
+          cacheWriteTokens: Math.round(15000 * scale),
+          outputTokens: Math.round(27000 * scale),
+          inputTokens: Math.round(178000 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 50.28,
+          messageCount: Math.round(10 * scale),
+        },
+      ],
+      models: [
+        {
+          model: 'claude-sonnet-4-20250514',
+          tokens: Math.round(1860000 * scale),
+          costUsd: Number((7.53 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 43.4,
+          costSharePct: 45.86,
+          cacheReadTokens: Math.round(1340000 * scale),
+          cacheWriteTokens: Math.round(85000 * scale),
+          outputTokens: Math.round(138000 * scale),
+          inputTokens: Math.round(297000 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 81.86,
+          avgOutputTokensPerSec: 82.4,
+        },
+        {
+          model: 'gemini-2.5-pro',
+          tokens: Math.round(1265600 * scale),
+          costUsd: Number((4.92 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 29.53,
+          costSharePct: 29.96,
+          cacheReadTokens: Math.round(840000 * scale),
+          cacheWriteTokens: Math.round(60000 * scale),
+          outputTokens: Math.round(98000 * scale),
+          inputTokens: Math.round(267600 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 75.84,
+          avgOutputTokensPerSec: 74.1,
+        },
+        {
+          model: 'gpt-5',
+          tokens: Math.round(680000 * scale),
+          costUsd: Number((2.45 * scale).toFixed(2)),
+          unpricedTokens: 0,
+          tokenSharePct: 15.87,
+          costSharePct: 14.92,
+          cacheReadTokens: Math.round(441600 * scale),
+          cacheWriteTokens: Math.round(35000 * scale),
+          outputTokens: Math.round(48400 * scale),
+          inputTokens: Math.round(155000 * scale),
+          unclassifiedTokens: 0,
+          cacheHitRatePct: 74.02,
+          avgOutputTokensPerSec: 69.8,
+        },
+      ],
+      devices: [
+        {
+          deviceId: 'mbp-m4-max',
+          hostname: 'MacBook Pro M4 Max',
+          platform: 'darwin',
+          stale: false,
+          tokens: Math.round(2840000 * scale),
+          costUsd: Number((10.94 * scale).toFixed(2)),
+          tokenSharePct: 66.27,
+          projectCount: 3,
+        },
+        {
+          deviceId: 'linux-dev-box',
+          hostname: 'Ubuntu Workstation',
+          platform: 'linux',
+          stale: false,
+          tokens: Math.round(1445600 * scale),
+          costUsd: Number((5.48 * scale).toFixed(2)),
+          tokenSharePct: 33.73,
+          projectCount: 2,
+        },
+      ],
+      timeline: Array.from({ length: Math.min(7, Math.max(1, activeDays)) }, (_, idx) => {
+        const d = new Date(nowMs - (Math.min(7, activeDays) - 1 - idx) * 86400_000).toISOString().slice(0, 10);
+        const dayTokens = idx === Math.min(7, activeDays) - 1 ? 4285600 : Math.round(2650000 + idx * 240000);
+        return {
+          date: d,
+          tokens: dayTokens,
+          costUsd: Number((dayTokens * 0.0000038).toFixed(2)),
+          activeTimeMs: 7200000 + idx * 900000,
+          topClient: 'claude',
+          topModel: 'claude-sonnet-4-20250514',
+        };
+      }),
+      signals: [
+        {
+          code: 'top-project-concentration',
+          severity: 'info',
+          project: 'token-monitor-android',
+          valuePct: 50.17,
+          summary: '项目 token-monitor-android 占本周期总 Token 的 50.17%',
+        },
+        {
+          code: 'unpriced-tokens-present',
+          severity: 'warning',
+          valuePct: 0.98,
+          summary: `包含 ${Math.round(42000 * scale).toLocaleString('en-US')} 个未定价 Token，已知费用仅统计已配置费率部分`,
+        },
+      ],
+    };
+
+    const markdown = [
+      '---',
+      `schema: ${report.schema}`,
+      `reportId: ${report.reportId}`,
+      `granularity: ${granularity}`,
+      `periodKey: ${key}`,
+      `startDate: ${startDate}`,
+      `endDate: ${endDate}`,
+      `generatedAt: ${nowIso}`,
+      `totalTokens: ${totalTokens}`,
+      `knownCostUsd: ${knownCostUsd}`,
+      `projectCount: ${report.projects.length}`,
+      '---',
+      '',
+      `# Token Monitor ${granularity.toUpperCase()} 分析报告 · ${label}`,
+      '',
+      '## 一、核心总览（Executive Summary）',
+      `- 总 Token：${totalTokens.toLocaleString('en-US')}`,
+      `- 已知费用：$${knownCostUsd.toFixed(2)}`,
+      `- 缓存命中率：75.43%`,
+      `- 活跃项目：${report.projects.length} 个`,
+      '',
+      '## 二、项目使用深度分析（Project Usage Analysis）',
+      '| 排名 | 项目 | Token | 占比 | 已知费用 | 主力工具 | 主力模型 |',
+      '| --- | --- | ---: | ---: | ---: | --- | --- |',
+      ...report.projects.map((p, idx) =>
+        `| ${idx + 1} | ${p.label} | ${p.tokens.toLocaleString('en-US')} | ${p.tokenSharePct}% | $${p.costUsd.toFixed(2)} | ${p.clients[0]?.client || '-'} | ${p.models[0]?.model || '-'} |`
+      ),
+    ].join('\n');
+
+    return { report, markdown };
+  };
+
+  const daily = makeDetail('daily', todayKey, `${todayKey} (今日)`, todayKey, todayKey, 1, 1);
+  const weekly = makeDetail('weekly', weekKey, `${weekKey} (本周)`, todayKey, todayKey, 4.6, 5);
+  const monthly = makeDetail('monthly', monthKey, `${monthKey} (本月)`, `${monthKey}-01`, todayKey, 11.8, 14);
+
+  return {
+    config: { enabled: true, daily: true, weekly: true, monthly: true },
+    items: [
+      {
+        reportId: daily.report.reportId,
+        granularity: 'daily',
+        periodKey: todayKey,
+        label: daily.report.period.label,
+        startDate: daily.report.period.startDate,
+        endDate: daily.report.period.endDate,
+        generatedAt: nowIso,
+        totalTokens: daily.report.summary.totalTokens,
+        knownCostUsd: daily.report.summary.knownCostUsd,
+        projectCount: daily.report.projects.length,
+      },
+      {
+        reportId: weekly.report.reportId,
+        granularity: 'weekly',
+        periodKey: weekKey,
+        label: weekly.report.period.label,
+        startDate: weekly.report.period.startDate,
+        endDate: weekly.report.period.endDate,
+        generatedAt: nowIso,
+        totalTokens: weekly.report.summary.totalTokens,
+        knownCostUsd: weekly.report.summary.knownCostUsd,
+        projectCount: weekly.report.projects.length,
+      },
+      {
+        reportId: monthly.report.reportId,
+        granularity: 'monthly',
+        periodKey: monthKey,
+        label: monthly.report.period.label,
+        startDate: monthly.report.period.startDate,
+        endDate: monthly.report.period.endDate,
+        generatedAt: nowIso,
+        totalTokens: monthly.report.summary.totalTokens,
+        knownCostUsd: monthly.report.summary.knownCostUsd,
+        projectCount: monthly.report.projects.length,
+      },
+    ],
+    details: {
+      [`daily:${todayKey}`]: daily,
+      'daily:current': daily,
+      [`weekly:${weekKey}`]: weekly,
+      'weekly:current': weekly,
+      [`monthly:${monthKey}`]: monthly,
+      'monthly:current': monthly,
     },
   };
 }

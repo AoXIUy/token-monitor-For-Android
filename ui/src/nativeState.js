@@ -1,5 +1,6 @@
 // @ts-check
 import { receiveConversation } from './conversationState.js';
+import { createInitialReportsState, receiveReportDetail, receiveReportsList } from './reportsState.js';
 
 /** @param {unknown} value @returns {value is import('./types/monitor').ConnectionStatus} */
 function isConnectionStatus(value) {
@@ -48,6 +49,7 @@ export function createInitialState() {
     connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
     displayPrefs: { separateQoderClients: false },
+    reports: createInitialReportsState(),
   };
 }
 
@@ -62,6 +64,10 @@ export function receiveNativeMessage(state, message) {
     case 'conversation':
       if (state.page !== 'sessionDetail' || state.detailKey !== message.key) return state;
       return { ...state, conversation: receiveConversation(state.conversation, message) };
+    case 'reportsList':
+      return { ...state, reports: receiveReportsList(state.reports, message) };
+    case 'reportDetail':
+      return { ...state, reports: receiveReportDetail(state.reports, message) };
     case 'appUpdate': {
       /** @param {string} key @param {number} limit */
       const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
@@ -182,7 +188,14 @@ export function receiveNativeMessage(state, message) {
         message: message.state === 'offline' ? String(message.message || '无法连接 Hub') : '',
       };
     }
-    case 'lifecycle': return { ...state, foreground: Boolean(message.foreground), conversation: message.foreground ? state.conversation : null };
+    case 'lifecycle': return {
+      ...state,
+      foreground: Boolean(message.foreground),
+      conversation: message.foreground ? state.conversation : null,
+      reports: message.foreground
+        ? state.reports
+        : { ...state.reports, listLoading: false, detailLoading: false },
+    };
     case 'notifications':
       return {
         ...state, monitorPending: false,

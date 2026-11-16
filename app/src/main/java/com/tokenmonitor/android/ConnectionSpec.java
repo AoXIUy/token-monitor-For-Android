@@ -49,6 +49,38 @@ final class ConnectionSpec {
         return url + "/api/approval-alerts";
     }
 
+    String reportsListEndpoint(String granularity, int limit) {
+        String cleanGranularity = granularity == null ? "" : granularity.trim();
+        if (!cleanGranularity.isEmpty()
+                && !("daily".equals(cleanGranularity) || "weekly".equals(cleanGranularity) || "monthly".equals(cleanGranularity))) {
+            throw new IllegalArgumentException("Invalid report granularity");
+        }
+        int boundedLimit = Math.max(1, Math.min(100, limit));
+        String base = url + "/api/reports?limit=" + boundedLimit;
+        return cleanGranularity.isEmpty() ? base : base + "&granularity=" + cleanGranularity;
+    }
+
+    String reportDetailEndpoint(String granularity, String periodKey, String format) {
+        if (!("daily".equals(granularity) || "weekly".equals(granularity) || "monthly".equals(granularity))) {
+            throw new IllegalArgumentException("Invalid report granularity");
+        }
+        String cleanKey = periodKey == null || periodKey.trim().isEmpty() ? "current" : periodKey.trim();
+        if (!("latest".equals(cleanKey) || "current".equals(cleanKey)
+                || ("daily".equals(granularity) && cleanKey.matches("\\d{4}-\\d{2}-\\d{2}"))
+                || ("weekly".equals(granularity) && cleanKey.matches("\\d{4}-W\\d{2}"))
+                || ("monthly".equals(granularity) && cleanKey.matches("\\d{4}-\\d{2}")))) {
+            throw new IllegalArgumentException("Invalid report periodKey");
+        }
+        String cleanFormat = format == null || format.trim().isEmpty() ? "both" : format.trim();
+        if (!("both".equals(cleanFormat) || "json".equals(cleanFormat) || "markdown".equals(cleanFormat))) {
+            throw new IllegalArgumentException("Invalid report format");
+        }
+        try {
+            return url + "/api/reports/" + granularity + "/" + java.net.URLEncoder.encode(cleanKey, "UTF-8")
+                    + "?format=" + cleanFormat;
+        } catch (java.io.UnsupportedEncodingException error) { throw new IllegalStateException(error); }
+    }
+
     String conversationEndpoint(String deviceId, String key, String cursor) {
         if (deviceId == null || deviceId.isEmpty() || deviceId.length() > 256 || key == null || key.length() > 512
                 || !key.matches("(codex|antigravity):[^\\s\\\\/\\x00-\\x1f]+")

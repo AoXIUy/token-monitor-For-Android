@@ -29,6 +29,16 @@ public final class MainActivity extends Activity {
             new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
     private HubClient conversationClient;
     private int conversationGeneration;
+    private final java.util.concurrent.ThreadPoolExecutor reportsListNetwork = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+    private final java.util.concurrent.ThreadPoolExecutor reportsDetailNetwork = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+    private HubClient reportsListClient;
+    private int reportsListGeneration;
+    private HubClient reportsDetailClient;
+    private int reportsDetailGeneration;
     private final Runnable poll = () -> refresh(false);
     private WebView web;
     private ConnectionStore store;
@@ -389,6 +399,7 @@ public final class MainActivity extends Activity {
 
     private void cancel() {
         cancelConversation();
+        cancelReports();
         generation++;
         historyBusy = false;
         pendingHistoryKey = null;
@@ -631,6 +642,13 @@ public final class MainActivity extends Activity {
             main.post(() -> readConversation(deviceId, key, cursor, requestId));
         }
         @JavascriptInterface public void cancelConversation() { main.post(() -> MainActivity.this.cancelConversation()); }
+        @JavascriptInterface public void listReports(String granularity, int limit, String requestId) {
+            main.post(() -> readReportsList(granularity, limit, requestId));
+        }
+        @JavascriptInterface public void getReport(String granularity, String periodKey, String requestId) {
+            main.post(() -> readReportDetail(granularity, periodKey, requestId));
+        }
+        @JavascriptInterface public void cancelReports() { main.post(() -> MainActivity.this.cancelReports()); }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
         @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }
@@ -751,6 +769,101 @@ public final class MainActivity extends Activity {
                 .put("requestId", requestId).put("page", page)); } catch (Exception ignored) { }
     }
 
+    private void cancelReportsList() {
+        reportsListGeneration++;
+        reportsListNetwork.getQueue().clear();
+        if (reportsListClient != null) reportsListClient.cancel();
+        reportsListClient = null;
+    }
+
+    private void cancelReportsDetail() {
+        reportsDetailGeneration++;
+        reportsDetailNetwork.getQueue().clear();
+        if (reportsDetailClient != null) reportsDetailClient.cancel();
+        reportsDetailClient = null;
+    }
+
+    private void cancelReports() {
+        cancelReportsList();
+        cancelReportsDetail();
+    }
+
+    private static String mapReportHubError(Exception error) {
+        if (error instanceof HubClient.HubError) {
+            int status = ((HubClient.HubError) error).status;
+            if (status == 404) return "unsupported_hub";
+            if (status == 401 || status == 403) return "unauthorized";
+        }
+        return "read_failed";
+    }
+
+    private void readReportsList(String granularity, int limit, String requestId) {
+        cancelReportsList();
+        if (!foreground || spec == null || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+        String cleanGranularity = granularity == null ? "" : granularity.trim();
+        try { spec.reportsListEndpoint(cleanGranularity, limit); } catch (IllegalArgumentException error) { return; }
+        int epoch = generation;
+        int queryEpoch = reportsListGeneration;
+        ConnectionSpec destination = spec;
+        HubClient request = new HubClient();
+        reportsListClient = request;
+        reportsListNetwork.execute(() -> {
+            JSONObject payload = event("reportsList");
+            try {
+                payload.put("granularity", cleanGranularity);
+                payload.put("requestId", requestId);
+                JSONObject data = request.reportsList(destination, cleanGranularity, limit);
+                payload.put("data", data);
+            } catch (Exception error) {
+                try {
+                    payload.put("granularity", cleanGranularity);
+                    payload.put("requestId", requestId);
+                    payload.put("error", mapReportHubError(error));
+                } catch (Exception ignored) { }
+            }
+            main.post(() -> {
+                if (epoch != generation || queryEpoch != reportsListGeneration || !foreground) return;
+                reportsListClient = null;
+                emit(payload);
+            });
+        });
+    }
+
+    private void readReportDetail(String granularity, String periodKey, String requestId) {
+        cancelReportsDetail();
+        if (!foreground || spec == null || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+        String cleanGranularity = granularity == null ? "" : granularity.trim();
+        String cleanKey = periodKey == null || periodKey.trim().isEmpty() ? "current" : periodKey.trim();
+        try { spec.reportDetailEndpoint(cleanGranularity, cleanKey, "both"); } catch (IllegalArgumentException error) { return; }
+        int epoch = generation;
+        int queryEpoch = reportsDetailGeneration;
+        ConnectionSpec destination = spec;
+        HubClient request = new HubClient();
+        reportsDetailClient = request;
+        reportsDetailNetwork.execute(() -> {
+            JSONObject payload = event("reportDetail");
+            try {
+                payload.put("granularity", cleanGranularity);
+                payload.put("periodKey", cleanKey);
+                payload.put("requestId", requestId);
+                JSONObject data = request.reportDetail(destination, cleanGranularity, cleanKey);
+                payload.put("data", data);
+            } catch (Exception error) {
+                try {
+                    payload.put("granularity", cleanGranularity);
+                    payload.put("periodKey", cleanKey);
+                    payload.put("requestId", requestId);
+                    payload.put("error", mapReportHubError(error));
+                } catch (Exception ignored) { }
+            }
+            main.post(() -> {
+                if (epoch != generation || queryEpoch != reportsDetailGeneration || !foreground) return;
+                reportsDetailClient = null;
+                emit(payload);
+            });
+        });
+    }
+
     private void readQuotaHistory(String key) {
         if (!foreground || spec == null || latestStats == null || key == null || !key.matches("[a-f0-9]{64}")) return;
         if (historyBusy) { pendingHistoryKey = key; return; }
@@ -836,6 +949,8 @@ public final class MainActivity extends Activity {
         cancel();
         network.shutdownNow();
         conversationNetwork.shutdownNow();
+        reportsListNetwork.shutdownNow();
+        reportsDetailNetwork.shutdownNow();
         if (updates != null) updates.close();
         if (downloads != null) downloads.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }

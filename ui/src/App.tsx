@@ -22,6 +22,7 @@ import { DevicesView } from './components/DevicesView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LimitsView } from './components/LimitsView';
 import { OverviewView } from './components/OverviewView';
+import { ReportsView } from './components/ReportsView';
 import { SessionDetailView } from './components/SessionDetailView';
 import { SessionsView } from './components/SessionsView';
 import { SettingsView } from './components/SettingsView';
@@ -33,6 +34,7 @@ import type {
   PageId,
   PeriodId,
   QuotaTabId,
+  ReportGranularity,
   ConnectionStatus,
 } from './types/monitor';
 import { formatShortTime, PAGE_LABELS } from './utils/formatters';
@@ -68,7 +70,19 @@ function isTextEntryElement(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
-function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConversation, clearConversation, saveLimitsPrefs, saveDisplayPrefs }: Monitor) {
+function Dashboard({
+  state,
+  update,
+  isBrowserPreview,
+  loadBrowserDemo,
+  queryConversation,
+  clearConversation,
+  queryReportsList,
+  queryReportDetail,
+  clearReports,
+  saveLimitsPrefs,
+  saveDisplayPrefs,
+}: Monitor) {
   const {
     page,
     period,
@@ -452,6 +466,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
     page !== 'settings' &&
     page !== 'devices' &&
     page !== 'sessionDetail' &&
+    page !== 'reports' &&
     !(page === 'limits' && quotaTab === 'subscriptions');
 
   useEffect(() => {
@@ -459,7 +474,7 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
   }, [showFilters, devicePickerOpen]);
 
   const showPeriods = page !== 'limits';
-  const showRefresh = Boolean(connection) && page !== 'settings';
+  const showRefresh = Boolean(connection) && page !== 'settings' && page !== 'reports';
   const noticeVisible = status === 'offline' || Boolean(message);
   const noticeText =
     (message || (status === 'offline' ? '无法连接 Hub' : '')) +
@@ -893,6 +908,19 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                     setPage('sessions');
                     setSessionTool(toolId);
                   }}
+                  onOpenReports={(granularity: ReportGranularity) => {
+                    setDevicePickerOpen(false);
+                    update((previous) => ({
+                      ...previous,
+                      page: 'reports',
+                      reports: {
+                        ...previous.reports,
+                        granularity,
+                        periodKey: 'current',
+                      },
+                    }));
+                    window.scrollTo(0, 0);
+                  }}
                 />
                 </>
               )}
@@ -971,6 +999,27 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
                   onClearConversation={clearConversation}
                 />
               )}
+
+              {page === 'reports' && (
+                <ReportsView
+                  reports={state.reports}
+                  connected={Boolean(connection)}
+                  foreground={foreground}
+                  onBack={() => setPage('overview')}
+                  onSelectGranularity={(granularity) => {
+                    queryReportsList('', 50);
+                    queryReportDetail(granularity, 'current');
+                  }}
+                  onSelectPeriodKey={(granularity, periodKey) => {
+                    queryReportDetail(granularity, periodKey);
+                  }}
+                  onRefresh={(granularity, periodKey) => {
+                    queryReportsList('', 50);
+                    queryReportDetail(granularity, periodKey);
+                  }}
+                  onCancel={clearReports}
+                />
+              )}
             </div>
           )}
         </main>
@@ -1010,7 +1059,9 @@ function Dashboard({ state, update, isBrowserPreview, loadBrowserDemo, queryConv
               ] as const
             ).map(([tabId, label, Icon]) => {
               const isActive =
-                page === tabId || (page === 'sessionDetail' && tabId === 'sessions');
+                page === tabId ||
+                (page === 'sessionDetail' && tabId === 'sessions') ||
+                (page === 'reports' && tabId === 'overview');
               return (
                 <button
                   key={tabId}

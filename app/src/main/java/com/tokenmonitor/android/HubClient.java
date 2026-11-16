@@ -35,6 +35,14 @@ final class HubClient {
         return getUrl(spec, spec.approvalAlertsEndpoint(), 128 * 1024);
     }
 
+    JSONObject reportsList(ConnectionSpec spec, String granularity, int limit) throws Exception {
+        return getUrl(spec, spec.reportsListEndpoint(granularity, limit), 512 * 1024);
+    }
+
+    JSONObject reportDetail(ConnectionSpec spec, String granularity, String periodKey) throws Exception {
+        return getUrl(spec, spec.reportDetailEndpoint(granularity, periodKey, "both"), 2 * 1024 * 1024);
+    }
+
     private JSONObject getUrl(ConnectionSpec spec, String url, int maxBytes) throws Exception {
         if (cancelled) throw new IOException("Cancelled");
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
