@@ -2,6 +2,7 @@ import type {
   AppUpdateState,
   ApprovalsState,
   HubReportConfig,
+  LimitAccountPresentationMap,
   MonitorStats,
   NotificationState,
   QuotaHistoryPayload,
@@ -16,6 +17,7 @@ import type {
 export function createDemoPayload(nowMs: number = Date.now()): {
   connectionUrl: string;
   stats: MonitorStats;
+  limitAccountPresentation: LimitAccountPresentationMap;
   subscriptions: SubscriptionsPayload;
   notifications: NotificationState;
   approvals: Pick<ApprovalsState, 'enabled' | 'permission' | 'status' | 'message' | 'items'>;
@@ -496,6 +498,19 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       ],
     },
     {
+      provider: 'alibaba',
+      accountKey: 'sha256:demo-alibaba-personal',
+      region: 'cn-personal',
+      source: 'cli',
+      sourceDeviceId: 'mbp-m4-max',
+      status: 'ok',
+      updatedAt: nowIso,
+      windows: [
+        { kind: 'session', label: '5 小时额度', windowMinutes: 300, usedPercent: 18, resetsAt: inThreeHours },
+        { kind: 'weekly', label: '每周额度', windowMinutes: 10080, usedPercent: 32, resetsAt: inFourDays },
+      ],
+    },
+    {
       provider: 'deepseek',
       accountKey: 'sha256:demo-deepseek-api',
       accountName: 'DeepSeek Platform',
@@ -516,6 +531,29 @@ export function createDemoPayload(nowMs: number = Date.now()): {
           metric: 'credits',
           label: '账户余额',
           remaining: 68.4,
+          currency: 'CNY',
+          showMeter: false,
+        },
+      ],
+    },
+    {
+      provider: 'deepseek',
+      accountKey: 'sha256:demo-deepseek-personal',
+      source: 'api',
+      sourceDeviceId: 'linux-ws-01',
+      status: 'ok',
+      updatedAt: fiveMinsAgo,
+      balance: {
+        amount: 24.5,
+        currency: 'CNY',
+        monthSpend: 5.1,
+      },
+      windows: [
+        {
+          kind: 'billing',
+          metric: 'credits',
+          label: '账户余额',
+          remaining: 24.5,
           currency: 'CNY',
           showMeter: false,
         },
@@ -763,10 +801,26 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       },
     })),
   };
+  const limitAccountPresentation: LimitAccountPresentationMap = {
+    deepseek: {
+      labels: {
+        'sha256:demo-deepseek-api': '工作账号',
+        'sha256:demo-deepseek-personal': '个人备用',
+      },
+      order: ['sha256:demo-deepseek-api', 'sha256:demo-deepseek-personal'],
+    },
+    alibaba: {
+      labels: {
+        'sha256:demo-alibaba-personal:cn-personal': '百炼主力',
+      },
+      order: ['sha256:demo-alibaba-personal:cn-personal'],
+    },
+  };
   return {
     quotaHistory,
     connectionUrl: 'https://hub.tokenmonitor.internal:8443',
     stats,
+    limitAccountPresentation,
     subscriptions,
     notifications: {
       enabled: true,

@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { ApprovalsState, NotificationState, AppUpdateState, HubProfile, MonitorStats } from '../types/monitor';
+import { ApprovalsState, DisplayPrefs, NotificationState, AppUpdateState, HubProfile, MonitorStats } from '../types/monitor';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
 import { AppUpdateCard } from './AppUpdateCard';
 import { WidgetGalleryCard } from './WidgetGalleryCard';
@@ -29,8 +29,8 @@ interface SettingsViewProps {
   activeHubProfileId?: string;
   connectPending: boolean;
   formError: string;
-  displayPrefs?: { separateQoderClients: boolean };
-  onChangeDisplayPrefs?: (next: { separateQoderClients: boolean }) => void;
+  displayPrefs?: DisplayPrefs;
+  onChangeDisplayPrefs?: (next: DisplayPrefs) => void;
   notifications: NotificationState;
   monitorPending: boolean;
   approvals: ApprovalsState;
@@ -61,7 +61,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   activeHubProfileId = '',
   connectPending,
   formError,
-  displayPrefs = { separateQoderClients: false },
+  displayPrefs = { separateQoderClients: false, exactTrendTokens: false },
   onChangeDisplayPrefs,
   notifications,
   monitorPending,
@@ -474,7 +474,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       />
 
       {onChangeDisplayPrefs && (
-        <section id="settings-display" className="glass-panel rounded-3xl p-5 space-y-3">
+        <section id="settings-display" className="glass-panel rounded-3xl p-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold text-slate-100">分开显示 Qoder 与 Qoder CN</h3>
@@ -504,6 +504,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <span
                   className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-0.5 left-0.5 transition-transform duration-200 ${
                     displayPrefs.separateQoderClients ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+            </label>
+          </div>
+
+          <div className="pt-3.5 border-t border-white/8 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-slate-100">趋势详情显示精确 Token 数</h3>
+              <p className="text-xs text-slate-400 leading-relaxed mt-1">
+                开启后在总览每日趋势选中卡片、曲线提示和数值明细中显示精确千分位 Token 计数；关闭时使用紧凑格式。
+              </p>
+            </div>
+            <label className="inline-flex items-center cursor-pointer min-h-[44px] shrink-0">
+              <input
+                id="exact-trend-tokens"
+                type="checkbox"
+                checked={displayPrefs.exactTrendTokens}
+                onChange={(e) =>
+                  onChangeDisplayPrefs({ ...displayPrefs, exactTrendTokens: e.target.checked })
+                }
+                aria-label="趋势详情显示精确 Token 数"
+                className="sr-only peer"
+              />
+              <span
+                aria-hidden="true"
+                className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#090C10] ${
+                  displayPrefs.exactTrendTokens
+                    ? 'bg-gradient-to-r from-sky-400 to-emerald-400'
+                    : 'bg-white/15'
+                }`}
+              >
+                <span
+                  className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-0.5 left-0.5 transition-transform duration-200 ${
+                    displayPrefs.exactTrendTokens ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </span>

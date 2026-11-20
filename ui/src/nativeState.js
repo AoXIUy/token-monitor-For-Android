@@ -26,6 +26,64 @@ export function sanitizeHubProfiles(raw) {
   return clean;
 }
 
+/** @param {unknown} value */
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+/** @param {unknown} key @returns {key is string} */
+function isValidPresentationKey(key) {
+  return typeof key === 'string' && key.trim() === key && key.length > 0 && key.length <= 256;
+}
+
+/** @param {unknown} label */
+function sanitizePresentationLabel(label) {
+  if (typeof label !== 'string' || label.length > 256) return null;
+  const trimmed = label.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return '';
+  if (/https?:\/\//i.test(trimmed) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || /[^\s@]+@[^\s@]+\.[^\s@]+/.test(trimmed)) {
+    return null;
+  }
+  return Array.from(trimmed).slice(0, 32).join('');
+}
+
+/** @param {unknown} raw @returns {import('./types/monitor').LimitAccountPresentationMap} */
+export function sanitizeLimitAccountPresentation(raw) {
+  if (!isPlainObject(raw)) return {};
+  /** @type {import('./types/monitor').LimitAccountPresentationMap} */
+  const clean = {};
+  let providerCount = 0;
+  for (const [providerId, group] of Object.entries(/** @type {Record<string, unknown>} */ (raw))) {
+    if (providerCount >= 100) break;
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(providerId) || !isPlainObject(group)) continue;
+    const rawGroup = /** @type {Record<string, unknown>} */ (group);
+    /** @type {Record<string, string>} */
+    const labels = {};
+    if (isPlainObject(rawGroup.labels)) {
+      const entries = Object.entries(/** @type {Record<string, unknown>} */ (rawGroup.labels))
+        .filter(([key]) => isValidPresentationKey(key));
+      for (const [key, value] of entries.slice(-200)) {
+        const sanitized = sanitizePresentationLabel(value);
+        if (sanitized !== null) labels[key] = sanitized;
+      }
+    }
+    /** @type {string[]} */
+    const order = [];
+    if (Array.isArray(rawGroup.order)) {
+      const seen = new Set();
+      for (const item of rawGroup.order) {
+        if (order.length >= 200) break;
+        if (!isValidPresentationKey(item) || seen.has(item)) continue;
+        seen.add(item);
+        order.push(item);
+      }
+    }
+    clean[providerId] = { labels, order };
+    providerCount += 1;
+  }
+  return clean;
+}
+
 /** @returns {import('./types/monitor').MonitorState} */
 export function createInitialState() {
   return {
@@ -48,7 +106,8 @@ export function createInitialState() {
     approvalsPending: false,
     connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
-    displayPrefs: { separateQoderClients: false },
+    displayPrefs: { separateQoderClients: false, exactTrendTokens: false },
+    limitAccountPresentation: {},
     reports: createInitialReportsState(),
   };
 }
@@ -157,7 +216,15 @@ export function receiveNativeMessage(state, message) {
           separateQoderClients: typeof message.separateQoderClients === 'boolean'
             ? message.separateQoderClients
             : state.displayPrefs.separateQoderClients,
+          exactTrendTokens: typeof message.exactTrendTokens === 'boolean'
+            ? message.exactTrendTokens
+            : state.displayPrefs.exactTrendTokens,
         },
+      };
+    case 'limitAccountPresentation':
+      return {
+        ...state,
+        limitAccountPresentation: sanitizeLimitAccountPresentation(message.data),
       };
     case 'stats':
       return {

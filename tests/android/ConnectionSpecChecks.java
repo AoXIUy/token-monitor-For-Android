@@ -35,6 +35,13 @@ public final class ConnectionSpecChecks {
         rejects("https://example.com", "", false);
         rejects("https://example.com", "secret\r\nInjected: bad", false);
         rejects("https://", "secret", false);
+        if (!prefixed.endpoint("/api/sync/settings/limitAccountPresentation")
+                .equals("https://monitor.example.com/proxy/api/sync/settings/limitAccountPresentation")) {
+            throw new AssertionError("Missing limitAccountPresentation endpoint");
+        }
+        checks++;
+        try { prefixed.endpoint("/api/sync/settings/other"); throw new AssertionError("Allowed arbitrary sync setting"); }
+        catch (IllegalArgumentException expected) { checks++; }
         try { prefixed.endpoint("/api/ingest"); throw new AssertionError("Allowed ingest"); }
         catch (IllegalArgumentException expected) { checks++; }
         try { prefixed.endpoint("/api/devices/device"); throw new AssertionError("Allowed mutation endpoint"); }

@@ -16,7 +16,8 @@ final class DisplayPrefs {
 
     static JSONObject sanitize(JSONObject parsed) throws Exception {
         return new JSONObject()
-                .put("separateQoderClients", parsed != null && parsed.optBoolean("separateQoderClients", false));
+                .put("separateQoderClients", parsed != null && parsed.optBoolean("separateQoderClients", false))
+                .put("exactTrendTokens", parsed != null && parsed.optBoolean("exactTrendTokens", false));
     }
 
     static JSONObject load(Context context) {

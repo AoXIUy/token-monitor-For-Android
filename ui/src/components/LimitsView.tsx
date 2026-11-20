@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import {
+  LimitAccountPresentationMap,
   LimitProvider,
   LimitsPrefs,
   MonitorStats,
@@ -44,6 +45,7 @@ interface LimitsViewProps {
   fetchedAt: number;
   foreground: boolean;
   prefs: LimitsPrefs;
+  limitAccountPresentation?: LimitAccountPresentationMap;
   onChangePrefs: (next: LimitsPrefs) => void;
 }
 
@@ -62,6 +64,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   fetchedAt,
   foreground,
   prefs,
+  limitAccountPresentation,
   onChangePrefs,
 }) => {
   const [openTopUps, setOpenTopUps] = useState<Record<string, boolean>>({});
@@ -93,14 +96,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   const hiddenSet = useMemo(() => new Set(hiddenHashes), [hiddenHashes]);
 
   const groups = useMemo(
-    () => MonitorModel.limitGroups(providers, stats, deviceId),
-    [providers, stats, deviceId]
+    () => MonitorModel.limitGroups(providers, stats, deviceId, limitAccountPresentation),
+    [providers, stats, deviceId, limitAccountPresentation]
   );
 
   const enrichedGroups = useMemo(() => {
     return groups.map((group) => {
       const items = group.providers.map((provider) => {
-        const account = MonitorModel.limitAccount(provider, stats, deviceId);
+        const account = MonitorModel.limitAccount(provider, stats, deviceId, limitAccountPresentation);
         const windows = MonitorModel.limitWindows(provider);
         const quotas = windows.map((win) => ({
           win,
@@ -130,6 +133,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           displayTitle,
           providerName(provider.provider),
           provider.provider,
+          account.displayName,
           provider.accountName,
           provider.accountEmail,
           provider.planLabel,
@@ -167,7 +171,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         maxUpdatedMs: Math.max(0, ...items.map((item) => item.updatedMs)),
       };
     });
-  }, [groups, stats, deviceId, showRemaining]);
+  }, [groups, stats, deviceId, limitAccountPresentation, showRemaining]);
 
   const allItems = useMemo(
     () => enrichedGroups.flatMap((group) => group.items),
@@ -214,8 +218,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         const keptItems = group.items.filter((item) => {
           const isManualHidden = hiddenSet.has(item.accountHash);
           const { provider } = item;
-          const needsCopilotLogin = provider.provider === 'copilot' && provider.accountKey && provider.status === 'unauthorized';
-          const isAutoHidden = hideUncollected && !item.hasHistory && !needsCopilotLogin;
+          const needsAccountLogin = Boolean(provider.accountKey && provider.status === 'unauthorized');
+          const isAutoHidden = hideUncollected && !item.hasHistory && !needsAccountLogin;
           if (isManualHidden) {
             manualHidden.push(item);
             if (keyword && item.searchIndex.includes(keyword)) hiddenMatches += 1;
@@ -766,6 +770,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   ? 'API 凭据失效'
                   : ({
                       ok: '正常',
+                      checking: '检查中…',
                       unavailable: '读取失败',
                       unauthorized: '需重新登录',
                       unconfigured: '未配置',
@@ -785,8 +790,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   (provider.provider === 'mimo' && account.productLabel)
                     ? ''
                     : provider.accountLabel);
+                const accountTitle = account.displayName || provider.accountName || provider.accountEmail;
                 const subMeta = [
-                  provider.accountName || provider.accountEmail,
+                  accountTitle,
+                  account.displayName && provider.accountName && provider.accountName !== account.displayName
+                    ? provider.accountName
+                    : '',
                   planOrAccountLabel,
                 ].filter(Boolean);
 
@@ -827,7 +836,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           </p>
                         )}
 
-                        {provider.accountName && provider.accountEmail && (
+                        {(account.displayName || provider.accountName) && provider.accountEmail && (
                           <p className="text-[11px] font-mono-tabular text-slate-400 mt-0.5 truncate">
                             {provider.accountEmail}
                           </p>

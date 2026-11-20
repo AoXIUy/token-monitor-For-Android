@@ -188,19 +188,64 @@ test('approval alerts sanitize items, open overview on tap and reset on reconnec
   assert.equal(state.approvals.items.length, 0);
 });
 
-test('display preferences sanitize separateQoderClients and survive Hub connection changes', async () => {
+test('display preferences sanitize separateQoderClients and exactTrendTokens and survive Hub connection changes', async () => {
   const { createInitialState, receiveNativeMessage } = await stateModule;
   let state = createInitialState();
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: false });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: false, exactTrendTokens: false });
 
-  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: true });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: true, exactTrendTokens: true });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
 
-  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: 'truthy-string' });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: 'truthy-string', exactTrendTokens: 1 });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
 
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.example.com' });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
+});
+
+test('limitAccountPresentation sanitizes custom labels/order and resets on reconnect', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = createInitialState();
+  assert.deepEqual(state.limitAccountPresentation, {});
+
+  state = receiveNativeMessage(state, {
+    type: 'limitAccountPresentation',
+    data: {
+      deepseek: {
+        labels: {
+          'sha256:one': '  Work   Account  ',
+          'sha256:cleared': '   ',
+          'sha256:email': 'user@example.com',
+          'sha256:url': 'https://evil.example/path',
+          '': 'blank-key',
+          '  untrimmed ': 'bad-key',
+        },
+        order: ['sha256:one', 'sha256:one', 'sha256:two', '  bad  '],
+      },
+      alibaba: {
+        labels: { 'sha256:ali:cn-personal': '百炼主力' },
+        order: ['sha256:ali:cn-personal'],
+      },
+      'INVALID PROVIDER!': { labels: { a: 'b' }, order: ['a'] },
+    },
+  });
+
+  assert.deepEqual(state.limitAccountPresentation, {
+    deepseek: {
+      labels: {
+        'sha256:one': 'Work Account',
+        'sha256:cleared': '',
+      },
+      order: ['sha256:one', 'sha256:two'],
+    },
+    alibaba: {
+      labels: { 'sha256:ali:cn-personal': '百炼主力' },
+      order: ['sha256:ali:cn-personal'],
+    },
+  });
+
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://other-hub.example.com' });
+  assert.deepEqual(state.limitAccountPresentation, {});
 });
 
 test('hubProfiles strip secret fields and survive inactive profile updates', async () => {

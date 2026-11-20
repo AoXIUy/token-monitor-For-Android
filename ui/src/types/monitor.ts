@@ -92,6 +92,7 @@ export interface PeriodData {
 
 export interface QuotaWindow {
   limitId?: string;
+  productId?: string;
   windowMinutes?: number;
   additional?: boolean;
   kind?: 'session' | 'weekly' | 'daily' | 'monthly' | 'billing' | 'credits' | string;
@@ -117,11 +118,13 @@ export interface LimitProvider {
   sourceDetail?: string;
   provider: string;
   accountKey?: string;
+  accountKeyAliases?: string[];
   relatedAccountKey?: string;
   profileName?: string;
   workspaceKind?: string;
   sourceDeviceId?: string;
   source?: string;
+  accountDisplayName?: string;
   accountName?: string;
   accountEmail?: string;
   planLabel?: string;
@@ -178,16 +181,25 @@ export interface DailyHistoryRow {
   cost?: number | null;
 }
 
+export interface LimitAccountPresentationGroup {
+  labels: Record<string, string>;
+  order: string[];
+}
+
+export type LimitAccountPresentationMap = Record<string, LimitAccountPresentationGroup>;
+
 export interface MonitorStats {
   periods?: Partial<Record<PeriodId, PeriodData>>;
   devices?: DeviceData[];
   limits?: {
     providers?: LimitProvider[];
+    multiAccountProviders?: string[];
   };
   historyPreview?: {
     daily?: DailyHistoryRow[];
     summary?: { activeDays?: number; activeDaysComplete?: boolean };
   };
+  syncSettingsRevisions?: Record<string, number>;
   projectsIncomplete?: boolean;
   periodProjectsOmitted?: Partial<Record<PeriodId, number>>;
   sessionDetailsOmitted?: Partial<Record<PeriodId, number>>;
@@ -301,6 +313,7 @@ export interface HubNativeBridge {
 
 export interface DisplayPrefs {
   separateQoderClients: boolean;
+  exactTrendTokens: boolean;
 }
 
 export interface LimitsPrefs {
@@ -376,6 +389,7 @@ export interface MonitorState {
   connectionEpoch: number;
   limitsPrefs: LimitsPrefs;
   displayPrefs: DisplayPrefs;
+  limitAccountPresentation: LimitAccountPresentationMap;
   reports: ReportsState;
 }
 

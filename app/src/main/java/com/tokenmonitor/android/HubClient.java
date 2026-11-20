@@ -27,6 +27,10 @@ final class HubClient {
         return getUrl(spec, spec.endpoint(path), 16 * 1024 * 1024);
     }
 
+    JSONObject limitAccountPresentation(ConnectionSpec spec) throws Exception {
+        return getUrl(spec, spec.endpoint("/api/sync/settings/limitAccountPresentation"), 256 * 1024);
+    }
+
     JSONObject conversation(ConnectionSpec spec, String deviceId, String key, String cursor) throws Exception {
         return getUrl(spec, spec.conversationEndpoint(deviceId, key, cursor), 384 * 1024);
     }

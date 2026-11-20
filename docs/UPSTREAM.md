@@ -22,6 +22,8 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 2026-11-16 适配分支版本 **`0.96.0`** 新增的主 Hub 按天 / 按周 / 按月数据使用与项目分析报告功能，随 Android **1.18.0 / versionCode 36** 发布。Android 端保持严格只读 GET 边界，通过 `ConnectionSpec` 白名单端点读取主 Hub 报告列表与结构化/Markdown 报告详情，不发送写入或触发生成请求，也不修改 `src/shared/` 快照闭包。
 
+2026-11-20 增量同步主线 `v0.94.0`（**`5888563c2bc76c02bb3b6e74073daa000d7c1c47`**）的 `src/shared/sessionLive.js`（新增 `sessionWithActivity` 可选 `now` 参数），并完成全部相关只读适配，随 Android **1.21.0 / versionCode 39** 发布：跨设备多账号配额与 `GET /api/sync/settings/limitAccountPresentation` 只读同步（按账号自定义名称与顺序展示、显式空名称清除回退及阿里云百炼 `region` 选区键隔离）、Alibaba Token Plan 区域/方案徽标及桌面微件白名单扩展、总览每日趋势精确 Token 数显示开关（`exactTrendTokens`）、`windows[].productId` 协议兼容及会话上下文行窄屏对齐。
+
 独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
 这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js`；v0.90 更新 `limits/windowText.js` 与 `limits/historyModel.js`；v0.93 更新 `clientCatalog.js`（新增 `qodercn`）。前者与固定上游提交字节一致，后者仅保留上述导入路径调整；其余文件保留各自快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。

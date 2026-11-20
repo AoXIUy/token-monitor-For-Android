@@ -39,7 +39,9 @@ final class ConnectionSpec {
     }
 
     String endpoint(String path) {
-        if (!("/api/stats".equals(path) || "/api/subscriptions".equals(path))) {
+        if (!("/api/stats".equals(path)
+                || "/api/subscriptions".equals(path)
+                || "/api/sync/settings/limitAccountPresentation".equals(path))) {
             throw new IllegalArgumentException("Unsupported read endpoint");
         }
         return url + path;

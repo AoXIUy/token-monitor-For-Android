@@ -1302,6 +1302,97 @@ public final class StartupTest {
         }
     }
 
+    @Test public void upstream94MultiAccountPresentationAlibabaAndExactTrend() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            if (header.startsWith("Authorization: ")) authorizations.add(header);
+                        }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/sync/settings/limitAccountPresentation ")) {
+                            body = "{\"ok\":true,\"version\":1,\"revision\":3,\"updatedAt\":\"2026-11-20T00:00:00Z\","
+                                    + "\"value\":{\"deepseek\":{\"labels\":{\"sha256:ds-1\":\"工作 DeepSeek\",\"sha256:ds-2\":\"备用 DeepSeek\"},"
+                                    + "\"order\":[\"sha256:ds-2\",\"sha256:ds-1\"]},"
+                                    + "\"alibaba\":{\"labels\":{\"sha256:ali-1:cn-personal\":\"百炼主力\"},"
+                                    + "\"order\":[\"sha256:ali-1:cn-personal\"]}}}";
+                        } else {
+                            org.json.JSONArray providers = new org.json.JSONArray()
+                                    .put(new org.json.JSONObject().put("provider", "deepseek").put("accountKey", "sha256:ds-1")
+                                            .put("source", "api").put("status", "ok")
+                                            .put("windows", new org.json.JSONArray().put(new org.json.JSONObject()
+                                                    .put("kind", "billing").put("metric", "credits").put("remaining", 68.4).put("currency", "CNY").put("showMeter", false)))
+                                            .put("balance", new org.json.JSONObject().put("amount", 68.4).put("currency", "CNY")))
+                                    .put(new org.json.JSONObject().put("provider", "alibaba").put("accountKey", "sha256:ali-1")
+                                            .put("region", "cn-personal").put("source", "cli").put("status", "ok")
+                                            .put("windows", new org.json.JSONArray().put(new org.json.JSONObject()
+                                                    .put("kind", "session").put("label", "5h").put("usedPercent", 18))))
+                                    .put(new org.json.JSONObject().put("provider", "deepseek").put("accountKey", "sha256:ds-2")
+                                            .put("source", "api").put("status", "ok")
+                                            .put("windows", new org.json.JSONArray().put(new org.json.JSONObject()
+                                                    .put("kind", "billing").put("metric", "credits").put("remaining", 12.0).put("currency", "CNY").put("showMeter", false)))
+                                            .put("balance", new org.json.JSONObject().put("amount", 12.0).put("currency", "CNY")));
+                            body = new org.json.JSONObject(testStats(false))
+                                    .put("syncSettingsRevisions", new org.json.JSONObject().put("limitAccountPresentation", 3))
+                                    .put("limits", new org.json.JSONObject().put("providers", providers))
+                                    .toString();
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-upstream94-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'v94-test-secret', true)");
+                awaitScript("document.querySelector('.trend-selection') && document.querySelector('.trend-selection').innerText.includes('1.23K')");
+
+                evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+                awaitScript("document.querySelectorAll('[data-limit-account]').length === 3 && document.body.innerText.includes('备用 DeepSeek')");
+                assertEquals("true", evaluate("(() => {"
+                        + " const cards = Array.from(document.querySelectorAll('[data-limit-account]'));"
+                        + " return cards.length === 3"
+                        + " && cards[0].innerText.includes('备用 DeepSeek')"
+                        + " && cards[1].innerText.includes('Alibaba Cloud') && cards[1].innerText.includes('中国站 · 个人版') && cards[1].innerText.includes('百炼主力')"
+                        + " && cards[2].innerText.includes('工作 DeepSeek');"
+                        + " })()"));
+
+                evaluate("document.querySelector('[data-page=\"settings\"]').click()");
+                awaitScript("document.getElementById('exact-trend-tokens')");
+                evaluate("document.getElementById('exact-trend-tokens').click()");
+                awaitScript("document.getElementById('exact-trend-tokens').checked === true");
+                evaluate("document.querySelector('[data-page=\"overview\"]').click()");
+                awaitScript("document.querySelector('.trend-selection') && document.querySelector('.trend-selection').innerText.includes('1,234')");
+
+                assertTrue(requests.stream().anyMatch(line -> line.startsWith("GET /api/sync/settings/limitAccountPresentation ")));
+                assertTrue(requests.stream().allMatch(line -> line.startsWith("GET ")));
+                assertFalse(authorizations.isEmpty());
+                assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer v94-test-secret")));
+            } finally {
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
     private static String testStats(boolean completed) throws Exception {
         String now = java.time.Instant.now().toString();
         org.json.JSONObject session = new org.json.JSONObject()

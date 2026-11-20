@@ -1,5 +1,5 @@
 import type {
-  BreakdownKind, DailyHistoryRow, DeviceData, LimitProvider, ModelTokenComponents, MonitorStats,
+  BreakdownKind, DailyHistoryRow, DeviceData, LimitAccountPresentationMap, LimitProvider, ModelTokenComponents, MonitorStats,
   PeriodData, PeriodId, QuotaWindow, SessionDevice, SessionRow, SessionStatusResult, SubscriptionRow,
 } from '../types/monitor';
 
@@ -81,8 +81,9 @@ export interface MonitorModelApi {
     recentDays: number; sevenDayDays: number; sevenDayTokens: number | null; peakDayTokens: number | null;
   };
   components(period: PeriodData): { cached: number; output: number; cachePercent: string } | null;
-  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string): { key: string; sourceLabel: string; productLabel?: string; regionLabel?: string };
-  limitGroups(providers: LimitProvider[], stats?: MonitorStats | null, deviceId?: string): Array<{key: string; label: string; linked: boolean; providers: LimitProvider[]}>;
+  limitSelectionKey(provider: LimitProvider): string;
+  limitAccount(provider: LimitProvider, stats?: MonitorStats | null, deviceId?: string, presentation?: LimitAccountPresentationMap | null): { key: string; sourceLabel: string; displayName?: string; productLabel?: string; regionLabel?: string };
+  limitGroups(providers: LimitProvider[], stats?: MonitorStats | null, deviceId?: string, presentation?: LimitAccountPresentationMap | null): Array<{key: string; label: string; linked: boolean; providers: LimitProvider[]}>;
   limitSpend(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
   limitBalanceDetails(provider: LimitProvider): Array<{key: string; label: string; value: string}>;
   quotaTrendBounds(provider: LimitProvider, window: QuotaWindow, now: number): { start: number; end: number; cycle: boolean };

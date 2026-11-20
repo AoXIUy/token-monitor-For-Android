@@ -141,6 +141,7 @@ export function useNativeMonitor() {
       });
       next = receiveNativeMessage(next, { type: 'status', state: 'online' });
       next = receiveNativeMessage(next, { type: 'stats', data: demo.stats, fetchedAt: now });
+      next = receiveNativeMessage(next, { type: 'limitAccountPresentation', data: demo.limitAccountPresentation });
       next = receiveNativeMessage(next, { type: 'quotaHistory', ...demo.quotaHistory });
       next = receiveNativeMessage(next, { type: 'subscriptions', data: demo.subscriptions });
       next = receiveNativeMessage(next, {

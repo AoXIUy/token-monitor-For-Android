@@ -19,6 +19,7 @@ import { DeviceBreakdownRow, MonitorModel } from '../model/monitorModel';
 import {
   BreakdownKind,
   DeviceData,
+  LimitAccountPresentationMap,
   LimitProvider,
   MonitorStats,
   PageId,
@@ -51,6 +52,8 @@ interface OverviewViewProps {
   onOpenReports?: (granularity: ReportGranularity) => void;
   onOpenReportWindow?: (granularity?: ReportGranularity) => void;
   separateQoderClients?: boolean;
+  exactTrendTokens?: boolean;
+  limitAccountPresentation?: LimitAccountPresentationMap;
 }
 
 type BreakdownSortBy = 'tokens' | 'cost';
@@ -308,7 +311,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onOpenReports,
   onOpenReportWindow,
   separateQoderClients = false,
+  exactTrendTokens = false,
+  limitAccountPresentation,
 }) => {
+  const formatTrendTokens = (tokens: unknown) =>
+    exactTrendTokens ? formatExact(tokens) : MonitorModel.compact(tokens);
   const breakdownSectionRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [showDailyList, setShowDailyList] = useState(false);
@@ -370,8 +377,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     const hasValidReading = (val?: string | null) =>
       Boolean(val) && val !== '暂无读数' && !String(val).startsWith('—');
 
-    const items = providers.map((provider, index) => {
-      const account = MonitorModel.limitAccount(provider, stats, deviceId);
+    const orderedProviders = MonitorModel.limitGroups(providers, stats, deviceId, limitAccountPresentation)
+      .flatMap((group) => group.providers);
+    const items = orderedProviders.map((provider, index) => {
+      const account = MonitorModel.limitAccount(provider, stats, deviceId, limitAccountPresentation);
       const windows = MonitorModel.limitWindows(provider);
       const quotas = windows.map((win) => ({ win, q: MonitorModel.quota(provider, win) }));
       const validQuotas = quotas.filter(
@@ -490,7 +499,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       collectedItems,
       fallbackItems: sortedItems.slice(0, 3),
     };
-  }, [selected.providers, stats, deviceId]);
+  }, [selected.providers, stats, deviceId, limitAccountPresentation]);
 
   const devicesPulse = useMemo(() => {
     const list = stats.devices || [];
@@ -1097,6 +1106,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         const tone = clientTone(provider.provider);
                         const displayTitle = account.productLabel || providerName(provider.provider);
                         const subLabel =
+                          account.displayName ||
                           provider.accountName ||
                           provider.accountEmail ||
                           provider.planLabel ||
@@ -1329,6 +1339,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 selectedDate={activeTrendDay?.date}
                 onSelectDate={setSelectedDate}
                 embedded={true}
+                exactTrendTokens={exactTrendTokens}
               />
 
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -1341,7 +1352,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       <strong className="text-white">{activeTrendDay.date}</strong>
                       <span className="mx-1.5 text-slate-500">·</span>
                       <span className="text-sky-300 font-semibold">
-                        {MonitorModel.compact(activeTrendDay.tokens)}
+                        {formatTrendTokens(activeTrendDay.tokens)}
                       </span>
                       {MonitorModel.numeric(activeTrendDay.cost) !== null && (
                         <>
@@ -1386,8 +1397,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       onClick={() => setSelectedDate(row.date)}
                       data-trend={row.date}
                       aria-pressed={isSelected}
-                      aria-label={`${row.date} · ${MonitorModel.compact(row.tokens)} tokens · ${MonitorModel.money(row.cost)}`}
-                      title={`${row.date} · ${MonitorModel.compact(row.tokens)}`}
+                      aria-label={`${row.date} · ${formatTrendTokens(row.tokens)} tokens · ${MonitorModel.money(row.cost)}`}
+                      title={`${row.date} · ${formatTrendTokens(row.tokens)}`}
                       className="trend-col flex-1 h-full flex flex-col justify-end items-center group rounded-t-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-0"
                     >
                       <div
@@ -1448,7 +1459,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                             <span>{row.date}</span>
                             <div className="flex items-center gap-3">
                               <span className="text-slate-100 font-semibold">
-                                {MonitorModel.compact(row.tokens)}
+                                {formatTrendTokens(row.tokens)}
                               </span>
                               <span className="text-slate-400 w-16 text-right">
                                 {MonitorModel.money(row.cost)}

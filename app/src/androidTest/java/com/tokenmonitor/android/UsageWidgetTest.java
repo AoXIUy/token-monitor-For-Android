@@ -321,5 +321,11 @@ public final class UsageWidgetTest {
         JSONArray openclawTop = openclawSummary.getJSONArray("topClients");
         assertEquals("OpenClaw", openclawTop.getJSONObject(0).getString("label"));
         assertEquals("150K", openclawTop.getJSONObject(0).getString("tokens"));
+
+        JSONObject alibabaSource = stats().put("limits", new JSONObject().put("providers", new JSONArray()
+                .put(new JSONObject().put("provider", "alibaba").put("region", "cn-personal").put("status", "ok")
+                        .put("windows", new JSONArray().put(new JSONObject().put("kind", "session").put("usedPercent", 64.0))))));
+        JSONObject alibabaSummary = UsageWidgetSnapshot.project(alibabaSource, 2000L, 1900L, false);
+        assertEquals("Alibaba Cloud · 会话", alibabaSummary.getJSONArray("quotas").getJSONObject(0).getString("label"));
     }
 }

@@ -21,7 +21,7 @@
 
 `LocalContentClient` 使用 AndroidX `WebViewAssetLoader`，仅在固定 HTTPS 源上映射明确允许的 APK 资源。未知地址必须返回阻止响应，不能回退到网络。网页禁用直接联网及文件访问；Hub 请求通过原生层执行。
 
-`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
+`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
 
 分析报告（按天 / 按周 / 按月）使用两个独立的有界队列 `reportsListNetwork` 和 `reportsDetailNetwork`，通过 `ConnectionSpec.reportsListEndpoint()` 与 `ConnectionSpec.reportDetailEndpoint()` 严格校验周期类型（`daily` / `weekly` / `monthly`）、期次键与格式（`both`），不提供向 Hub 写入配置或触发 `POST /api/reports/generate` 的突变能力；切换连接或进入后台时取消在途请求并清空缓存，使用连接代次与请求标识拒绝迟到响应。
 

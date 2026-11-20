@@ -391,12 +391,12 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         {data.context ? (
           <div className="mt-3.5 pt-3 border-t border-white/8 space-y-1.5">
             <div className="flex items-baseline justify-between gap-2 text-xs font-mono-tabular">
-              <span className="text-slate-200">
+              <span className="text-slate-200 min-w-0 truncate">
                 上下文窗口 ({formatExact(data.context.contextTokens)} /{' '}
                 {formatExact(data.context.contextWindow)})
               </span>
               <span
-                className={`font-semibold ${
+                className={`font-semibold shrink-0 tabular-nums ${
                   data.context.percentUsed > 80 ? 'text-amber-300' : 'text-sky-300'
                 }`}
               >

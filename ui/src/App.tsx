@@ -988,6 +988,8 @@ function Dashboard({
                   }}
                   onOpenSessionDetail={openSession}
                   separateQoderClients={state.displayPrefs.separateQoderClients}
+                  exactTrendTokens={state.displayPrefs.exactTrendTokens}
+                  limitAccountPresentation={state.limitAccountPresentation}
                   onSelectToolSessions={(toolId) => {
                     setSearch('');
                     setPage('sessions');
@@ -1026,6 +1028,7 @@ function Dashboard({
                   fetchedAt={fetchedAt}
                   foreground={foreground}
                   prefs={state.limitsPrefs}
+                  limitAccountPresentation={state.limitAccountPresentation}
                   onChangePrefs={saveLimitsPrefs}
                 />
               )}

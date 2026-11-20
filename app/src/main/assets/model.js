@@ -306,7 +306,53 @@
       nextChangeAt: Math.min(fetchedAt + REMOTE_STATUS_MAX_AGE_MS, next > now ? next : Infinity),
     };
   }
-  function limitAccount(provider, stats, deviceId = '') {
+  function limitSelectionKey(provider) {
+    const accountKey = String(provider?.accountKey || '').trim();
+    if (!accountKey) return '';
+    if (provider?.provider === 'alibaba') return `${accountKey}:${String(provider.region || '').trim() || 'cn'}`;
+    return accountKey;
+  }
+  function limitPresentationOrderRank(provider, order) {
+    if (!Array.isArray(order) || !order.length || !provider) return -1;
+    const region = String(provider.region || '').trim() || 'cn';
+    const selKey = limitSelectionKey(provider);
+    if (selKey) {
+      const idx = order.indexOf(selKey);
+      if (idx >= 0) return idx;
+    }
+    const aliases = Array.isArray(provider.accountKeyAliases) ? provider.accountKeyAliases : [];
+    for (const rawAlias of aliases) {
+      const alias = String(rawAlias || '').trim();
+      if (!alias) continue;
+      const key = provider.provider === 'alibaba' ? `${alias}:${region}` : alias;
+      const idx = order.indexOf(key);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+  function applyLimitPresentationOrder(providers, presentation) {
+    if (!Array.isArray(providers) || !providers.length || !presentation || typeof presentation !== 'object') return providers;
+    const result = providers.slice();
+    for (const providerId of Object.keys(presentation)) {
+      const order = presentation[providerId]?.order;
+      if (!Array.isArray(order) || !order.length) continue;
+      const positions = [];
+      for (let i = 0; i < result.length; i++) {
+        if (result[i]?.provider === providerId) positions.push(i);
+      }
+      if (positions.length < 2) continue;
+      const ordered = positions
+        .map((pos, originalIdx) => {
+          const row = result[pos];
+          const rank = limitPresentationOrderRank(row, order);
+          return { row, rank: rank >= 0 ? rank : order.length + originalIdx, originalIdx };
+        })
+        .sort((a, b) => a.rank - b.rank || a.originalIdx - b.originalIdx);
+      positions.forEach((pos, idx) => { result[pos] = ordered[idx].row; });
+    }
+    return result;
+  }
+  function limitAccount(provider, stats, deviceId = '', presentation = null) {
     const museSource = provider.provider === 'muse' ? provider.source === 'web' ? 'web' : 'cli' : '';
     const minimaxSource = provider.provider === 'minimax' ? provider.source || '' : '';
     const sourceId = deviceId || provider.sourceDeviceId || '';
@@ -329,31 +375,54 @@
       : mimoProduct ? mimoProduct === 'Console' ? 'MiMo Console' : 'MiMo Desktop'
       : provider.provider === 'minimax' ? minimaxSource === 'oauth' ? 'MiniMax Code'
         : provider.accountLabel === 'Pay-as-you-go' ? 'MiniMax API' : provider.accountLabel === 'Token Plan' ? 'MiniMax Token Plan' : 'MiniMax' : '';
-    const regionLabel = provider.provider === 'minimax' ? ({ cn: '中国', en: '国际' })[provider.region] || '' : '';
-    return { key, sourceLabel, ...(productLabel ? { productLabel } : {}), ...(regionLabel ? { regionLabel } : {}) };
+    const regionLabel = provider.provider === 'minimax'
+      ? ({ cn: '中国', en: '国际' })[provider.region] || ''
+      : provider.provider === 'alibaba'
+        ? ({ cn: '中国站 · 团队版', intl: '国际站 · 团队版', 'cn-personal': '中国站 · 个人版', 'intl-personal': '国际站 · 个人版' })[provider.region] || ''
+        : '';
+    const presLabels = presentation && typeof presentation === 'object' ? presentation[provider.provider]?.labels : null;
+    const region = String(provider.region || '').trim() || 'cn';
+    const lookupKeys = [
+      limitSelectionKey(provider),
+      ...(Array.isArray(provider.accountKeyAliases) ? provider.accountKeyAliases : [])
+        .map(alias => String(alias || '').trim())
+        .filter(Boolean)
+        .map(alias => provider.provider === 'alibaba' ? `${alias}:${region}` : alias),
+    ].filter(Boolean);
+    let displayName = '';
+    if (presLabels && typeof presLabels === 'object' && lookupKeys.length > 0) {
+      const matchedKey = lookupKeys.find(k => Object.prototype.hasOwnProperty.call(presLabels, k));
+      if (matchedKey) displayName = String(presLabels[matchedKey] || '').trim();
+      else if (typeof provider.accountDisplayName === 'string') displayName = provider.accountDisplayName.trim();
+    } else if (typeof provider.accountDisplayName === 'string') {
+      displayName = provider.accountDisplayName.trim();
+    }
+    return { key, sourceLabel, ...(displayName ? { displayName } : {}), ...(productLabel ? { productLabel } : {}), ...(regionLabel ? { regionLabel } : {}) };
   }
-  function limitGroups(providers, stats, deviceId = '') {
+  function limitGroups(providers, stats, deviceId = '', presentation = null) {
+    const orderedProviders = applyLimitPresentationOrder(providers, presentation);
     const groups = new Map();
     const individuals = new Map();
-    for (const provider of providers) {
+    for (const provider of orderedProviders) {
       // A verified API -> Code link groups headings only. Each original row,
       // quota, status, currency and history identity remains independent.
       const code = provider.provider === 'minimax' && provider.source === 'api'
         && provider.accountKey && provider.accountKey !== provider.relatedAccountKey
         && /^sha256:[a-f0-9]{64}$/.test(provider.relatedAccountKey || '')
-        && providers.find(row => row.provider === 'minimax' && row.source === 'oauth'
+        && orderedProviders.find(row => row.provider === 'minimax' && row.source === 'oauth'
           && row.accountKey === provider.relatedAccountKey && row.region && row.region === provider.region);
       const owner = code || provider;
+      const ownerAccount = limitAccount(owner, stats, deviceId, presentation);
       let key;
       if (owner.provider === 'minimax' && owner.source === 'oauth' && owner.accountKey) {
         key = JSON.stringify(['minimax-group', owner.region || '', owner.accountKey]);
       } else {
-        const identity = limitAccount(provider, stats, deviceId).key;
+        const identity = limitAccount(provider, stats, deviceId, presentation).key;
         const duplicate = individuals.get(identity) || 0;
         individuals.set(identity, duplicate + 1);
         key = JSON.stringify(['card', identity, duplicate]);
       }
-      if (!groups.has(key)) groups.set(key, { key, label: owner.accountName || owner.accountEmail || 'MiniMax 账户', providers: [] });
+      if (!groups.has(key)) groups.set(key, { key, label: ownerAccount.displayName || owner.accountName || owner.accountEmail || 'MiniMax 账户', providers: [] });
       groups.get(key).providers.push(provider);
     }
     return [...groups.values()].map(group => ({ ...group,
@@ -560,5 +629,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitSelectionKey, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });

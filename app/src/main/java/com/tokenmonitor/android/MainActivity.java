@@ -54,6 +54,8 @@ public final class MainActivity extends Activity {
     private int generation;
     private int failures;
     private String subscriptionVersion;
+    private Integer limitAccountPresentationRevision;
+    private boolean limitAccountPresentationUnsupported;
     private String initialError = "";
     private String pendingNotificationAction;
     private JSONObject latestStats;
@@ -198,6 +200,8 @@ public final class MainActivity extends Activity {
         spec = next;
         failures = 0;
         subscriptionVersion = null;
+        limitAccountPresentationRevision = null;
+        limitAccountPresentationUnsupported = false;
         connectionChanged();
         MainActivity.this.refresh(true);
     }
@@ -422,6 +426,8 @@ public final class MainActivity extends Activity {
         boolean readSubscriptions = subscriptionsRequested;
         subscriptionsRequested = false;
         String previousVersion = subscriptionVersion;
+        Integer previousPresRevision = limitAccountPresentationRevision;
+        boolean skipPresentation = limitAccountPresentationUnsupported;
         status("loading", "正在同步…");
         network.execute(() -> {
             try {
@@ -442,6 +448,36 @@ public final class MainActivity extends Activity {
                 }
                 JSONObject subscriptionData = subscriptions;
                 String subscriptionMessage = subscriptionError;
+                JSONObject presentationData = null;
+                Integer fetchedPresentationRevision = null;
+                boolean markPresentationUnsupported = false;
+                JSONObject syncRevisions = stats.optJSONObject("syncSettingsRevisions");
+                if (!skipPresentation && syncRevisions != null && syncRevisions.has("limitAccountPresentation")) {
+                    int presRev = syncRevisions.optInt("limitAccountPresentation", -1);
+                    if (presRev == 0) {
+                        if (previousPresRevision == null || previousPresRevision != 0) {
+                            presentationData = new JSONObject();
+                            fetchedPresentationRevision = 0;
+                        }
+                    } else if (presRev > 0 && (previousPresRevision == null || presRev != previousPresRevision)) {
+                        try {
+                            JSONObject presBody = request.limitAccountPresentation(destination);
+                            if (presBody.optBoolean("ok", false)) {
+                                JSONObject presValue = presBody.optJSONObject("value");
+                                presentationData = presValue != null ? presValue : new JSONObject();
+                                fetchedPresentationRevision = presBody.has("revision")
+                                        ? presBody.optInt("revision", presRev)
+                                        : presRev;
+                            }
+                        } catch (HubClient.HubError error) {
+                            if (error.status == 401 || error.status == 403) throw error;
+                            if (error.status == 400 || error.status == 404) markPresentationUnsupported = true;
+                        } catch (Exception ignored) { }
+                    }
+                }
+                final JSONObject finalPresentationData = presentationData;
+                final Integer finalPresentationRevision = fetchedPresentationRevision;
+                final boolean finalMarkPresentationUnsupported = markPresentationUnsupported;
                 // Use the provider's observation time, never the polling clock.
                 // Persistence failures must not fail a healthy Hub read.
                 String persistenceError = "";
@@ -513,6 +549,12 @@ public final class MainActivity extends Activity {
                             // rather than adding another network request on every stats poll.
                             subscriptionVersion = marker;
                             emit(event("subscriptionError").put("message", subscriptionMessage));
+                        }
+                        if (finalMarkPresentationUnsupported) {
+                            limitAccountPresentationUnsupported = true;
+                        } else if (finalPresentationData != null) {
+                            limitAccountPresentationRevision = finalPresentationRevision;
+                            emit(event("limitAccountPresentation").put("data", finalPresentationData));
                         }
                         if (fetchedApprovals && approvalStore.enabled()) {
                             approvalStore.saveState(true, finalApprovalStatus, finalApprovalMessage);

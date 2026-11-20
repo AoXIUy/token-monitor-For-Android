@@ -6,6 +6,7 @@ export function sanitizeDisplayPrefs(raw: unknown): DisplayPrefs {
   const input = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
     separateQoderClients: input.separateQoderClients === true,
+    exactTrendTokens: input.exactTrendTokens === true,
   };
 }
 

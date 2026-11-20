@@ -2,12 +2,14 @@ import { useId, useState } from 'react';
 import { Activity } from 'lucide-react';
 import type { DailyHistoryRow } from '../types/monitor';
 import { MonitorModel } from '../model/monitorModel';
+import { formatExact } from '../utils/formatters';
 
 export interface HistoryChartProps {
   trend: DailyHistoryRow[];
   selectedDate?: string;
   onSelectDate?: (date: string) => void;
   embedded?: boolean;
+  exactTrendTokens?: boolean;
 }
 
 export function HistoryChart({
@@ -15,7 +17,10 @@ export function HistoryChart({
   selectedDate,
   onSelectDate,
   embedded = false,
+  exactTrendTokens = false,
 }: HistoryChartProps) {
+  const formatTrendTokens = (tokens: unknown) =>
+    exactTrendTokens ? formatExact(tokens) : MonitorModel.compact(tokens);
   const [mode, setMode] = useState<'daily' | 'cumulative'>('daily');
   const gradientId = useId().replace(/:/g, '');
   if (!trend.length) return null;
@@ -53,7 +58,7 @@ export function HistoryChart({
             <span>{embedded ? '趋势曲线 · 全部设备' : '历史用量 · 全部设备'}</span>
           </span>
           <span className="text-[11px] font-mono-tabular text-slate-300/90">
-            · {MonitorModel.compact(latestValue)}
+            · {formatTrendTokens(latestValue)}
           </span>
         </div>
         <div
@@ -85,7 +90,7 @@ export function HistoryChart({
         viewBox="0 0 320 100"
         role="img"
         aria-label={`${label}：${trend
-          .map((row, index) => `${row.date} ${MonitorModel.compact(values[index])} tokens`)
+          .map((row, index) => `${row.date} ${formatTrendTokens(values[index])} tokens`)
           .join('；')}`}
       >
         <defs>
@@ -129,7 +134,7 @@ export function HistoryChart({
               key={row.date}
               role={onSelectDate ? 'button' : undefined}
               tabIndex={onSelectDate ? 0 : undefined}
-              aria-label={onSelectDate ? `${row.date} · ${MonitorModel.compact(values[index])} tokens` : undefined}
+              aria-label={onSelectDate ? `${row.date} · ${formatTrendTokens(values[index])} tokens` : undefined}
               aria-pressed={onSelectDate ? isSelected : undefined}
               onClick={onSelectDate ? () => onSelectDate(row.date) : undefined}
               onKeyDown={onSelectDate ? (e) => {

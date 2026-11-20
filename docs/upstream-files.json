@@ -24,7 +24,9 @@
     },
     {
       "path": "src/shared/sessionLive.js",
-      "sha256": "6447a8240dc1cae255ff29fd264a4b0792c921679b08ead20c3760b2c13886a7"
+      "sha256": "e61707e40cc99024736fdb3ace64173f7509469ae2168d6df6b980a4072f47f4",
+      "sourcePath": "src/shared/sessionLive.js",
+      "sourceCommit": "5888563c2bc76c02bb3b6e74073daa000d7c1c47"
     },
     {
       "path": "src/shared/limits/windowLabels.js",
@@ -65,6 +67,6 @@
       "sourceCommit": "4361dd9234824bd7040adb653833fb4b8de397af"
     }
   ],
-  "upstreamVersion": "0.93.1",
-  "upstreamCommit": "55cd6bfb0e404cac25ac2ba5590c8a82ca16acbb"
+  "upstreamVersion": "0.94.0",
+  "upstreamCommit": "5888563c2bc76c02bb3b6e74073daa000d7c1c47"
 }

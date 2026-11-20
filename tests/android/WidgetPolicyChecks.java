@@ -27,6 +27,12 @@ public final class WidgetPolicyChecks {
         check("视频".equals(WidgetLayoutPolicy.windowLabel("minimax", "weekly", "Video")));
         check("周度".equals(WidgetLayoutPolicy.windowLabel("other", "weekly", "Video")));
         check("OpenDesign".equals(WidgetLayoutPolicy.providerLabel("opendesign", "web")));
+        check("Alibaba Cloud".equals(WidgetLayoutPolicy.providerLabel("alibaba", "cli")));
+        check("GLM".equals(WidgetLayoutPolicy.providerLabel("zai", "api")));
+        check("Kimi".equals(WidgetLayoutPolicy.providerLabel("kimi", "web")));
+        check("Factory Droid".equals(WidgetLayoutPolicy.providerLabel("factory", "web")));
+        check("Volcengine".equals(WidgetLayoutPolicy.providerLabel("volcengine", "api")));
+        check("Trae CN".equals(WidgetLayoutPolicy.providerLabel("trae", "web")));
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 0, 0) == WidgetLayoutPolicy.Size.COMPACT_BAR);
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 110, 56) == WidgetLayoutPolicy.Size.COMPACT_BAR);
         check(WidgetLayoutPolicy.selectSize(WidgetLayoutPolicy.Kind.COMPACT, 140, 120) == WidgetLayoutPolicy.Size.SMALL);
