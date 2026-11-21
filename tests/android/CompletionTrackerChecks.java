@@ -63,8 +63,8 @@ public final class CompletionTrackerChecks {
         size(0, tick(tracker, 1000, ended(-900000)), "Historical end outside the activity window is silent");
 
         tracker = new SessionCompletionTracker();
-        tick(tracker, 0, active(0), row("claude:b", 0, 0, 0, true, false));
-        size(2, tick(tracker, 1000, ended(1000), row("claude:b", 1000, 1000, 1000, false, true)), "Independent sessions each complete");
+        tick(tracker, 0, active(0), row("claude:b", 0, 0, 0, true, false), row("antigravity:c", 0, 0, 0, true, false));
+        size(3, tick(tracker, 1000, ended(1000), row("claude:b", 1000, 1000, 1000, false, true), row("antigravity:c", 1000, 1000, 1000, false, true)), "Independent sessions each complete");
         String first = ended(1000).eventId();
         if (!first.equals(ended(1000).eventId()) || first.equals(ended(2000).eventId())) throw new AssertionError("Event identity is not stable");
         checks++;

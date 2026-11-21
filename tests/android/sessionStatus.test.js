@@ -128,6 +128,12 @@ test('Android Antigravity running state keeps its canonical label and separate i
   assert.match(result.detail, /推断/);
   assert.equal(status({ ...running, turnEnded: false }).source, 'transcript');
   assert.equal(status({ ...running, turnEnded: true }).state, 'ended');
+  const nativeRunning = status({ ...running, turnEnded: true, liveActivity: { state: 'running', observedAt: iso(-5000) } });
+  assert.equal(nativeRunning.state, 'running');
+  assert.equal(nativeRunning.source, 'native');
+  const nativeIdle = status({ ...running, turnEnded: undefined, liveActivity: { state: 'idle', observedAt: iso(-5000) } });
+  assert.equal(nativeIdle.state, 'idle');
+  assert.equal(nativeIdle.source, 'native');
 });
 
 test('Android Antigravity inference never bypasses inactivity, archive, transport or source freshness rules', () => {

@@ -49,7 +49,8 @@ final class CompletionObservations {
                     JSONObject live = session.optJSONObject("liveActivity");
                     long observed = live == null ? 0 : timestamp(live.optString("observedAt"));
                     String state = live == null ? "unknown" : live.optString("state", "unknown");
-                    boolean validLive = ("claude".equals(client) || "codex".equals(client)) && observed > 0
+                    boolean validLive = ("claude".equals(client) || "codex".equals(client) || "antigravity".equals(client))
+                            && observed > 0
                             && observed <= now && now - observed < 30_000 && !"unknown".equals(state)
                             && ("running".equals(state) || "waiting".equals(state) || "idle".equals(state));
                     boolean openTurn = Boolean.FALSE.equals(session.opt("turnEnded"));

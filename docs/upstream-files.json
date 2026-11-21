@@ -16,7 +16,9 @@
     },
     {
       "path": "src/shared/sessionActivityProviders.js",
-      "sha256": "41a5ddf96d6115f04157d46865fa2aa0bafa601759c053418a867ffa2bf6759d"
+      "sha256": "2bc87297a03fa457cc26c1f9d7285a84a0cf5e2af185637a046f5f2fe4ca46eb",
+      "sourceProject": "https://github.com/AoXIUy/token-monitor",
+      "sourcePath": "src/shared/sessionActivityProviders.js"
     },
     {
       "path": "src/shared/sessionGroups.js",

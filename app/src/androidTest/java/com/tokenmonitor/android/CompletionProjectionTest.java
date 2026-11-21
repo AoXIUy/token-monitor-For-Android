@@ -62,4 +62,24 @@ public final class CompletionProjectionTest {
         row.getJSONObject("liveActivity").put("observedAt", Instant.ofEpochMilli(NOW - 30000).toString());
         assertTrue(read(device("pc", row)).isEmpty());
     }
+
+    @Test public void antigravityLiveActivityIsAcceptedForCompletionTracking() throws Exception {
+        JSONObject agRunning = new JSONObject()
+                .put("client", "antigravity")
+                .put("sessionId", "ag-1")
+                .put("title", "AG Task")
+                .put("lastUsedAt", Instant.ofEpochMilli(NOW - 5000).toString())
+                .put("turnEnded", true)
+                .put("liveActivity", new JSONObject()
+                        .put("state", "running")
+                        .put("observedAt", Instant.ofEpochMilli(NOW - 1000).toString()));
+        JSONObject period = new JSONObject().put("sessions", new JSONObject().put("antigravity:ag-1", agRunning));
+        JSONObject dev = new JSONObject().put("deviceId", "pc")
+                .put("updatedAt", Instant.ofEpochMilli(NOW).toString())
+                .put("stale", false)
+                .put("periods", new JSONObject().put("month", period).put("today", period));
+        SessionCompletionTracker.Observation obs = read(dev).get(0);
+        assertTrue(obs.active);
+        assertFalse(obs.ended);
+    }
 }
