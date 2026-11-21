@@ -83,6 +83,8 @@ export function clientTone(client?: string): {
         bar: 'from-sky-400 to-cyan-300',
       };
     case 'codex':
+    case 'junie':
+    case 'opencodereview':
       return {
         text: 'text-emerald-300',
         dot: 'bg-emerald-400',

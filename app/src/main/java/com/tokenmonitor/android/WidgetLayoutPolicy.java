@@ -91,6 +91,8 @@ final class WidgetLayoutPolicy {
             case "gemini" -> "Gemini";
             case "prime-agent" -> "Prime Agent";
             case "jcode" -> "Jcode";
+            case "junie" -> "Junie";
+            case "opencodereview" -> "OpenCodeReview";
             case "opendesign" -> "OpenDesign";
             case "thirdparty" -> "Third-party APIs";
             case "senpi" -> "Senpi";

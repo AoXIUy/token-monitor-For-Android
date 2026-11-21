@@ -15,6 +15,10 @@ public final class WidgetPolicyChecks {
         check("Mistral".equals(WidgetLayoutPolicy.providerLabel("mistral", "web")));
         check("Prime Agent".equals(WidgetLayoutPolicy.clientLabel("prime-agent")));
         check("Jcode".equals(WidgetLayoutPolicy.clientLabel("jcode")));
+        check("Junie".equals(WidgetLayoutPolicy.clientLabel("junie")));
+        check("Junie".equals(WidgetLayoutPolicy.providerLabel("junie", "")));
+        check("OpenCodeReview".equals(WidgetLayoutPolicy.clientLabel("opencodereview")));
+        check("OpenCodeReview".equals(WidgetLayoutPolicy.providerLabel("opencodereview", "")));
         check("Qoder".equals(WidgetLayoutPolicy.clientLabel("qoder")));
         check("Qoder CN".equals(WidgetLayoutPolicy.clientLabel("qodercn")));
         check("OpenClaw".equals(WidgetLayoutPolicy.clientLabel("openclaw")));

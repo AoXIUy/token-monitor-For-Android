@@ -49,9 +49,9 @@
     },
     {
       "path": "src/shared/clientCatalog.js",
-      "sha256": "5335c77b9e88123b9e2ce0ea08744320b1fc9a495603b8488e3be80f21110997",
+      "sha256": "4cc8dd09e0ec268ade96de8e52394e9ac29acc369c3b77a3f53135acf3f1dc36",
       "sourcePath": "src/shared/clientCatalog.js",
-      "sourceCommit": "a88c69504b63f5fd7f36f87a32f4c762c7b36120"
+      "sourceCommit": "4a36ad4f487271a5cd2450914a9ce56376295501"
     },
     {
       "path": "src/shared/limits/windowText.js",
@@ -67,6 +67,6 @@
       "sourceCommit": "4361dd9234824bd7040adb653833fb4b8de397af"
     }
   ],
-  "upstreamVersion": "0.94.0",
-  "upstreamCommit": "5888563c2bc76c02bb3b6e74073daa000d7c1c47"
+  "upstreamVersion": "0.95.0",
+  "upstreamCommit": "4a36ad4f487271a5cd2450914a9ce56376295501"
 }
