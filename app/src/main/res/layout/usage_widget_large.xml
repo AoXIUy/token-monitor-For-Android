@@ -6,11 +6,11 @@
     android:orientation="vertical"
     android:background="@drawable/widget_background"
     android:paddingHorizontal="14dp"
-    android:paddingVertical="12dp">
+    android:paddingVertical="11dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="26dp"
+        android:layout_height="32dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -23,25 +23,28 @@
             android:textSize="11sp"
             android:textStyle="bold"
             android:letterSpacing="0.12"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:ellipsize="end" />
         <LinearLayout
             android:id="@+id/widget_refresh"
-            android:layout_width="62dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
+            android:minWidth="70dp"
+            android:paddingHorizontal="10dp"
             android:background="@drawable/widget_button"
             android:gravity="center"
             android:orientation="horizontal"
             android:contentDescription="@string/widget_refresh_description">
             <ImageView
-                android:layout_width="13dp"
-                android:layout_height="13dp"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:src="@drawable/widget_refresh"
                 android:importantForAccessibility="no" />
             <TextView
                 android:includeFontPadding="false"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="5dp"
                 android:text="@string/widget_refresh"
                 android:textColor="#7DD3FC"
                 android:textSize="11sp"
@@ -52,7 +55,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="3dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -71,53 +74,56 @@
             android:includeFontPadding="false"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
             android:text="@string/widget_placeholder"
             android:textColor="#94A3B8"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:fontFeatureSettings="tnum"
             android:maxLines="1" />
     </LinearLayout>
 
-    <LinearLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:minHeight="36dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:minHeight="34dp">
         <TextView
             android:id="@+id/widget_tokens"
             android:includeFontPadding="false"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
             android:text="@string/widget_placeholder"
             android:textColor="#F8FAFC"
-            android:textSize="34sp"
+            android:textSize="32sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
             android:fontFeatureSettings="tnum"
             android:maxLines="1"
             android:autoSizeTextType="uniform"
             android:autoSizeMinTextSize="22sp"
-            android:autoSizeMaxTextSize="34sp"
+            android:autoSizeMaxTextSize="32sp"
             android:autoSizeStepGranularity="1sp" />
         <TextView
             android:includeFontPadding="false"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
+            android:layout_toEndOf="@id/widget_tokens"
+            android:layout_alignBaseline="@id/widget_tokens"
+            android:layout_marginStart="7dp"
             android:text="@string/widget_tokens_unit"
             android:textColor="#94A3B8"
-            android:textSize="11sp" />
-    </LinearLayout>
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </RelativeLayout>
 
     <ProgressBar
         android:id="@+id/widget_cache_bar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="5dp"
-        android:layout_marginBottom="6dp"
+        android:layout_marginBottom="7dp"
         android:max="100"
         android:progress="0"
         android:progressDrawable="@drawable/widget_progress_sky" />
@@ -142,7 +148,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_cost"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
             <TextView
@@ -150,13 +156,17 @@
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="3dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#F1F5F9"
                 android:textSize="14sp"
                 android:fontFamily="sans-serif-medium"
                 android:fontFeatureSettings="tnum"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="11sp"
+                android:autoSizeMaxTextSize="14sp"
+                android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
         <LinearLayout
             android:layout_width="0dp"
@@ -171,7 +181,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_cache_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
             <TextView
@@ -179,13 +189,17 @@
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="3dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#6EE7B7"
                 android:textSize="14sp"
                 android:fontFamily="sans-serif-medium"
                 android:fontFeatureSettings="tnum"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="11sp"
+                android:autoSizeMaxTextSize="14sp"
+                android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
         <LinearLayout
             android:layout_width="0dp"
@@ -200,7 +214,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_devices_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
             <TextView
@@ -208,20 +222,24 @@
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="3dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#7DD3FC"
                 android:textSize="14sp"
                 android:fontFamily="sans-serif-medium"
                 android:fontFeatureSettings="tnum"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="11sp"
+                android:autoSizeMaxTextSize="14sp"
+                android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="7dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -230,7 +248,7 @@
             android:layout_height="wrap_content"
             android:text="@string/widget_top_tools_label"
             android:textColor="#94A3B8"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:maxLines="1" />
         <TextView
             android:id="@+id/widget_tools_summary"
@@ -255,7 +273,7 @@
         android:paddingTop="5dp"
         android:text="@string/widget_connect"
         android:textColor="#94A3B8"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:maxLines="1"
         android:ellipsize="end" />
 </LinearLayout>

@@ -96,18 +96,35 @@ public final class MainActivity extends Activity {
         viewport.setOnApplyWindowInsetsListener(MainActivity::applySafeArea);
         viewport.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(viewport);
+        configureSystemBarAppearance();
         viewport.requestApplyInsets();
         try {
             web.loadUrl(LocalContentClient.START_URL);
         } catch (Exception error) {
+            int paddingPx = Math.round(24 * getResources().getDisplayMetrics().density);
             android.widget.TextView message = new android.widget.TextView(this);
             message.setText(R.string.resources_unavailable);
-            message.setTextColor(Color.WHITE);
+            message.setTextColor(Color.rgb(203, 213, 225));
+            message.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f);
+            message.setLineSpacing(0f, 1.4f);
+            message.setGravity(android.view.Gravity.CENTER);
+            message.setPadding(paddingPx, paddingPx, paddingPx, paddingPx);
             viewport.removeAllViews();
             viewport.addView(message, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::back);
+        }
+    }
+
+    private void configureSystemBarAppearance() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(0, mask);
+            }
         }
     }
 

@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_card"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/widget_background"
     android:paddingHorizontal="14dp"
     android:paddingVertical="11dp">
 
     <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
-        android:layout_height="26dp"
+        android:layout_height="32dp"
+        android:layout_alignParentTop="true"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -27,22 +28,24 @@
             android:ellipsize="end" />
         <LinearLayout
             android:id="@+id/widget_refresh"
-            android:layout_width="60dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
+            android:minWidth="70dp"
+            android:paddingHorizontal="10dp"
             android:background="@drawable/widget_button"
             android:gravity="center"
             android:orientation="horizontal"
             android:contentDescription="@string/widget_refresh_description">
             <ImageView
-                android:layout_width="13dp"
-                android:layout_height="13dp"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:src="@drawable/widget_refresh"
                 android:importantForAccessibility="no" />
             <TextView
                 android:includeFontPadding="false"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="5dp"
                 android:text="@string/widget_refresh"
                 android:textColor="#7DD3FC"
                 android:textSize="11sp"
@@ -52,8 +55,9 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:layout_below="@id/widget_header"
+        android:layout_above="@+id/widget_metrics_row"
         android:layout_marginTop="7dp"
         android:orientation="horizontal"
         android:baselineAligned="false">
@@ -74,7 +78,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_today_short"
                 android:textColor="#BAE6FD"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
             <TextView
@@ -92,7 +96,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="20sp" />
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_cost"
                 android:includeFontPadding="false"
@@ -123,7 +128,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_month_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1" />
             <TextView
                 android:id="@+id/widget_month_tokens"
@@ -140,7 +145,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="20sp" />
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_month_cost"
                 android:includeFontPadding="false"
@@ -171,7 +177,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_all_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1" />
             <TextView
                 android:id="@+id/widget_all_tokens"
@@ -188,7 +194,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="20sp" />
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_all_cost"
                 android:includeFontPadding="false"
@@ -205,32 +212,36 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/widget_metrics_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_above="@+id/widget_tools_row"
         android:layout_marginTop="7dp"
         android:orientation="horizontal"
         android:baselineAligned="false">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:id="@+id/widget_seven_day_label" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_seven_day" android:textColor="#94A3B8" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_seven_day_tokens" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#F1F5F9" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" />
+            <TextView android:id="@+id/widget_seven_day_label" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_seven_day" android:textColor="#94A3B8" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_seven_day_tokens" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#F1F5F9" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingStart="6dp" android:paddingEnd="0dp" android:orientation="vertical">
-            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_peak_day" android:textColor="#94A3B8" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_peak_tokens" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#7DD3FC" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" />
+            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_peak_day" android:textColor="#94A3B8" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_peak_tokens" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#7DD3FC" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingStart="6dp" android:paddingEnd="0dp" android:orientation="vertical">
-            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_cache_short" android:textColor="#94A3B8" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_cache" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#6EE7B7" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" />
+            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_cache_short" android:textColor="#94A3B8" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cache" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#6EE7B7" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingStart="6dp" android:paddingEnd="0dp" android:orientation="vertical">
-            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_devices_short" android:textColor="#94A3B8" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_devices" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#BAE6FD" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" />
+            <TextView android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_devices_short" android:textColor="#94A3B8" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_devices" android:includeFontPadding="false" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/widget_placeholder" android:textColor="#BAE6FD" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/widget_tools_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_above="@+id/widget_updated"
         android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -240,7 +251,7 @@
             android:layout_height="wrap_content"
             android:text="@string/widget_top_tools_label"
             android:textColor="#94A3B8"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:maxLines="1" />
         <TextView
             android:id="@+id/widget_tools_summary"
@@ -262,10 +273,11 @@
         android:includeFontPadding="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
         android:paddingTop="5dp"
         android:text="@string/widget_connect"
         android:textColor="#94A3B8"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:maxLines="1"
         android:ellipsize="end" />
-</LinearLayout>
+</RelativeLayout>

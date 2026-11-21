@@ -1,5 +1,5 @@
 import { MonitorModel } from '../model/monitorModel';
-import { PageId, PeriodId } from '../types/monitor';
+import { LimitProvider, PageId, PeriodId } from '../types/monitor';
 
 export const PAGE_LABELS: Record<PageId, string> = {
   overview: '用量总览',
@@ -71,6 +71,7 @@ export function clientTone(client?: string): {
 } {
   switch (client) {
     case 'claude':
+    case 'stepfun':
       return {
         text: 'text-violet-300',
         dot: 'bg-violet-400',
@@ -85,12 +86,14 @@ export function clientTone(client?: string): {
     case 'codex':
     case 'junie':
     case 'opencodereview':
+    case 'ollama':
       return {
         text: 'text-emerald-300',
         dot: 'bg-emerald-400',
         bar: 'from-emerald-400 to-teal-300',
       };
     case 'antigravity':
+    case 'devin':
       return {
         text: 'text-cyan-300',
         dot: 'bg-cyan-400',
@@ -99,6 +102,7 @@ export function clientTone(client?: string): {
     case 'copilot':
     case 'zed':
     case 'opencode':
+    case 'typesafe':
       return {
         text: 'text-indigo-300',
         dot: 'bg-indigo-400',
@@ -108,6 +112,7 @@ export function clientTone(client?: string): {
     case 'qoder':
     case 'qodercn':
     case 'mimo':
+    case 'workbuddy':
       return {
         text: 'text-teal-300',
         dot: 'bg-teal-400',
@@ -116,20 +121,29 @@ export function clientTone(client?: string): {
     case 'openrouter':
     case 'alibaba':
     case 'mistral':
+    case 'thirdparty':
       return {
         text: 'text-amber-300',
         dot: 'bg-amber-400',
         bar: 'from-amber-400 to-orange-400',
       };
+    case 'grok':
+      return {
+        text: 'text-orange-300',
+        dot: 'bg-orange-400',
+        bar: 'from-orange-400 to-amber-400',
+      };
     case 'minimax':
     case 'mcode':
     case 'kimi':
     case 'trae':
+    case 'manus':
       return {
         text: 'text-rose-300',
         dot: 'bg-rose-400',
         bar: 'from-rose-400 to-pink-400',
       };
+    case 'gemini':
     case 'zai':
     case 'zaiteam':
     case 'volcengine':
@@ -150,6 +164,12 @@ export function clientTone(client?: string): {
         dot: 'bg-fuchsia-400',
         bar: 'from-fuchsia-400 to-violet-400',
       };
+    case 'notion':
+      return {
+        text: 'text-slate-200',
+        dot: 'bg-slate-300',
+        bar: 'from-slate-300 to-sky-300',
+      };
     default:
       return {
         text: 'text-slate-300',
@@ -159,12 +179,49 @@ export function clientTone(client?: string): {
   }
 }
 
-export function formatRelativeCountdown(value?: string | number | null, nowMs: number = Date.now()): string {
+const LIMIT_STATUS_LABELS: Record<string, string> = {
+  ok: '正常',
+  checking: '检查中…',
+  unavailable: '读取失败',
+  unauthorized: '需重新登录',
+  authExpired: '需重新登录',
+  unconfigured: '未配置',
+  notConfigured: '未配置',
+  disabled: '已停用',
+  rateLimited: '已限流',
+  sourceRateLimited: '查询受限',
+  stale: '读数已过期',
+  error: '读取失败',
+};
+
+export function limitStatusLabel(
+  target?: Pick<LimitProvider, 'provider' | 'source' | 'status' | 'stale'> | string | null,
+): string {
+  if (!target) return '状态未知';
+  if (typeof target === 'string') {
+    return LIMIT_STATUS_LABELS[target] || target;
+  }
+  if (target.stale) return '读数已过期';
+  if (target.provider === 'minimax' && target.source === 'oauth' && target.status === 'notConfigured') {
+    return '需登录 Code';
+  }
+  if (target.provider === 'minimax' && target.source === 'api' && target.status === 'unauthorized') {
+    return 'API 凭据失效';
+  }
+  const status = target.status || '';
+  return LIMIT_STATUS_LABELS[status] || status || '状态未知';
+}
+
+export function formatRelativeCountdown(
+  value?: string | number | null,
+  nowMs: number = Date.now(),
+  expiredLabel: string = '即将重置',
+): string {
   if (value === undefined || value === null || value === '') return '';
   const target = typeof value === 'number' ? value : Date.parse(String(value));
   if (!Number.isFinite(target)) return '';
   const diffMs = target - nowMs;
-  if (diffMs <= 0) return '即将重置';
+  if (diffMs <= 0) return expiredLabel;
   const totalMinutes = Math.floor(diffMs / 60000);
   if (totalMinutes < 1) return '不到 1 分钟';
   if (totalMinutes < 60) return `${totalMinutes} 分钟后`;

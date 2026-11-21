@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Laptop, Search, Server, X } from 'lucide-react';
+import { ArrowRight, Check, Laptop, Server, X } from 'lucide-react';
 import { DeviceIcon } from './DeviceIcon';
+import { InlineAlert, SearchField } from './ui/Primitives';
 import { MonitorModel } from '../model/monitorModel';
 import type { MonitorStats, PageId, PeriodId } from '../types/monitor';
 import { formatShortTime, PERIOD_LABELS } from '../utils/formatters';
@@ -85,8 +86,9 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
       })
       .filter(({ device }) => {
         if (!kw) return true;
-        return [device.hostname, device.deviceId, device.osName, device.platform]
-          .some((field) => String(field || '').toLocaleLowerCase().includes(kw));
+        return [device.hostname, device.deviceId, device.osName, device.platform].some((field) =>
+          String(field || '').toLocaleLowerCase().includes(kw),
+        );
       })
       .sort((a, b) => {
         if (Boolean(a.device.stale) !== Boolean(b.device.stale)) {
@@ -115,19 +117,25 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
       onClick={(event) => {
         if (event.target === dialogRef.current) onClose();
       }}
-      className="device-picker-sheet mt-auto mb-0 mx-auto w-full max-w-[440px] sm:my-auto sm:w-[calc(100%_-_2rem)] sm:max-w-[420px] max-h-[82dvh] rounded-t-3xl sm:rounded-3xl border border-white/15 bg-[#0E1520] text-slate-100 shadow-2xl p-0 overflow-hidden backdrop:bg-black/75 backdrop:backdrop-blur-sm"
+      className="tm-dialog device-picker-sheet mt-auto mb-0 mx-auto w-full max-w-[460px] sm:my-auto sm:w-[calc(100%_-_2rem)] sm:max-w-[420px] max-h-[82dvh] rounded-t-3xl sm:rounded-3xl p-0 overflow-hidden"
     >
       <div className="flex flex-col max-h-[82dvh]">
+        {/* Mobile bottom-sheet grabber */}
+        <div
+          aria-hidden="true"
+          className="w-9 h-1 rounded-full bg-white/20 mx-auto mt-2.5 sm:hidden shrink-0"
+        />
+
         {/* Header */}
-        <div className="px-5 pt-4 pb-3 border-b border-white/10 flex items-start justify-between gap-3 shrink-0">
+        <div className="px-5 pt-3.5 pb-3 border-b border-white/10 flex items-start justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Laptop className="w-4 h-4 text-sky-400 shrink-0" />
+              <Laptop className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
               <h2 id="device-picker-title" className="text-base font-bold text-white">
                 选择统计设备
               </h2>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5 font-mono-tabular">
+            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
               共 {devices.length} 台设备 · {activeCount} 台近期上报
             </p>
           </div>
@@ -135,7 +143,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
             type="button"
             aria-label="关闭设备选择"
             onClick={onClose}
-            className="min-h-[40px] min-w-[40px] -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors shrink-0"
+            className="min-h-[44px] min-w-[44px] -mr-2 -mt-1.5 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] active:scale-95 transition-all shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -144,47 +152,36 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
         {/* Search when many devices */}
         {(devices.length > 4 || search !== '') && (
           <div className="px-4 pt-3 shrink-0">
-            <div className="relative flex items-center">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 pointer-events-none" />
-              <input
-                type="search"
-                data-device-search="true"
-                aria-label="搜索设备名称、ID 或系统"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索设备名称、ID 或系统…"
-                autoComplete="off"
-                className="w-full min-h-[38px] pl-9 pr-9 py-1.5 rounded-2xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/60 transition-colors"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  aria-label="清除设备搜索"
-                  className="w-8 h-8 flex items-center justify-center absolute right-1 text-slate-400 hover:text-slate-200 rounded-lg"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="搜索设备名称、ID 或系统…"
+              ariaLabel="搜索设备名称、ID 或系统"
+              clearAriaLabel="清除设备搜索"
+              inputProps={{ 'data-device-search': 'true' }}
+            />
           </div>
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-3.5 space-y-2.5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 space-y-2.5">
           {isSelectedDeviceRemoved && (
-            <div className="rounded-2xl bg-amber-500/12 border border-amber-400/30 p-3 flex items-center justify-between gap-2 text-xs text-amber-200">
-              <span className="min-w-0 truncate">
+            <InlineAlert
+              tone="amber"
+              action={
+                <button
+                  type="button"
+                  onClick={() => choose('')}
+                  className="min-h-[36px] px-3 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/35 text-xs font-semibold text-amber-100 active:scale-[0.97] transition-all shrink-0 whitespace-nowrap"
+                >
+                  切回全部
+                </button>
+              }
+            >
+              <span className="break-words">
                 当前所选设备 <span className="font-mono-tabular">{selectedDeviceId}</span> 已从 Hub 移除
               </span>
-              <button
-                type="button"
-                onClick={() => choose('')}
-                className="px-2.5 py-1 rounded-xl bg-amber-400/20 border border-amber-300/30 text-[11px] font-semibold text-amber-100 shrink-0"
-              >
-                切回全部
-              </button>
-            </div>
+            </InlineAlert>
           )}
 
           {/* All Devices summary option */}
@@ -194,7 +191,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
               data-device-option=""
               aria-pressed={selectedDeviceId === ''}
               onClick={() => choose('')}
-              className={`w-full text-left rounded-2xl p-3.5 border transition-colors ${
+              className={`w-full text-left rounded-2xl p-3.5 border transition-all active:scale-[0.99] ${
                 selectedDeviceId === ''
                   ? 'bg-sky-500/12 border-sky-400/45 shadow-[0_0_20px_rgba(56,189,248,0.12)]'
                   : 'bg-white/[0.025] hover:bg-white/[0.055] border-white/[0.08]'
@@ -206,13 +203,13 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                     <Server className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white flex items-center gap-2">
+                    <div className="text-sm font-semibold text-white flex items-center gap-2 flex-wrap">
                       <span>全部设备</span>
-                      <span className="px-1.5 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-mono-tabular text-slate-300">
+                      <span className="px-2 py-0.5 rounded-full bg-white/[0.07] text-[11px] tabular-nums text-slate-300">
                         {devices.length} 台汇总
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 font-mono-tabular">
+                    <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
                       {page === 'limits'
                         ? fleetSummary
                           ? `共 ${fleetSummary.providersCount} 个账户 · ${fleetSummary.collectedLimits} 项有采集`
@@ -259,7 +256,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                       data-device-option={dev.deviceId}
                       aria-pressed={isSelected}
                       onClick={() => choose(dev.deviceId)}
-                      className={`w-full text-left rounded-2xl p-3.5 border transition-colors ${
+                      className={`w-full text-left rounded-2xl p-3.5 border transition-all active:scale-[0.99] ${
                         isSelected
                           ? 'bg-sky-500/12 border-sky-400/45 shadow-[0_0_20px_rgba(56,189,248,0.12)]'
                           : 'bg-white/[0.025] hover:bg-white/[0.055] border-white/[0.08]'
@@ -276,8 +273,8 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                                 {dev.hostname || dev.deviceId}
                               </span>
                             </div>
-                            <p className="text-[11px] font-mono-tabular text-slate-400 truncate mt-0.5">
-                              {dev.deviceId}
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                              <span className="font-mono-tabular">{dev.deviceId}</span>
                               {meta ? ` · ${meta}` : ''}
                             </p>
                           </div>
@@ -285,10 +282,10 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${
                               dev.stale
-                                ? 'bg-amber-500/10 border-amber-400/25 text-amber-300'
-                                : 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
+                                ? 'bg-amber-500/12 border-amber-400/25 text-amber-300'
+                                : 'bg-emerald-500/12 border-emerald-400/25 text-emerald-300'
                             }`}
                           >
                             <i
@@ -307,7 +304,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                         </div>
                       </div>
 
-                      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2 text-[11px] font-mono-tabular">
+                      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2 text-[11px] tabular-nums">
                         <span className="text-slate-300">
                           {page === 'limits' ? (
                             providersCount > 0 ? (
@@ -321,9 +318,11 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                           ) : tokens !== null ? (
                             <>
                               {PERIOD_LABELS[period]}{' '}
-                              <strong className="text-white">{MonitorModel.compact(tokens)}</strong>
+                              <strong className="font-mono-tabular text-white">
+                                {MonitorModel.compact(tokens)}
+                              </strong>
                               {cost !== null && (
-                                <span className="text-emerald-300 ml-2">
+                                <span className="font-mono-tabular text-emerald-300 ml-2">
                                   {MonitorModel.money(cost)}
                                 </span>
                               )}
@@ -334,13 +333,13 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                             </span>
                           )}
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0">
                           {formatShortTime(dev.updatedAt)}
                         </span>
                       </div>
                     </button>
                   );
-                }
+                },
               )}
             </div>
           ) : (
@@ -358,10 +357,10 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
               onClose();
               onOpenDevicesPage();
             }}
-            className="w-full min-h-[38px] rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-sky-300 flex items-center justify-center gap-1.5 transition-colors"
+            className="w-full min-h-[44px] rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-xs font-semibold text-sky-300 flex items-center justify-center gap-1.5 active:scale-[0.985] transition-all"
           >
             <span>查看全部设备详细状态</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>

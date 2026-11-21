@@ -1,6 +1,8 @@
 import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { UpdateDownloadPanel } from './UpdateDownloadPanel';
 import type { AppUpdateState } from '../types/monitor';
+import { formatFullTime } from '../utils/formatters';
+import { DetailsDisclosure, InlineAlert, SectionHeader, ToggleSwitch } from './ui/Primitives';
 
 interface AppUpdateCardProps {
   state: AppUpdateState;
@@ -14,10 +16,10 @@ export function AppUpdateCard({ state, onSimulateCheck, onSimulateAutoToggle }: 
   const summary = state.checking
     ? '正在检查 GitHub 最新正式版…'
     : state.available
-    ? `发现新版本 ${state.latestVersion}`
-    : state.checkedAt && state.latestVersion
-    ? '当前已是最新版本'
-    : '尚未检查更新';
+      ? `发现新版本 ${state.latestVersion}`
+      : state.checkedAt && state.latestVersion
+        ? '当前已是最新版本'
+        : '尚未检查更新';
 
   const handleCheck = () => {
     if (window.HubNative?.checkForUpdates) {
@@ -36,63 +38,49 @@ export function AppUpdateCard({ state, onSimulateCheck, onSimulateAutoToggle }: 
   };
 
   return (
-    <section id="app-update" className="glass-panel rounded-3xl p-5 space-y-3.5 scroll-mt-20">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 shrink-0">
+    <section
+      id="app-update"
+      className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3.5 scroll-mt-20"
+    >
+      <SectionHeader
+        icon={
+          <span className="w-9 h-9 rounded-xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300">
             <ShieldCheck className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-100">软件更新</h3>
-            <p className="text-xs text-slate-400 mt-0.5 font-mono-tabular">
-              当前版本 {state.currentVersion || '—'}
-            </p>
-          </div>
-        </div>
-        <button
-          id="check-app-update"
-          type="button"
-          disabled={!supported || state.checking}
-          onClick={handleCheck}
-          className="shrink-0 min-h-[44px] rounded-xl bg-sky-500/10 hover:bg-sky-500/18 border border-sky-400/25 px-3.5 text-xs font-medium text-sky-300 flex items-center gap-1.5 transition-colors disabled:opacity-45 whitespace-nowrap"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${state.checking ? 'animate-spin' : ''}`} />
-          <span>{state.checking ? '检查中' : '检查更新'}</span>
-        </button>
-      </div>
-
-      <label className="flex items-center justify-between gap-3 text-xs text-slate-200 min-h-[44px] py-1 cursor-pointer border-t border-white/8 pt-3">
-        <span>
-          <span className="font-medium text-slate-100">自动检查更新</span>
-          <span className="block text-[11px] text-slate-400 mt-0.5">
-            打开应用时检查，前台每 12 小时检查
           </span>
-        </span>
-        <span className="inline-flex items-center shrink-0">
-          <input
-            id="automatic-app-updates"
-            type="checkbox"
-            checked={state.automatic}
-            disabled={!supported}
-            onChange={(event) => handleAutoToggle(event.target.checked)}
-            className="sr-only peer"
-          />
-          <span
-            aria-hidden="true"
-            className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#090C10] ${
-              state.automatic
-                ? 'bg-gradient-to-r from-sky-400 to-emerald-400'
-                : 'bg-white/15'
-            } ${!supported ? 'opacity-45' : ''}`}
+        }
+        title="软件更新"
+        subtitle={
+          <span className="tabular-nums">当前版本 {state.currentVersion || '—'}</span>
+        }
+        action={
+          <button
+            id="check-app-update"
+            type="button"
+            disabled={!supported || state.checking}
+            onClick={handleCheck}
+            className="shrink-0 min-h-[44px] rounded-xl bg-sky-500/12 hover:bg-sky-500/20 active:scale-[0.98] border border-sky-400/25 px-3.5 text-xs font-semibold text-sky-200 flex items-center gap-1.5 transition-all disabled:opacity-45 whitespace-nowrap"
           >
-            <span
-              className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-0.5 left-0.5 transition-transform duration-200 ${
-                state.automatic ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </span>
-        </span>
-      </label>
+            <RefreshCw className={`w-3.5 h-3.5 ${state.checking ? 'animate-spin' : ''}`} />
+            <span>{state.checking ? '检查中' : '检查更新'}</span>
+          </button>
+        }
+      />
+
+      <div className="flex items-center justify-between gap-3 border-t border-white/8 pt-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-slate-100">自动检查更新</p>
+          <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+            打开应用时检查，前台每 12 小时检查
+          </p>
+        </div>
+        <ToggleSwitch
+          id="automatic-app-updates"
+          checked={state.automatic}
+          disabled={!supported}
+          onChange={handleAutoToggle}
+          ariaLabel="自动检查更新"
+        />
+      </div>
 
       <div className="glass-inset rounded-2xl px-3.5 py-2.5 space-y-1">
         <p
@@ -106,34 +94,34 @@ export function AppUpdateCard({ state, onSimulateCheck, onSimulateAutoToggle }: 
           {supported ? summary : '请在 Android App 中检查更新'}
         </p>
         {state.checkedAt > 0 && (
-          <p className="text-[11px] text-slate-400 font-mono-tabular">
-            上次检查 {new Date(state.checkedAt).toLocaleString('zh-CN')}
+          <p className="text-[11px] text-slate-400 tabular-nums">
+            上次检查 {formatFullTime(state.checkedAt)}
           </p>
         )}
       </div>
 
       {state.error && (
-        <p
-          id="app-update-error"
-          role="alert"
-          className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/25 rounded-xl p-3 leading-relaxed"
-        >
+        <InlineAlert id="app-update-error" tone="amber" role="alert">
           {state.error}
-        </p>
+        </InlineAlert>
       )}
 
       {state.available && (
-        <div className="space-y-3 pt-1">
-          <details className="text-xs text-slate-300 glass-inset rounded-2xl p-3">
-            <summary className="cursor-pointer min-h-[36px] flex items-center font-medium text-sky-300">
+        <DetailsDisclosure
+          className="glass-inset rounded-2xl px-3.5"
+          summary={
+            <span className="font-semibold text-sky-200 truncate">
               更新说明 · {state.name || state.latestVersion}
-            </summary>
-            <p className="whitespace-pre-wrap break-words max-h-64 overflow-y-auto mt-2 pt-2 border-t border-white/8 leading-relaxed text-slate-300 font-mono-tabular text-[11px]">
-              {state.notes || '此版本未提供更新说明。'}
-            </p>
-          </details>
-        </div>
+            </span>
+          }
+          bodyClassName="pt-2.5 pb-3 border-t border-white/8"
+        >
+          <p className="whitespace-pre-wrap break-words max-h-64 overflow-y-auto text-xs leading-relaxed text-slate-200 select-text">
+            {state.notes || '此版本未提供更新说明。'}
+          </p>
+        </DetailsDisclosure>
       )}
+
       {(state.available || state.download.phase !== 'idle') && <UpdateDownloadPanel state={state} />}
 
       <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-white/6">

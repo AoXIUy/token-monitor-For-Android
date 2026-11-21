@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Check, Link2, Terminal } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeftRight, Check, Link2, Terminal } from 'lucide-react';
 import {
   inlinePlainText,
   parseMarkdown,
@@ -8,6 +8,7 @@ import {
   type MarkdownTableAlignment,
   type MarkdownTableBlock,
 } from '../utils/markdown';
+import { CopyButton, DetailsDisclosure } from './ui/Primitives';
 
 export interface MarkdownRendererProps {
   markdown: string;
@@ -71,31 +72,31 @@ const SCALE_STYLES: Record<
   }
 > = {
   sm: {
-    prose: 'text-[12px] leading-[1.65]',
-    h1: 'text-[16px] leading-snug',
-    h2: 'text-[14px] leading-snug',
-    h3: 'text-[13px] leading-snug',
-    h4: 'text-[12px] leading-snug',
-    tableText: 'text-[11px]',
-    codeText: 'text-[11px]',
-  },
-  md: {
-    prose: 'text-[13px] leading-[1.72]',
-    h1: 'text-[18px] leading-snug',
+    prose: 'text-[13px] leading-[1.68]',
+    h1: 'text-[17px] leading-snug',
     h2: 'text-[15px] leading-snug',
     h3: 'text-[13.5px] leading-snug',
     h4: 'text-[13px] leading-snug',
     tableText: 'text-[11.5px]',
     codeText: 'text-[11.5px]',
   },
+  md: {
+    prose: 'text-[14px] leading-[1.75]',
+    h1: 'text-[19px] leading-snug',
+    h2: 'text-[16px] leading-snug',
+    h3: 'text-[14.5px] leading-snug',
+    h4: 'text-[13.5px] leading-snug',
+    tableText: 'text-[12px]',
+    codeText: 'text-[12px]',
+  },
   lg: {
-    prose: 'text-[14.5px] leading-[1.78]',
-    h1: 'text-[20px] leading-snug',
-    h2: 'text-[16.5px] leading-snug',
-    h3: 'text-[15px] leading-snug',
-    h4: 'text-[14px] leading-snug',
-    tableText: 'text-[12.5px]',
-    codeText: 'text-[12.5px]',
+    prose: 'text-[15.5px] leading-[1.8]',
+    h1: 'text-[21px] leading-snug',
+    h2: 'text-[17.5px] leading-snug',
+    h3: 'text-[16px] leading-snug',
+    h4: 'text-[15px] leading-snug',
+    tableText: 'text-[13px]',
+    codeText: 'text-[13px]',
   },
 };
 
@@ -104,9 +105,10 @@ const RE_NUMERIC_CELL =
 const RE_WIDE_COLUMN_HEADER =
   /观察|备注|说明|摘要|建议|详情|结论|原因|observation|notes?|summary|detail|comment|reason/i;
 
-function alignmentClass(align: MarkdownTableAlignment): string {
+function cellAlignmentClass(align: MarkdownTableAlignment, isNumeric: boolean): string {
   if (align === 'right') return 'text-right';
   if (align === 'center') return 'text-center';
+  if (isNumeric) return 'text-right';
   return 'text-left';
 }
 
@@ -177,7 +179,7 @@ function renderInlines(
         );
       case 'strike':
         return (
-          <del key={key} className="line-through text-slate-400/80">
+          <del key={key} className="line-through text-slate-400">
             {renderInlines(inline.children, theme, key)}
           </del>
         );
@@ -198,16 +200,21 @@ function renderInlines(
           <span
             key={key}
             data-safe-href={inline.safeHref ?? undefined}
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded-md border align-baseline text-[0.9em] ${
+            className={`inline px-1.5 py-0.5 mx-0.5 rounded-md border align-baseline text-[0.9em] break-words [box-decoration-break:clone] ${
               inline.safeHref
                 ? theme.linkPill
                 : 'bg-white/[0.05] border-white/10 text-slate-300'
             }`}
           >
-            <Link2 className="w-3 h-3 shrink-0 opacity-75" aria-hidden="true" />
+            <Link2
+              className="w-3 h-3 inline-block align-[-0.14em] mr-1 opacity-75"
+              aria-hidden="true"
+            />
             <span>{renderInlines(inline.label, theme, key)}</span>
             {showDomain && (
-              <span className="text-[10px] opacity-70 font-mono-tabular">({domain})</span>
+              <span className="ml-1 text-[11px] opacity-80 font-mono-tabular break-all">
+                ({domain})
+              </span>
             )}
           </span>
         );
@@ -215,6 +222,123 @@ function renderInlines(
     }
   });
 }
+
+interface MarkdownTableBlockViewProps {
+  block: MarkdownTableBlock;
+  theme: (typeof ACCENT_STYLES)[AccentTone];
+  scale: (typeof SCALE_STYLES)[FontScale];
+  blockKey: string;
+}
+
+const MarkdownTableBlockView: React.FC<MarkdownTableBlockViewProps> = ({
+  block,
+  theme,
+  scale,
+  blockKey,
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const columns = useMemo(() => analyzeTableColumns(block), [block]);
+
+  const updateScrollCue = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const overflow = el.scrollWidth > el.clientWidth + 2;
+    setHasOverflow(overflow);
+    setCanScrollRight(overflow && el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    updateScrollCue();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateScrollCue());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateScrollCue, block]);
+
+  return (
+    <div className="space-y-1">
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          onScroll={updateScrollCue}
+          className="overflow-x-auto rounded-2xl border border-white/[0.09] bg-[#080C12]/80"
+        >
+          <table className={`w-full border-collapse text-left ${scale.tableText}`}>
+            <thead className={`border-b border-white/[0.09] ${theme.tableHeader}`}>
+              <tr>
+                {block.headers.map((headerCell, colIdx) => {
+                  const align = block.alignments[colIdx] || 'left';
+                  const col = columns[colIdx] || { isNumeric: false, isWideText: false };
+                  return (
+                    <th
+                      key={`${blockKey}-th-${colIdx}`}
+                      scope="col"
+                      className={`px-3 py-2 font-semibold whitespace-nowrap ${cellAlignmentClass(
+                        align,
+                        col.isNumeric,
+                      )} ${col.isWideText ? 'min-w-[140px]' : ''}`}
+                    >
+                      {renderInlines(headerCell, theme, `${blockKey}-th-${colIdx}`)}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.06]">
+              {block.rows.map((row, rowIdx) => (
+                <tr key={`${blockKey}-tr-${rowIdx}`} className="hover:bg-white/[0.02]">
+                  {row.map((cell, colIdx) => {
+                    const align = block.alignments[colIdx] || 'left';
+                    const col = columns[colIdx] || { isNumeric: false, isWideText: false };
+                    return (
+                      <td
+                        key={`${blockKey}-td-${rowIdx}-${colIdx}`}
+                        className={`px-3 py-2 align-top ${cellAlignmentClass(
+                          align,
+                          col.isNumeric,
+                        )} ${
+                          col.isWideText
+                            ? 'min-w-[140px] whitespace-normal break-words text-slate-200'
+                            : col.isNumeric
+                              ? 'font-mono-tabular whitespace-nowrap text-slate-100'
+                              : 'whitespace-nowrap text-slate-200'
+                        }`}
+                      >
+                        {cell.length > 0 ? (
+                          renderInlines(cell, theme, `${blockKey}-td-${rowIdx}-${colIdx}`)
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {canScrollRight && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-[1px] right-[1px] w-7 rounded-r-2xl bg-gradient-to-l from-[#080C12]/95 to-transparent"
+          />
+        )}
+      </div>
+      {hasOverflow && (
+        <div
+          aria-hidden="true"
+          className="flex items-center justify-end gap-1 px-1 text-[11px] text-slate-400 select-none"
+        >
+          <ArrowLeftRight className="w-3 h-3 opacity-80" />
+          <span>左右滑动查看完整表格</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function renderHeading(
   block: Extract<MarkdownBlock, { type: 'heading' }>,
@@ -232,7 +356,7 @@ function renderHeading(
         <h1
           key={key}
           id={headingId}
-          className={`scroll-mt-4 font-bold tracking-tight text-white pb-2 border-b border-white/10 ${scale.h1}`}
+          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-white pb-2 border-b border-white/10 break-words ${scale.h1}`}
         >
           {content}
         </h1>
@@ -242,9 +366,12 @@ function renderHeading(
         <h2
           key={key}
           id={headingId}
-          className={`scroll-mt-4 font-bold tracking-tight text-white flex items-center gap-2 pt-1 ${scale.h2}`}
+          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-white flex items-start gap-2 ${scale.h2}`}
         >
-          <span aria-hidden="true" className={`w-1 h-4 rounded-full shrink-0 ${theme.h2Bar}`} />
+          <span
+            aria-hidden="true"
+            className={`w-1 h-[1.05em] mt-[0.22em] rounded-full shrink-0 ${theme.h2Bar}`}
+          />
           <span className="min-w-0 break-words">{content}</span>
         </h2>
       );
@@ -253,7 +380,7 @@ function renderHeading(
         <h3
           key={key}
           id={headingId}
-          className={`scroll-mt-4 font-semibold text-slate-100 pt-0.5 break-words ${scale.h3}`}
+          className={`scroll-mt-4 !mt-4 first:!mt-0 font-semibold text-slate-100 break-words ${scale.h3}`}
         >
           {content}
         </h3>
@@ -263,7 +390,7 @@ function renderHeading(
         <h4
           key={key}
           id={headingId}
-          className={`scroll-mt-4 font-semibold text-slate-200 break-words ${scale.h4}`}
+          className={`scroll-mt-4 !mt-3 first:!mt-0 font-semibold text-slate-200 break-words ${scale.h4}`}
         >
           {content}
         </h4>
@@ -273,7 +400,7 @@ function renderHeading(
         <h5
           key={key}
           id={headingId}
-          className="scroll-mt-4 text-xs font-semibold uppercase tracking-wide text-slate-300 break-words"
+          className="scroll-mt-4 !mt-3 first:!mt-0 text-xs font-semibold uppercase tracking-wide text-slate-300 break-words"
         >
           {content}
         </h5>
@@ -283,7 +410,7 @@ function renderHeading(
         <h6
           key={key}
           id={headingId}
-          className="scroll-mt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 break-words"
+          className="scroll-mt-4 !mt-3 first:!mt-0 text-[11px] font-semibold uppercase tracking-wider text-slate-400 break-words"
         >
           {content}
         </h6>
@@ -313,7 +440,7 @@ function renderBlocks(
         );
 
       case 'hr':
-        return <hr key={key} className="border-0 border-t border-white/10 my-2" />;
+        return <hr key={key} className="border-0 border-t border-white/10 my-2.5" />;
 
       case 'blockquote':
         return (
@@ -331,11 +458,18 @@ function renderBlocks(
             key={key}
             className="rounded-2xl glass-inset overflow-hidden border border-white/[0.08]"
           >
-            <div className="px-3 py-1.5 border-b border-white/[0.07] bg-white/[0.02] flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono-tabular uppercase tracking-wider text-slate-400">
-                <Terminal className="w-3 h-3" aria-hidden="true" />
-                <span>{block.lang || 'code'}</span>
+            <div className="px-3 py-1 border-b border-white/[0.07] bg-white/[0.02] flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono-tabular uppercase tracking-wider text-slate-400 min-w-0 truncate">
+                <Terminal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{block.lang || 'code'}</span>
               </span>
+              <CopyButton
+                text={block.text}
+                ariaLabel={`复制 ${block.lang || 'code'} 代码块`}
+                label="复制"
+                copiedLabel="已复制"
+                className="min-h-[36px] px-2.5 py-1 text-[11px]"
+              />
             </div>
             <pre
               className={`p-3 overflow-x-auto font-mono-tabular leading-relaxed text-slate-200 select-text ${scale.codeText}`}
@@ -358,7 +492,7 @@ function renderBlocks(
                     <span
                       role="img"
                       aria-label={item.checked ? '已完成' : '未完成'}
-                      className={`mt-[0.22em] w-4 h-4 rounded-[5px] border inline-flex items-center justify-center shrink-0 ${
+                      className={`mt-[0.25em] w-4 h-4 rounded-[5px] border inline-flex items-center justify-center shrink-0 ${
                         item.checked
                           ? theme.taskChecked
                           : 'border-white/25 bg-white/[0.03]'
@@ -376,7 +510,7 @@ function renderBlocks(
                   ) : (
                     <span
                       aria-hidden="true"
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 mt-[0.58em] ${
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 mt-[0.62em] ${
                         listDepth > 0 ? 'bg-slate-400/80' : theme.bullet
                       }`}
                     />
@@ -413,65 +547,16 @@ function renderBlocks(
         );
       }
 
-      case 'table': {
-        const columns = analyzeTableColumns(block);
+      case 'table':
         return (
-          <div
+          <MarkdownTableBlockView
             key={key}
-            className="overflow-x-auto rounded-2xl border border-white/[0.09] bg-[#080C12]/80"
-          >
-            <table className={`w-full border-collapse text-left ${scale.tableText}`}>
-              <thead className={`border-b border-white/[0.09] ${theme.tableHeader}`}>
-                <tr>
-                  {block.headers.map((headerCell, colIdx) => {
-                    const align = block.alignments[colIdx] || 'left';
-                    const col = columns[colIdx] || { isNumeric: false, isWideText: false };
-                    return (
-                      <th
-                        key={`${key}-th-${colIdx}`}
-                        scope="col"
-                        className={`px-3 py-2 font-semibold whitespace-nowrap ${alignmentClass(align)} ${
-                          col.isWideText ? 'min-w-[140px]' : ''
-                        }`}
-                      >
-                        {renderInlines(headerCell, theme, `${key}-th-${colIdx}`)}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.06]">
-                {block.rows.map((row, rowIdx) => (
-                  <tr key={`${key}-tr-${rowIdx}`} className="hover:bg-white/[0.02]">
-                    {row.map((cell, colIdx) => {
-                      const align = block.alignments[colIdx] || 'left';
-                      const col = columns[colIdx] || { isNumeric: false, isWideText: false };
-                      return (
-                        <td
-                          key={`${key}-td-${rowIdx}-${colIdx}`}
-                          className={`px-3 py-2 align-top ${alignmentClass(align)} ${
-                            col.isWideText
-                              ? 'min-w-[140px] whitespace-normal break-words text-slate-200'
-                              : col.isNumeric
-                                ? 'font-mono-tabular whitespace-nowrap text-slate-100'
-                                : 'whitespace-nowrap text-slate-200'
-                          }`}
-                        >
-                          {cell.length > 0 ? (
-                            renderInlines(cell, theme, `${key}-td-${rowIdx}-${colIdx}`)
-                          ) : (
-                            <span className="text-slate-500">—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            block={block}
+            theme={theme}
+            scale={scale}
+            blockKey={key}
+          />
         );
-      }
     }
   });
 }
@@ -508,24 +593,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       className={`select-text text-slate-200 ${scale.prose} ${spacingClass} ${className}`.trim()}
     >
       {hasFrontmatter && (
-        <div className="glass-inset rounded-2xl p-3 space-y-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            文档元数据
-          </div>
+        <DetailsDisclosure
+          className="glass-inset rounded-2xl px-3.5"
+          summary={<span className="text-xs font-medium text-slate-300">文档元数据</span>}
+          summaryMeta={
+            <span className="text-[11px] tabular-nums text-slate-400">
+              {doc.frontmatter.length} 项
+            </span>
+          }
+          bodyClassName="pb-3 pt-1.5 border-t border-white/[0.06]"
+        >
           <dl className="grid grid-cols-2 gap-2">
             {doc.frontmatter.map((entry, idx) => (
               <div
                 key={`${entry.key}-${idx}`}
                 className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-2.5 py-1.5 min-w-0"
               >
-                <dt className="text-[10px] text-slate-400 truncate">{entry.key}</dt>
+                <dt className="text-[11px] text-slate-400 truncate">{entry.key}</dt>
                 <dd className="text-[11px] font-mono-tabular text-slate-100 mt-0.5 break-all">
                   {entry.value || '—'}
                 </dd>
               </div>
             ))}
           </dl>
-        </div>
+        </DetailsDisclosure>
       )}
 
       {renderBlocks(doc.blocks, theme, scale, idPrefix, 'md')}

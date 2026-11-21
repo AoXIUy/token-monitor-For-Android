@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="HardcodedText"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:includeFontPadding="false"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_brand"
+            android:textColor="#BAE6FD"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.12"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:minWidth="70dp"
+            android:paddingHorizontal="10dp"
+            android:background="@drawable/widget_button"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/widget_refresh"
+                android:importantForAccessibility="no" />
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/widget_refresh"
+                android:textColor="#7DD3FC"
+                android:textSize="11sp"
+                android:importantForAccessibility="no" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:includeFontPadding="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="04-18 · 今日用量"
+        android:textColor="#94A3B8"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:minHeight="32dp">
+        <TextView
+            android:id="@+id/preview_tokens"
+            android:includeFontPadding="false"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:text="1.84M"
+            android:textColor="#F8FAFC"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1" />
+        <TextView
+            android:includeFontPadding="false"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@id/preview_tokens"
+            android:layout_alignBaseline="@id/preview_tokens"
+            android:layout_marginStart="7dp"
+            android:text="@string/widget_tokens_unit"
+            android:textColor="#94A3B8"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </RelativeLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/widget_inset_box"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="6dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_cost"
+                android:textColor="#94A3B8"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="$4.62"
+                android:textColor="#F1F5F9"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="0dp"
+            android:orientation="vertical">
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_cache"
+                android:textColor="#94A3B8"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="72.4%"
+                android:textColor="#6EE7B7"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="0dp"
+            android:orientation="vertical">
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_devices"
+                android:textColor="#94A3B8"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+            <TextView
+                android:includeFontPadding="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="2 / 3"
+                android:textColor="#7DD3FC"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:includeFontPadding="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="5dp"
+        android:text="上次读取 · 04-18 14:20"
+        android:textColor="#94A3B8"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+</LinearLayout>

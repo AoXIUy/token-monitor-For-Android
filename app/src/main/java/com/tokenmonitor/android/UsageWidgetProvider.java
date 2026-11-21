@@ -134,7 +134,10 @@ public final class UsageWidgetProvider extends AppWidgetProvider {
                     : hasData ? snapshot.optString("cost", "—")
                     : context.getString(R.string.widget_waiting);
             views.setTextViewText(R.id.widget_cost, barSub);
-            views.setTextColor(R.id.widget_cost, failed ? Color.rgb(251, 191, 36) : Color.rgb(110, 231, 183));
+            int barSubColor = failed ? Color.rgb(251, 191, 36)
+                    : (!connected || !hasData || "—".equals(barSub)) ? Color.rgb(148, 163, 184)
+                    : Color.rgb(110, 231, 183);
+            views.setTextColor(R.id.widget_cost, barSubColor);
             bindIntents(context, views, connected);
             return views;
         }
@@ -296,7 +299,7 @@ public final class UsageWidgetProvider extends AppWidgetProvider {
         views.setTextColor(valueId, warn ? Color.rgb(251, 191, 36) : Color.rgb(125, 211, 252));
         views.setViewVisibility(barOkId, warn ? View.GONE : View.VISIBLE);
         views.setViewVisibility(barWarnId, warn ? View.VISIBLE : View.GONE);
-        views.setProgressBar(warn ? barWarnId : barOkId, 100, Math.max(2, pct), false);
+        views.setProgressBar(warn ? barWarnId : barOkId, 100, pct, false);
     }
 
     private static String formatTopClients(JSONArray topClients) {

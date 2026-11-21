@@ -2,7 +2,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_quota_description"
     android:initialLayout="@layout/widget_quota_medium"
-    android:previewLayout="@layout/widget_quota_medium"
+    android:previewLayout="@layout/preview_widget_quota"
     android:minWidth="250dp"
     android:minHeight="160dp"
     android:minResizeWidth="140dp"

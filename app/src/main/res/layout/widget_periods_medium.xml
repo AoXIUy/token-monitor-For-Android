@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_card"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/widget_background"
     android:paddingHorizontal="14dp"
-    android:paddingVertical="11dp">
+    android:paddingVertical="10dp">
 
     <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
-        android:layout_height="26dp"
+        android:layout_height="30dp"
+        android:layout_alignParentTop="true"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -27,8 +28,10 @@
             android:ellipsize="end" />
         <LinearLayout
             android:id="@+id/widget_refresh"
-            android:layout_width="60dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
+            android:minWidth="68dp"
+            android:paddingHorizontal="10dp"
             android:background="@drawable/widget_button"
             android:gravity="center"
             android:orientation="horizontal"
@@ -42,7 +45,7 @@
                 android:includeFontPadding="false"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="5dp"
                 android:text="@string/widget_refresh"
                 android:textColor="#7DD3FC"
                 android:textSize="11sp"
@@ -52,10 +55,11 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:layout_below="@id/widget_header"
+        android:layout_above="@+id/widget_updated"
         android:layout_marginTop="7dp"
-        android:layout_marginBottom="5dp"
+        android:layout_marginBottom="6dp"
         android:orientation="horizontal"
         android:baselineAligned="false">
 
@@ -65,7 +69,7 @@
             android:layout_weight="1"
             android:background="@drawable/widget_inset_box"
             android:paddingHorizontal="9dp"
-            android:paddingVertical="7dp"
+            android:paddingVertical="5dp"
             android:gravity="center_vertical"
             android:orientation="vertical">
             <TextView
@@ -75,7 +79,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_today_short"
                 android:textColor="#BAE6FD"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
             <TextView
@@ -83,7 +87,7 @@
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#F8FAFC"
                 android:textSize="19sp"
@@ -93,7 +97,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="19sp" />
+                android:autoSizeMaxTextSize="19sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_cost"
                 android:includeFontPadding="false"
@@ -115,7 +120,7 @@
             android:layout_marginStart="6dp"
             android:background="@drawable/widget_inset_box"
             android:paddingHorizontal="9dp"
-            android:paddingVertical="7dp"
+            android:paddingVertical="5dp"
             android:gravity="center_vertical"
             android:orientation="vertical">
             <TextView
@@ -124,14 +129,14 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_month_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1" />
             <TextView
                 android:id="@+id/widget_month_tokens"
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#7DD3FC"
                 android:textSize="19sp"
@@ -141,7 +146,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="19sp" />
+                android:autoSizeMaxTextSize="19sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_month_cost"
                 android:includeFontPadding="false"
@@ -163,7 +169,7 @@
             android:layout_marginStart="6dp"
             android:background="@drawable/widget_inset_box"
             android:paddingHorizontal="9dp"
-            android:paddingVertical="7dp"
+            android:paddingVertical="5dp"
             android:gravity="center_vertical"
             android:orientation="vertical">
             <TextView
@@ -172,14 +178,14 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_all_short"
                 android:textColor="#94A3B8"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:maxLines="1" />
             <TextView
                 android:id="@+id/widget_all_tokens"
                 android:includeFontPadding="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:text="@string/widget_placeholder"
                 android:textColor="#C4B5FD"
                 android:textSize="19sp"
@@ -189,7 +195,8 @@
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="13sp"
-                android:autoSizeMaxTextSize="19sp" />
+                android:autoSizeMaxTextSize="19sp"
+                android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:id="@+id/widget_all_cost"
                 android:includeFontPadding="false"
@@ -210,9 +217,10 @@
         android:includeFontPadding="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
         android:text="@string/widget_connect"
         android:textColor="#94A3B8"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:maxLines="1"
         android:ellipsize="end" />
-</LinearLayout>
+</RelativeLayout>

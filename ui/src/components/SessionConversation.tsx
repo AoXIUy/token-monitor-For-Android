@@ -1,18 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Check,
   ChevronDown,
   ChevronRight,
-  Copy,
   Eye,
   EyeOff,
   Layers,
   MessageSquare,
   RefreshCw,
-  Search,
   Sparkles,
   Terminal,
-  X,
 } from 'lucide-react';
 import type {
   SessionConversationItemDescriptor,
@@ -20,7 +16,15 @@ import type {
   SessionDevice,
 } from '../types/monitor';
 import { conversationError, groupConversationBlocks } from '../conversationState';
-import { copyTextToClipboard, formatFullTime, formatShortTime } from '../utils/formatters';
+import { formatFullTime, formatShortTime } from '../utils/formatters';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import {
+  CopyButton,
+  EmptyState,
+  InlineAlert,
+  SearchField,
+  SectionHeader,
+} from './ui/Primitives';
 
 interface Props {
   detailKey: string;
@@ -35,15 +39,15 @@ interface Props {
 function eventBadgeStyle(category: SessionConversationItemDescriptor['category']): string {
   switch (category) {
     case 'thinking':
-      return 'bg-violet-500/15 text-violet-300 border-violet-400/25';
+      return 'bg-violet-500/15 text-violet-200 border-violet-400/30';
     case 'tool_call':
-      return 'bg-sky-500/15 text-sky-300 border-sky-400/25';
+      return 'bg-sky-500/15 text-sky-200 border-sky-400/30';
     case 'tool_result':
-      return 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25';
+      return 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30';
     case 'context':
-      return 'bg-amber-500/15 text-amber-300 border-amber-400/25';
+      return 'bg-amber-500/15 text-amber-200 border-amber-400/30';
     default:
-      return 'bg-white/8 text-slate-300 border-white/15';
+      return 'bg-white/[0.08] text-slate-200 border-white/15';
   }
 }
 
@@ -57,8 +61,6 @@ export function SessionConversation({
   onClear,
 }: Props) {
   const [selected, setSelected] = useState('');
-  const [copied, setCopied] = useState('');
-  const copyTimer = useRef<number | null>(null);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [openEventGroups, setOpenEventGroups] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,25 +78,7 @@ export function SessionConversation({
       : null;
 
   useEffect(() => {
-    return () => {
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    };
-  }, []);
-
-  const handleCopyText = async (text: string, id: string) => {
-    const ok = await copyTextToClipboard(text);
-    if (!ok) return;
-    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    setCopied(id);
-    copyTimer.current = window.setTimeout(() => {
-      setCopied((prev) => (prev === id ? '' : prev));
-      copyTimer.current = null;
-    }, 1500);
-  };
-
-  useEffect(() => {
     onClear();
-    setCopied('');
     setShowAllEvents(false);
     setOpenEventGroups(new Set());
     setSearchQuery('');
@@ -103,7 +87,7 @@ export function SessionConversation({
 
   const grouped = useMemo(
     () => groupConversationBlocks(current?.messages || [], searchQuery),
-    [current?.messages, searchQuery]
+    [current?.messages, searchQuery],
   );
 
   if (!supported) return null;
@@ -117,7 +101,7 @@ export function SessionConversation({
       const next = new Set(
         grouped.blocks
           .filter((b) => b.type === 'events' && b.id !== groupId)
-          .map((b) => b.id)
+          .map((b) => b.id),
       );
       setOpenEventGroups(next);
       return;
@@ -139,43 +123,45 @@ export function SessionConversation({
     }
   };
 
+  const subtitleText = canRead
+    ? `按需从 ${owner?.hostname || target} 读取本机会话（不受周期筛选），默认折叠工具与上下文事件`
+    : !available
+    ? '连接恢复且应用位于前台时，可查询在线设备的对话'
+    : '这条会话暂无在线来源设备';
+
   return (
     <section
       id="session-conversation"
-      className="glass-panel rounded-3xl p-5 space-y-3.5 scroll-mt-16"
+      className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3.5 scroll-mt-16"
       data-session-conversation="true"
       aria-busy={current?.loading || false}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-sky-400 shrink-0" />
-            <span>对话与上下文</span>
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            默认仅显示对话问答，点击「事件详情」展开工具与上下文
-          </p>
-        </div>
-        <button
-          type="button"
-          data-read-conversation="true"
-          disabled={!canRead || current?.loading}
-          onClick={() => onQuery(target, detailKey)}
-          className="min-h-[44px] px-3.5 rounded-xl bg-sky-500/12 hover:bg-sky-500/20 border border-sky-400/25 text-sky-300 text-xs font-semibold disabled:opacity-40 flex items-center gap-1.5 shrink-0 transition-colors"
-        >
-          {current?.loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
-          {current?.loading ? '读取中…' : current ? '刷新对话' : '查看对话'}
-        </button>
-      </div>
+      <SectionHeader
+        icon={<MessageSquare className="w-4 h-4" />}
+        title="对话与上下文"
+        subtitle={subtitleText}
+        action={
+          <button
+            type="button"
+            data-read-conversation="true"
+            disabled={!canRead || current?.loading}
+            onClick={() => onQuery(target, detailKey)}
+            className="min-h-[44px] px-3.5 rounded-xl bg-sky-500/14 hover:bg-sky-500/22 active:scale-[0.98] border border-sky-400/30 text-sky-200 text-xs font-semibold disabled:opacity-40 flex items-center gap-1.5 shrink-0 transition-all whitespace-nowrap"
+          >
+            {current?.loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : null}
+            <span>{current?.loading ? '读取中…' : current ? '刷新对话' : '查看对话'}</span>
+          </button>
+        }
+      />
 
       {owners.length > 1 && (
-        <label className="block text-xs text-slate-400">
-          来源设备
+        <label className="block text-xs text-slate-300 space-y-1.5">
+          <span>来源设备</span>
           <select
             aria-label="对话来源设备"
             value={target}
             onChange={(event) => setSelected(event.target.value)}
-            className="w-full min-h-[44px] mt-1 px-3 rounded-xl bg-[#111b25] text-slate-200 border border-white/10"
+            className="w-full min-h-[44px] px-3 py-2 text-xs glass-select focus:outline-none focus:border-sky-400/60"
           >
             {owners.map((source) => (
               <option key={source.deviceId} value={source.deviceId}>
@@ -187,47 +173,54 @@ export function SessionConversation({
         </label>
       )}
 
-      <p className="text-[11px] text-slate-400 leading-relaxed">
-        {canRead
-          ? `按需从 ${owner?.hostname || target} 读取本机会话，不受统计周期筛选。正文仅用于当前查看。`
-          : !available
-          ? '连接恢复且应用位于前台时，可查询在线设备的对话。'
-          : '这条会话暂无在线来源设备。'}
-      </p>
-
       {current?.error && (
-        <p
-          role="alert"
-          data-conversation-error="true"
-          className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/25 rounded-2xl p-3 leading-relaxed"
-        >
-          {conversationError(current.error)}
-        </p>
+        <div data-conversation-error="true">
+          <InlineAlert tone="amber" role="alert">
+            {conversationError(current.error)}
+          </InlineAlert>
+        </div>
       )}
 
       {current?.incomplete && (
-        <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/20 rounded-xl p-2.5">
+        <InlineAlert tone="amber">
           日志包含尚未写完或无法识别的记录，当前显示已读取内容。
-        </p>
+        </InlineAlert>
       )}
 
       {current && !current.loading && !current.error && current.messages.length === 0 && (
-        <p className="text-xs text-slate-400 glass-inset rounded-2xl p-4 text-center">
-          日志中没有可显示的文字消息。
-        </p>
+        <EmptyState
+          compact
+          tone="slate"
+          title="暂无文字消息"
+          description="日志中没有可显示的文字消息。"
+        />
       )}
 
       {hasMessages && (
-        <div className="space-y-2.5 pt-1 border-t border-white/8">
+        <div className="space-y-2.5 pt-3 border-t border-white/8">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2 text-[11px] font-mono-tabular text-slate-300">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-inset">
-                <MessageSquare className="w-3 h-3 text-sky-400" />
-                <span>对话 {grouped.dialogueCount}</span>
+            <div className="flex items-center gap-2 text-[11px] tabular-nums text-slate-300 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl glass-inset">
+                <MessageSquare className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                <span>
+                  对话{' '}
+                  <strong className="font-mono-tabular text-slate-100">
+                    {hasSearch
+                      ? `${grouped.matchedDialogueCount}/${grouped.dialogueCount}`
+                      : grouped.dialogueCount}
+                  </strong>
+                </span>
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-inset text-slate-400">
-                <Layers className="w-3 h-3 text-amber-400" />
-                <span>事件 {grouped.eventCount}</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl glass-inset text-slate-300">
+                <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
+                <span>
+                  事件{' '}
+                  <strong className="font-mono-tabular text-slate-100">
+                    {hasSearch
+                      ? `${grouped.matchedEventCount}/${grouped.eventCount}`
+                      : grouped.eventCount}
+                  </strong>
+                </span>
               </span>
             </div>
 
@@ -237,21 +230,21 @@ export function SessionConversation({
                 data-toggle-conversation-events="true"
                 aria-pressed={showAllEvents}
                 onClick={handleToggleAllEvents}
-                className={`min-h-[36px] px-3 rounded-xl text-xs font-semibold border inline-flex items-center gap-1.5 transition-colors ${
+                className={`min-h-[40px] px-3 rounded-xl text-xs font-semibold border inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
                   showAllEvents
-                    ? 'bg-sky-500/18 border-sky-400/40 text-sky-200'
-                    : 'glass-inset hover:border-white/20 text-slate-300'
+                    ? 'bg-sky-500/18 border-sky-400/40 text-sky-100'
+                    : 'glass-inset hover:border-white/20 text-slate-200'
                 }`}
               >
                 {showAllEvents ? (
                   <>
-                    <EyeOff className="w-3.5 h-3.5 text-sky-300" />
+                    <EyeOff className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
                     <span>隐藏事件详情</span>
                   </>
                 ) : (
                   <>
-                    <Eye className="w-3.5 h-3.5 text-sky-400" />
-                    <span>显示全部事件 ({grouped.eventCount})</span>
+                    <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                    <span className="tabular-nums">显示全部事件 ({grouped.eventCount})</span>
                   </>
                 )}
               </button>
@@ -259,38 +252,26 @@ export function SessionConversation({
           </div>
 
           {(grouped.dialogueCount + grouped.eventCount > 2 || hasSearch) && (
-            <div className="relative flex items-center">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
-              <input
-                type="search"
-                data-conversation-search="true"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索已加载的对话、工具名称或上下文…"
-                aria-label="搜索对话与上下文"
-                autoComplete="off"
-                className="w-full min-h-[38px] pl-9 pr-9 py-1.5 rounded-xl glass-inset text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/60 transition-colors"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="清除对话搜索"
-                  className="w-8 h-8 flex items-center justify-center absolute right-1 text-slate-400 hover:text-slate-200 rounded-lg"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="搜索已加载的对话、工具名称或上下文…"
+              ariaLabel="搜索对话与上下文"
+              clearAriaLabel="清除对话搜索"
+              inputProps={{ 'data-conversation-search': 'true' }}
+            />
           )}
         </div>
       )}
 
       <div className="space-y-3" data-conversation-messages="true">
         {hasMessages && hasSearch && grouped.blocks.length === 0 && (
-          <p className="text-xs text-slate-400 glass-inset rounded-2xl p-4 text-center">
-            当前已加载内容中未找到匹配「{searchQuery.trim()}」的记录。
-          </p>
+          <EmptyState
+            compact
+            tone="slate"
+            title="未找到匹配记录"
+            description={`当前已加载内容中未找到匹配「${searchQuery.trim()}」的记录。`}
+          />
         )}
 
         {hasMessages &&
@@ -299,39 +280,40 @@ export function SessionConversation({
           grouped.eventCount > 0 &&
           !showAllEvents &&
           openEventGroups.size === 0 && (
-            <p className="text-xs text-slate-400 bg-white/[0.02] border border-white/8 rounded-2xl p-3 leading-relaxed">
-              当前页共有 {grouped.eventCount} 条上下文与工具事件，默认已收起；点击下方「查看事件详情」或右上角「显示全部事件」即可查看。
-            </p>
+            <InlineAlert tone="sky">
+              当前页共有 {grouped.eventCount} 条上下文与工具事件，默认已收起；轻触下方「查看事件详情」或上方「显示全部事件」即可查看。
+            </InlineAlert>
           )}
 
         {grouped.blocks.map((block) => {
           if (block.type === 'dialogue') {
             const { item, meta } = block;
             const isUser = item.role === 'user';
-            const isCopied = copied === item.id;
             return (
               <article
                 key={item.id}
                 data-message-role={item.role}
                 className={`rounded-2xl p-3.5 border [content-visibility:auto] ${
                   isUser
-                    ? 'bg-sky-500/[0.08] border-sky-400/20'
-                    : 'bg-white/[0.035] border-white/10'
+                    ? 'ml-3 border-sky-400/25 border-l-2 border-l-sky-400/80 bg-sky-500/[0.08]'
+                    : 'border-white/10 border-l-2 border-l-emerald-400/70 bg-white/[0.03]'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
                   <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
                         isUser
-                          ? 'bg-sky-500/20 text-sky-200'
-                          : 'bg-emerald-500/18 text-emerald-200'
+                          ? 'bg-sky-500/20 border-sky-400/30 text-sky-100'
+                          : 'bg-emerald-500/16 border-emerald-400/30 text-emerald-200'
                       }`}
                     >
                       {meta.badge}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono-tabular">
-                      {item.timestamp ? formatFullTime(item.timestamp) : '时间未提供'}
+                    <span className="text-[11px] text-slate-400 tabular-nums">
+                      <span className="font-mono-tabular">
+                        {item.timestamp ? formatFullTime(item.timestamp) : '时间未提供'}
+                      </span>
                       {item.parts > 1
                         ? ` · 已合并 ${item.parts} 段续文`
                         : item.continued
@@ -340,29 +322,22 @@ export function SessionConversation({
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    aria-label={`复制${meta.badge}`}
-                    onClick={() => handleCopyText(item.text, item.id)}
-                    className="min-h-[32px] px-2.5 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-[11px] text-sky-300 flex items-center gap-1 shrink-0 transition-colors"
-                  >
-                    {isCopied ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span className="text-emerald-300">已复制</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>复制</span>
-                      </>
-                    )}
-                  </button>
+                  <CopyButton text={item.text} ariaLabel={`复制${meta.badge}`} />
                 </div>
 
-                <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-6 font-sans text-slate-100 select-text">
-                  {item.text}
-                </pre>
+                {isUser ? (
+                  <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[13px] leading-relaxed text-slate-100 select-text">
+                    {item.text}
+                  </div>
+                ) : (
+                  <MarkdownRenderer
+                    markdown={item.text}
+                    variant="compact"
+                    fontScale="sm"
+                    accent="sky"
+                    className="select-text"
+                  />
+                )}
               </article>
             );
           }
@@ -372,33 +347,34 @@ export function SessionConversation({
             <div
               key={block.id}
               data-event-group={block.id}
-              className="rounded-2xl border border-white/8 bg-white/[0.015] overflow-hidden"
+              className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden"
             >
               <button
                 type="button"
                 data-event-group-toggle={block.id}
                 aria-expanded={groupOpen}
                 onClick={() => handleToggleEventGroup(block.id)}
-                className="w-full min-h-[42px] px-3.5 py-2 flex items-center justify-between gap-2 text-left hover:bg-white/[0.04] transition-colors"
+                className="w-full min-h-[44px] px-3.5 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors"
               >
-                <div className="flex items-center gap-2 min-w-0 flex-wrap text-xs">
-                  <span className="inline-flex items-center gap-1 font-medium text-slate-300">
+                <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap text-xs">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-slate-200 shrink-0">
                     {block.counts.tool > 0 ? (
-                      <Terminal className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <Terminal className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
                     ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                      <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" aria-hidden="true" />
                     )}
                     <span>{groupOpen ? '事件详情' : '查看事件详情'}</span>
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono-tabular truncate">
+                  <span className="text-[11px] text-slate-400 tabular-nums truncate min-w-0">
                     {block.counts.total} 条（{block.summaryLabel}）
                   </span>
                 </div>
 
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-300 shrink-0">
-                  <span>{groupOpen ? '收起' : '点击显示'}</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-300 shrink-0">
+                  <span>{groupOpen ? '收起' : '展开'}</span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                    aria-hidden="true"
+                    className={`w-4 h-4 transition-transform duration-150 ${
                       groupOpen ? 'rotate-180 text-sky-300' : 'text-slate-400'
                     }`}
                   />
@@ -408,89 +384,74 @@ export function SessionConversation({
               {groupOpen && (
                 <div
                   data-event-group-list={block.id}
-                  className="px-3 pb-3 pt-1.5 border-t border-white/8 space-y-2"
+                  className="px-3 pb-3 pt-2 border-t border-white/8 space-y-2"
                 >
-                  {block.events.map(({ item, meta }) => {
-                    const isCopied = copied === item.id;
-                    return (
-                      <details
-                        key={item.id}
-                        data-message-role={item.role}
-                        data-event-kind={item.kind}
-                        className="group rounded-xl border border-white/10 bg-[#0B1017]/80 p-2.5 [content-visibility:auto]"
-                      >
-                        <summary className="min-h-[34px] cursor-pointer list-none flex flex-col justify-center gap-1 text-xs text-slate-300">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                              <span
-                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${eventBadgeStyle(
-                                  meta.category
-                                )}`}
-                              >
-                                {meta.badge}
-                              </span>
-                              {meta.detail && meta.detail !== meta.badge && (
-                                <span className="font-mono-tabular text-[11px] text-slate-300 truncate max-w-[180px]">
-                                  {meta.detail}
-                                </span>
-                              )}
-                              {item.parts > 1 ? (
-                                <span className="text-[10px] text-slate-400">
-                                  · 合并 {item.parts} 段
-                                </span>
-                              ) : item.continued ? (
-                                <span className="text-[10px] text-slate-400">· 续文</span>
-                              ) : null}
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-slate-400 font-mono-tabular">
-                              {item.timestamp && <span>{formatShortTime(item.timestamp)}</span>}
-                              <ChevronRight className="w-3.5 h-3.5 text-slate-400 transition-transform duration-150 group-open:rotate-90 group-open:text-sky-400" />
-                            </div>
-                          </div>
-
-                          <p className="text-[11px] text-slate-400 font-mono-tabular truncate group-open:hidden">
-                            {meta.preview}
-                          </p>
-                        </summary>
-
-                        <div className="mt-2.5 pt-2 border-t border-white/8">
-                          <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 mb-2">
-                            <span>
-                              {item.timestamp ? formatFullTime(item.timestamp) : '时间未提供'}
-                              {item.parts > 1
-                                ? ` · 已合并 ${item.parts} 段续文`
-                                : item.continued
-                                ? ' · 续文'
-                                : ''}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`复制${meta.badge}`}
-                              onClick={() => handleCopyText(item.text, item.id)}
-                              className="min-h-[30px] px-2 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] text-sky-300 flex items-center gap-1"
+                  {block.events.map(({ item, meta }) => (
+                    <details
+                      key={item.id}
+                      data-message-role={item.role}
+                      data-event-kind={item.kind}
+                      className="group rounded-xl glass-inset p-3 [content-visibility:auto]"
+                    >
+                      <summary className="list-none [&::-webkit-details-marker]:hidden min-h-[44px] cursor-pointer flex flex-col justify-center gap-1 text-xs text-slate-200">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border shrink-0 ${eventBadgeStyle(
+                                meta.category,
+                              )}`}
                             >
-                              {isCopied ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-emerald-300">已复制</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" />
-                                  <span>复制</span>
-                                </>
-                              )}
-                            </button>
+                              {meta.badge}
+                            </span>
+                            {meta.detail && meta.detail !== meta.badge && (
+                              <span className="font-mono-tabular text-[11px] text-slate-300 truncate min-w-0">
+                                {meta.detail}
+                              </span>
+                            )}
+                            {item.parts > 1 ? (
+                              <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
+                                · 合并 {item.parts} 段
+                              </span>
+                            ) : item.continued ? (
+                              <span className="text-[11px] text-slate-400 shrink-0">· 续文</span>
+                            ) : null}
                           </div>
 
-                          <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 font-mono-tabular text-slate-200 select-text max-h-80 overflow-y-auto">
-                            {item.text}
-                          </pre>
+                          <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-slate-400 font-mono-tabular">
+                            {item.timestamp && <span>{formatShortTime(item.timestamp)}</span>}
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="w-4 h-4 text-slate-400 transition-transform duration-150 group-open:rotate-90 group-open:text-sky-400"
+                            />
+                          </div>
                         </div>
-                      </details>
-                    );
-                  })}
+
+                        <p className="text-[11px] text-slate-400 font-mono-tabular truncate group-open:hidden">
+                          {meta.preview}
+                        </p>
+                      </summary>
+
+                      <div className="mt-2.5 pt-2.5 border-t border-white/8 space-y-2">
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 flex-wrap">
+                          <span className="tabular-nums">
+                            <span className="font-mono-tabular">
+                              {item.timestamp ? formatFullTime(item.timestamp) : '时间未提供'}
+                            </span>
+                            {item.parts > 1
+                              ? ` · 已合并 ${item.parts} 段续文`
+                              : item.continued
+                              ? ' · 续文'
+                              : ''}
+                          </span>
+                          <CopyButton text={item.text} ariaLabel={`复制${meta.badge}`} />
+                        </div>
+
+                        <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 font-mono-tabular text-slate-200 select-text max-h-80 overflow-y-auto">
+                          {item.text}
+                        </pre>
+                      </div>
+                    </details>
+                  ))}
                 </div>
               )}
             </div>
@@ -504,17 +465,21 @@ export function SessionConversation({
           data-more-conversation="true"
           disabled={!canRead || current.loading || Boolean(current.error)}
           onClick={() => onQuery(target, detailKey, current.nextCursor)}
-          className="min-h-[44px] w-full rounded-xl bg-white/6 hover:bg-white/10 border border-white/10 text-xs font-semibold text-sky-300 disabled:opacity-40 transition-colors"
+          className="min-h-[44px] w-full rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] active:scale-[0.99] border border-white/10 text-xs font-semibold text-sky-200 disabled:opacity-40 transition-all"
         >
           {current.loading ? '正在读取…' : '加载后续对话'}
         </button>
       )}
 
-      {current && !current.loading && !current.error && !current.nextCursor && current.messages.length > 0 && (
-        <p className="text-[11px] text-slate-500 text-center">
-          已读到当前日志末尾 · 新消息可点击刷新
-        </p>
-      )}
+      {current &&
+        !current.loading &&
+        !current.error &&
+        !current.nextCursor &&
+        current.messages.length > 0 && (
+          <p className="text-[11px] text-slate-400 text-center">
+            已读到当前日志末尾 · 新消息可点击刷新
+          </p>
+        )}
     </section>
   );
 }

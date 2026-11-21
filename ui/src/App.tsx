@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Activity,
-  AlertTriangle,
   ChevronDown,
   Clock,
   Download,
@@ -28,6 +27,7 @@ import { ReportsView } from './components/ReportsView';
 import { SessionDetailView } from './components/SessionDetailView';
 import { SessionsView } from './components/SessionsView';
 import { SettingsView } from './components/SettingsView';
+import { EmptyState, InlineAlert, SegmentedControl } from './components/ui/Primitives';
 import { useNativeMonitor } from './hooks/useNativeMonitor';
 import { MonitorModel } from './model/monitorModel';
 import { receiveNativeMessage } from './nativeState';
@@ -535,7 +535,7 @@ function Dashboard({
       ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse'
       : status === 'offline'
       ? 'bg-rose-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]'
-      : 'bg-slate-500';
+      : 'bg-slate-400';
 
   const devicesList = stats?.devices || [];
   const activeDevicesCount = devicesList.filter((d) => !d.stale).length;
@@ -543,23 +543,23 @@ function Dashboard({
   const isSelectedDeviceRemoved = Boolean(device) && !selectedDeviceObj;
 
   return (
-    <div className="min-h-screen bg-[#090C10] text-slate-100 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#090C10] text-slate-100 relative overflow-x-clip flex flex-col">
       <div
         aria-hidden="true"
-        className="fixed inset-x-0 top-0 h-80 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-15%,rgba(56,189,248,0.16),transparent)] z-0"
+        className="fixed inset-x-0 top-0 h-72 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-15%,rgba(56,189,248,0.15),transparent)] z-0"
       />
 
-      <div className="max-w-[440px] mx-auto min-h-screen flex flex-col relative z-10">
-        <header className="sticky top-0 z-30 min-h-14 py-1.5 px-4 flex items-center justify-between gap-2 bg-[#090C10]/85 backdrop-blur-2xl border-b border-white/[0.08]">
+      <header className="sticky top-0 z-30 w-full tm-chrome-bar border-b border-white/[0.08]">
+        <div className="max-w-[460px] mx-auto min-h-14 py-1 px-3.5 sm:px-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setPage('overview')}
-            className="flex items-center gap-2 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] shrink-0 group"
+            className="min-w-0 flex items-center gap-2 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] active:scale-[0.98] transition-transform group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.22)] group-hover:border-sky-400/50 transition-colors shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_16px_rgba(56,189,248,0.20)] group-hover:border-sky-400/50 transition-colors shrink-0">
               <Activity className="w-4 h-4" />
             </div>
-            <span className="text-sm font-bold tracking-tight text-white whitespace-nowrap">
+            <span className="text-sm font-bold tracking-tight text-white truncate">
               Token Monitor
             </span>
           </button>
@@ -571,7 +571,7 @@ function Dashboard({
                 type="button"
                 aria-label="打开报告专区"
                 onClick={() => openReportsZone('daily', false)}
-                className="min-h-[40px] px-2.5 py-1.5 rounded-full glass-pill-bar hover:border-sky-400/35 inline-flex items-center gap-1 text-xs font-semibold text-sky-200 transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[44px] px-2.5 py-1.5 rounded-full glass-pill-bar hover:border-sky-400/40 active:scale-[0.97] inline-flex items-center gap-1 text-xs font-semibold text-sky-200 transition-all whitespace-nowrap shrink-0"
               >
                 <FileText className="w-3.5 h-3.5 text-sky-300 shrink-0" />
                 <span>报告</span>
@@ -583,20 +583,22 @@ function Dashboard({
               type="button"
               onClick={() => setPage('settings')}
               aria-label="连接设置"
-              className="min-h-[40px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+              className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.97] flex items-center gap-1.5 text-xs font-medium text-slate-200 transition-all whitespace-nowrap shrink-0"
             >
               <i id="status-dot" className={`w-2 h-2 rounded-full shrink-0 ${statusDotColor}`} />
               <span id="status-label">{statusLabel}</span>
             </button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="flex-1 px-4 pt-4 pb-24">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
+      <div className="w-full max-w-[460px] mx-auto flex-1 flex flex-col relative z-10">
+        <main className="flex-1 px-4 pt-3 pb-24">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
               <p
                 id="eyebrow"
-                className="text-[11px] font-medium tracking-wide text-sky-400 mb-0.5"
+                className="text-[11px] font-medium tracking-wide text-sky-400 mb-0.5 truncate"
               >
                 {page === 'settings'
                   ? '多设备同步与安全凭据'
@@ -604,7 +606,7 @@ function Dashboard({
                     ? '智能分析 · 周期报告专区'
                     : 'AI 遥测与额度监控'}
               </p>
-              <h1 id="page-title" className="text-2xl font-bold tracking-tight text-white">
+              <h1 id="page-title" className="text-[22px] sm:text-2xl leading-tight font-bold tracking-tight text-white">
                 {PAGE_LABELS[page]}
               </h1>
             </div>
@@ -616,7 +618,7 @@ function Dashboard({
                 disabled={status === 'loading'}
                 onClick={handleRefresh}
                 aria-label="刷新数据"
-                className="w-11 h-11 rounded-full glass-pill-bar hover:border-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
+                className="w-11 h-11 rounded-full glass-pill-bar hover:border-white/25 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${
@@ -628,95 +630,89 @@ function Dashboard({
           </div>
 
           {noticeVisible && (
-            <div
+            <InlineAlert
               id="notice"
-              role="status"
-              aria-live="polite"
-              className="mb-3.5 rounded-2xl bg-amber-500/12 border border-amber-400/30 p-3.5 text-xs text-amber-200 flex items-start gap-2.5 leading-relaxed"
+              tone={status === 'offline' && !fetchedAt ? 'rose' : 'amber'}
+              ariaLive="polite"
+              className="mb-3"
+              action={
+                status === 'offline' && connection ? (
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    className="min-h-[36px] px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white active:scale-[0.97] transition-all whitespace-nowrap"
+                  >
+                    重试
+                  </button>
+                ) : undefined
+              }
             >
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <span>{noticeText}</span>
-            </div>
+            </InlineAlert>
           )}
 
           {state.appUpdate.available &&
             state.dismissedUpdateVersion !== state.appUpdate.latestVersion && (
-              <div
+              <InlineAlert
                 id="app-update-banner"
-                role="status"
-                className="mb-3.5 rounded-2xl border border-sky-400/30 bg-sky-400/10 p-3 flex flex-wrap items-center gap-2 text-xs text-sky-200"
+                tone="sky"
+                icon={<Download className="w-4 h-4" />}
+                className="mb-3 py-2"
+                action={
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPage('settings');
+                        setRevealAppUpdate(true);
+                      }}
+                      className="min-h-[44px] px-3 rounded-xl bg-sky-400/20 hover:bg-sky-400/28 border border-sky-400/35 text-xs font-semibold text-sky-100 active:scale-[0.97] transition-all whitespace-nowrap"
+                    >
+                      查看更新
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="稍后更新"
+                      className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-sky-200 hover:text-white hover:bg-white/[0.06] active:scale-95 transition-all"
+                      onClick={() =>
+                        update((previous) => ({
+                          ...previous,
+                          dismissedUpdateVersion: previous.appUpdate.latestVersion,
+                        }))
+                      }
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                }
               >
-                <Download className="w-4 h-4 shrink-0" />
-                <span className="flex-1 min-w-0">
+                <span className="font-medium">
                   发现新版本 {state.appUpdate.latestVersion}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPage('settings');
-                    setRevealAppUpdate(true);
-                  }}
-                  className="min-h-[40px] px-2.5 font-semibold text-sky-200 hover:text-white transition-colors"
-                >
-                  查看更新
-                </button>
-                <button
-                  type="button"
-                  aria-label="稍后更新"
-                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-sky-300 hover:text-white transition-colors"
-                  onClick={() =>
-                    update((previous) => ({
-                      ...previous,
-                      dismissedUpdateVersion: previous.appUpdate.latestVersion,
-                    }))
-                  }
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              </InlineAlert>
             )}
 
           {showFilters && (
-            <div id="filters" className="mb-3.5 space-y-2.5">
+            <div id="filters" className="mb-3 space-y-2">
               {showPeriods && (
-                <div
+                <SegmentedControl<PeriodId>
                   id="periods"
-                  aria-label="统计周期"
-                  className="glass-inset p-1 rounded-2xl flex gap-1"
-                >
-                  {(
-                    [
-                      ['today', '今日'],
-                      ['month', '本月'],
-                      ['allTime', '累计'],
-                    ] as Array<[PeriodId, string]>
-                  ).map(([pId, label]) => {
-                    const active = period === pId;
-                    return (
-                      <button
-                        key={pId}
-                        type="button"
-                        data-period={pId}
-                        aria-pressed={active}
-                        onClick={() => {
-                          setPeriod(pId);
-                          setOpenSessions(new Set());
-                        }}
-                        className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
-                          active
-                            ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+                  ariaLabel="统计周期"
+                  value={period}
+                  onChange={(pId) => {
+                    setPeriod(pId);
+                    setOpenSessions(new Set());
+                  }}
+                  options={[
+                    { value: 'today', label: '今日', dataAttrs: { 'data-period': 'today' } },
+                    { value: 'month', label: '本月', dataAttrs: { 'data-period': 'month' } },
+                    { value: 'allTime', label: '累计', dataAttrs: { 'data-period': 'allTime' } },
+                  ]}
+                />
               )}
 
               <div className="flex items-center justify-between gap-2 text-xs">
-                <div className="inline-flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <button
                     id="device-picker-trigger"
                     type="button"
@@ -724,9 +720,9 @@ function Dashboard({
                     aria-haspopup="dialog"
                     aria-expanded={devicePickerOpen}
                     onClick={() => setDevicePickerOpen(true)}
-                    className={`min-h-[40px] pl-3 pr-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 inline-flex items-center gap-2 text-xs font-medium max-w-[min(240px,62vw)] transition-colors ${
+                    className={`min-h-[44px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.98] inline-flex items-center gap-2 text-xs font-medium max-w-full min-w-0 transition-all ${
                       isSelectedDeviceRemoved
-                        ? 'border-amber-400/40 text-amber-200'
+                        ? 'border-amber-400/45 text-amber-200'
                         : 'text-slate-200'
                     }`}
                   >
@@ -756,7 +752,7 @@ function Dashboard({
                         <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <span className="truncate">全部设备</span>
                         {devicesList.length > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-mono-tabular text-slate-300 shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-full bg-white/[0.07] text-[11px] tabular-nums text-slate-300 shrink-0">
                             {activeDevicesCount}/{devicesList.length}
                           </span>
                         )}
@@ -792,7 +788,9 @@ function Dashboard({
                 <span
                   id="freshness"
                   title={fetchedAt ? formatShortTime(fetchedAt) : undefined}
-                  className="text-[11px] font-mono-tabular text-slate-400 shrink-0"
+                  className={`text-[11px] tabular-nums shrink-0 ${
+                    status === 'offline' ? 'text-amber-300' : 'text-slate-400'
+                  }`}
                 >
                   {fetchedAt
                     ? `${new Date(fetchedAt).toLocaleTimeString('zh-CN', {
@@ -807,37 +805,22 @@ function Dashboard({
           )}
 
           {page === 'limits' && (
-            <div id="quota-tabs" className="glass-inset p-1 rounded-2xl flex gap-1 mb-3.5">
-              {(
-                [
-                  ['limits', '账户额度'],
-                  ['subscriptions', '共享订阅'],
-                ] as Array<[QuotaTabId, string]>
-              ).map(([qId, label]) => {
-                const active = quotaTab === qId;
-                return (
-                  <button
-                    key={qId}
-                    type="button"
-                    data-quota={qId}
-                    aria-pressed={active}
-                    onClick={() => {
-                      setQuotaTab(qId);
-                      if (qId === 'subscriptions') {
-                        window.HubNative?.subscriptions?.();
-                      }
-                    }}
-                    className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap shrink-0 ${
-                      active
-                        ? 'bg-slate-800/95 text-white shadow-sm border border-white/10'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <SegmentedControl<QuotaTabId>
+              id="quota-tabs"
+              ariaLabel="额度视图"
+              value={quotaTab}
+              className="mb-3"
+              onChange={(qId) => {
+                setQuotaTab(qId);
+                if (qId === 'subscriptions') {
+                  window.HubNative?.subscriptions?.();
+                }
+              }}
+              options={[
+                { value: 'limits', label: '账户额度', dataAttrs: { 'data-quota': 'limits' } },
+                { value: 'subscriptions', label: '共享订阅', dataAttrs: { 'data-quota': 'subscriptions' } },
+              ]}
+            />
           )}
 
           {page === 'sessions' && (
@@ -922,41 +905,38 @@ function Dashboard({
               {page === 'overview' && connection && (
                 <ApprovalsPanel approvals={approvals} />
               )}
-              <div id="content" className="glass-panel rounded-3xl p-8 text-center my-4 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300 mx-auto">
-                <Activity className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-slate-100 mb-1">
-                  {connection ? '等待 Hub 数据' : '连接你的 Hub'}
-                </p>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {connection
+              <EmptyState
+                id="content"
+                icon={<Activity className="w-6 h-6" />}
+                title={connection ? '等待 Hub 数据' : '连接你的 Hub'}
+                description={
+                  connection
                     ? '连接成功后，用量、设备和额度将在这里显示。'
-                    : '打开下方「连接」，输入电脑端的 Hub 地址和 secret。'}
-                </p>
-              </div>
-              {!connection && (
-                <div className="pt-2 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPage('settings')}
-                    className="w-full min-h-[44px] rounded-2xl bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 font-bold text-xs"
-                  >
-                    前往配置 Hub 连接
-                  </button>
-                  {isBrowserPreview && (
-                    <button
-                      type="button"
-                      onClick={() => loadBrowserDemo()}
-                      className="w-full min-h-[44px] rounded-2xl glass-inset hover:border-sky-400/30 text-sky-300 font-semibold text-xs transition-colors"
-                    >
-                      加载演示数据 (Web 预览)
-                    </button>
-                  )}
-                </div>
-              )}
-              </div>
+                    : '打开下方「连接」，输入电脑端的 Hub 地址和 secret。'
+                }
+                action={
+                  !connection ? (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPage('settings')}
+                        className="w-full min-h-[44px] rounded-2xl bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 font-bold text-xs active:scale-[0.985] transition-transform"
+                      >
+                        前往配置 Hub 连接
+                      </button>
+                      {isBrowserPreview && (
+                        <button
+                          type="button"
+                          onClick={() => loadBrowserDemo()}
+                          className="w-full min-h-[44px] rounded-2xl glass-inset hover:border-sky-400/35 text-sky-300 font-semibold text-xs active:scale-[0.985] transition-all"
+                        >
+                          加载演示数据 (Web 预览)
+                        </button>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              />
             </>
           ) : (
             <div id="content">
@@ -1108,56 +1088,62 @@ function Dashboard({
           onClose={() => setReportWindowOpen(false)}
           reports={state.reports}
         />
-
-        <nav
-          aria-label="主导航"
-          aria-hidden={inputFocused || undefined}
-          className={`bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] z-40 bg-[#090C10]/88 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5 transition-all duration-150 ${
-            inputFocused ? 'opacity-0 pointer-events-none translate-y-full' : ''
-          }`}
-        >
-          <div className="grid grid-cols-5 gap-1">
-            {(
-              [
-                ['overview', '总览', LayoutGrid],
-                ['devices', '设备', Server],
-                ['limits', '额度', Clock],
-                ['sessions', '会话', MessageSquare],
-                ['settings', '连接', Settings],
-              ] as const
-            ).map(([tabId, label, Icon]) => {
-              const isActive =
-                page === tabId ||
-                (page === 'sessionDetail' && tabId === 'sessions') ||
-                (page === 'reports' && tabId === 'overview');
-              return (
-                <button
-                  key={tabId}
-                  type="button"
-                  data-page={tabId}
-                  aria-current={isActive ? 'page' : undefined}
-                  tabIndex={inputFocused ? -1 : undefined}
-                  onClick={() => setPage(tabId)}
-                  className={`min-h-[48px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-150 ${
-                    isActive
-                      ? 'text-sky-300 bg-sky-400/12'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Icon
-                    className={`w-[19px] h-[19px] transition-transform duration-150 ${
-                      isActive ? '-translate-y-0.5 text-sky-300' : ''
-                    }`}
-                  />
-                  <span className="text-[10px] font-semibold tracking-tight whitespace-nowrap">
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
       </div>
+
+      <nav
+        aria-label="主导航"
+        aria-hidden={inputFocused || undefined}
+        className={`bottom-nav fixed bottom-0 inset-x-0 z-40 tm-chrome-bar border-t border-white/[0.08] transition-all duration-150 ${
+          inputFocused ? 'opacity-0 pointer-events-none translate-y-full' : ''
+        }`}
+      >
+        <div className="max-w-[460px] mx-auto px-2 py-1 grid grid-cols-5 gap-1">
+          {(
+            [
+              ['overview', '总览', LayoutGrid],
+              ['devices', '设备', Server],
+              ['limits', '额度', Clock],
+              ['sessions', '会话', MessageSquare],
+              ['settings', '连接', Settings],
+            ] as const
+          ).map(([tabId, label, Icon]) => {
+            const isActive =
+              page === tabId ||
+              (page === 'sessionDetail' && tabId === 'sessions') ||
+              (page === 'reports' && tabId === 'overview');
+            return (
+              <button
+                key={tabId}
+                type="button"
+                data-page={tabId}
+                aria-current={isActive ? 'page' : undefined}
+                tabIndex={inputFocused ? -1 : undefined}
+                onClick={() => setPage(tabId)}
+                className={`relative min-h-[50px] rounded-2xl flex flex-col items-center justify-center gap-1 border transition-all duration-150 active:scale-[0.96] ${
+                  isActive
+                    ? 'text-sky-300 bg-sky-400/12 border-sky-400/20'
+                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                }`}
+              >
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.85)]"
+                  />
+                )}
+                <Icon
+                  className={`w-[19px] h-[19px] transition-transform duration-150 ${
+                    isActive ? 'text-sky-300' : ''
+                  }`}
+                />
+                <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
