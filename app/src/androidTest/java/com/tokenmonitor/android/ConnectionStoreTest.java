@@ -154,4 +154,79 @@ public final class ConnectionStoreTest {
         assertEquals(2, store.listProfiles().size());
         assertEquals("legacy-secret", store.selectProfile(migratedId).secret);
     }
+
+    @Test public void customCaPersistsEncryptedAndEnforcesSecretReentryOnCaChange() throws Exception {
+        TestCertFactory.Identity caA = TestCertFactory.createCa("Store Test CA A");
+        TestCertFactory.Identity caB = TestCertFactory.createCa("Store Test CA B");
+        CertificateTrustPolicy.ParsedBundle parsedA = CertificateTrustPolicy.parseForImport(
+                caA.pem.getBytes(StandardCharsets.UTF_8));
+        CertificateTrustPolicy.ParsedBundle parsedB = CertificateTrustPolicy.parseForImport(
+                caB.pem.getBytes(StandardCharsets.UTF_8));
+
+        ConnectionStore store = new ConnectionStore(context);
+        ConnectionSpec added = store.addProfile("Private Hub", "https://private.example.com/", "secret-a", false, caA.pem);
+        assertTrue(added.hasCustomCa());
+        assertEquals(parsedA.fingerprintSha256, added.caFingerprintSha256);
+        String profileId = store.activeProfileId();
+        String initialBinding = store.binding();
+
+        // Reload from Android Keystore AES-GCM and verify full CA round-trip.
+        ConnectionSpec loaded = store.load();
+        assertNotNull(loaded);
+        assertEquals("secret-a", loaded.secret);
+        assertEquals(parsedA.canonicalPem, loaded.caCertPem);
+        assertEquals(parsedA.fingerprintSha256, loaded.caFingerprintSha256);
+
+        // ProfileSummary exposes sanitized metadata only (never raw PEM or secret).
+        List<ConnectionStore.ProfileSummary> summaries = store.listProfiles();
+        assertEquals(1, summaries.size());
+        ConnectionStore.ProfileSummary summary = summaries.get(0);
+        assertTrue(summary.hasCustomCa);
+        assertEquals(parsedA.fingerprintSha256, summary.caFingerprint);
+        assertTrue(summary.caSubject.contains("Store Test CA A"));
+        assertTrue(summary.caNotAfter > System.currentTimeMillis());
+
+        // Renaming with caMode="keep" and empty secret preserves both secret and CA.
+        ConnectionSpec renamed = store.saveProfile(profileId, "Private Renamed", "https://private.example.com", "", false, "keep", "");
+        assertEquals("secret-a", renamed.secret);
+        assertEquals(parsedA.fingerprintSha256, renamed.caFingerprintSha256);
+
+        // Replacing CA with a different CA without fresh secret MUST be rejected.
+        try {
+            store.saveProfile(profileId, "Private Renamed", "https://private.example.com", "", false, "replace", caB.pem);
+            fail("Expected secret-reuse rejection when custom CA changed");
+        } catch (IllegalArgumentException expected) {
+            assertEquals(parsedA.fingerprintSha256, store.load().caFingerprintSha256);
+            assertEquals("secret-a", store.load().secret);
+        }
+
+        // Clearing CA without fresh secret MUST be rejected.
+        try {
+            store.saveProfile(profileId, "Private Renamed", "https://private.example.com", "", false, "clear", "");
+            fail("Expected secret-reuse rejection when custom CA cleared");
+        } catch (IllegalArgumentException expected) {
+            assertEquals(parsedA.fingerprintSha256, store.load().caFingerprintSha256);
+        }
+
+        // Replacing CA WITH fresh secret succeeds, rotates binding & trustFingerprint, keeps fingerprint invariant.
+        ConnectionSpec replaced = store.saveProfile(profileId, "Private Hub B", "https://private.example.com", "secret-b", false, "replace", caB.pem);
+        assertEquals("secret-b", replaced.secret);
+        assertEquals(parsedB.fingerprintSha256, replaced.caFingerprintSha256);
+        assertNotEquals(initialBinding, store.binding());
+        assertNotEquals(added.trustFingerprint(), replaced.trustFingerprint());
+
+        // Clearing CA WITH fresh secret reverts to system CA.
+        ConnectionSpec cleared = store.saveProfile(profileId, "Public Hub", "https://private.example.com", "secret-c", false, "clear", "");
+        assertFalse(cleared.hasCustomCa());
+        assertEquals("", cleared.caCertPem);
+        assertFalse(store.listProfiles().get(0).hasCustomCa);
+
+        // Adding a CA to a system-CA profile without fresh secret MUST be rejected.
+        try {
+            store.saveProfile(profileId, "Public Hub", "https://private.example.com", "", false, "replace", caA.pem);
+            fail("Expected secret-reuse rejection when adding custom CA to system-CA profile");
+        } catch (IllegalArgumentException expected) {
+            assertFalse(store.load().hasCustomCa());
+        }
+    }
 }

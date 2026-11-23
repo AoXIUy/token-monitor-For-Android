@@ -7,10 +7,14 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSocketFactory;
 
 final class HubClient {
     private volatile boolean cancelled;
     private volatile HttpURLConnection active;
+    private String cachedCaFingerprint;
+    private SSLSocketFactory cachedSocketFactory;
 
     static final class HubError extends IOException {
         final int status;
@@ -51,12 +55,38 @@ final class HubClient {
         return getUrl(spec, spec.antigravityManagerEndpoint(), 512 * 1024);
     }
 
+    private SSLSocketFactory socketFactoryFor(ConnectionSpec spec) throws Exception {
+        String key = spec.hasCustomCa() ? spec.caFingerprintSha256 : "";
+        if (cachedSocketFactory != null && key.equals(cachedCaFingerprint)) {
+            return cachedSocketFactory;
+        }
+        SSLSocketFactory created = spec.hasCustomCa()
+                ? CertificateTrustPolicy.createPinnedSocketFactory(spec.caCertPem)
+                : CertificateTrustPolicy.createSystemSocketFactory();
+        cachedCaFingerprint = key;
+        cachedSocketFactory = created;
+        return created;
+    }
+
     private JSONObject getUrl(ConnectionSpec spec, String url, int maxBytes) throws Exception {
         if (cancelled) throw new IOException("Cancelled");
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        URL parsed = new URL(url);
+        if ("http".equalsIgnoreCase(parsed.getProtocol()) && !spec.allowHttp) {
+            throw new SecurityException("明文 HTTP 连接已被禁止");
+        }
+        HttpURLConnection connection = (HttpURLConnection) parsed.openConnection();
         active = connection;
         try {
             if (cancelled) throw new IOException("Cancelled");
+            if ("https".equalsIgnoreCase(parsed.getProtocol())) {
+                if (!(connection instanceof HttpsURLConnection)) {
+                    throw new IOException("HTTPS 连接不受支持");
+                }
+                HttpsURLConnection https = (HttpsURLConnection) connection;
+                // Strictly per-connection SSLSocketFactory (never mutates process-global defaults).
+                // Default HostnameVerifier stays active and is never weakened.
+                https.setSSLSocketFactory(socketFactoryFor(spec));
+            }
             connection.setRequestMethod("GET");
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(10000);

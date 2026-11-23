@@ -26,9 +26,52 @@ export function sanitizeHubProfiles(raw) {
     if (!id || !url || seen.has(id)) continue;
     seen.add(id);
     const rawName = typeof item.name === 'string' ? item.name.trim().replace(/\s+/g, ' ').slice(0, 64) : '';
-    clean.push({ id, name: rawName || url, url, allowHttp: Boolean(item.allowHttp) });
+    /** @type {import('./types/monitor').HubProfile} */
+    const profile = { id, name: rawName || url, url, allowHttp: Boolean(item.allowHttp) };
+    if (item.hasCustomCa === true) {
+      const fp = typeof item.caFingerprint === 'string' && /^[a-f0-9]{64}$/i.test(item.caFingerprint.trim())
+        ? item.caFingerprint.trim().toLowerCase()
+        : '';
+      const subject = typeof item.caSubject === 'string' ? item.caSubject.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
+      const notAfter = typeof item.caNotAfter === 'number' && Number.isFinite(item.caNotAfter) && item.caNotAfter > 0
+        ? Math.floor(item.caNotAfter)
+        : 0;
+      profile.hasCustomCa = true;
+      profile.caFingerprint = fp;
+      profile.caSubject = subject;
+      profile.caNotAfter = notAfter;
+    }
+    clean.push(profile);
   }
   return clean;
+}
+
+/** @param {unknown} raw @returns {import('./types/monitor').CaCertSummary | null} */
+function sanitizeCaCertSummary(raw) {
+  if (!isPlainObject(raw)) return null;
+  const item = /** @type {Record<string, unknown>} */ (raw);
+  const sha256 = typeof item.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(item.sha256.trim())
+    ? item.sha256.trim().toLowerCase()
+    : '';
+  if (!sha256) return null;
+  const text = (/** @type {unknown} */ v, /** @type {number} */ max) => (
+    typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : ''
+  );
+  const ts = (/** @type {unknown} */ v) => (
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+  );
+  const certCount = typeof item.certCount === 'number' && Number.isFinite(item.certCount)
+    ? Math.max(1, Math.min(4, Math.floor(item.certCount)))
+    : 1;
+  return {
+    sha256,
+    subject: text(item.subject, 160),
+    issuer: text(item.issuer, 160),
+    notBefore: ts(item.notBefore),
+    notAfter: ts(item.notAfter),
+    certCount,
+    isCa: Boolean(item.isCa),
+  };
 }
 
 /** @param {unknown} value */
@@ -99,7 +142,8 @@ export function createInitialState() {
       download: { phase: 'idle', version: '', downloaded: 0, total: 0, message: '', error: '' } },
     dismissedUpdateVersion: '', dismissedUpdatePrompt: '',
     page: 'overview', period: 'today', device: '', stats: null, subscriptions: null,
-    subscriptionError: '', connection: '', allowHttp: false, hubProfiles: [], activeHubProfileId: '',
+    subscriptionError: '', connection: '', allowHttp: false, hasCustomCa: false,
+    hubProfiles: [], activeHubProfileId: '', caDraft: null,
     status: 'disconnected',
     message: '', fetchedAt: 0, foreground: true, statusHealthy: false, detailKey: '',
     notifications: { enabled: false, permission: false, message: '完成提醒未开启' },
@@ -178,14 +222,53 @@ export function receiveNativeMessage(state, message) {
       const activeHubProfileId = rawActiveId && (!hasProfiles || hubProfiles.some(profile => profile.id === rawActiveId))
         ? rawActiveId
         : '';
+      const activeProfile = activeHubProfileId ? hubProfiles.find(profile => profile.id === activeHubProfileId) : null;
       return {
         ...createInitialState(), connection, allowHttp: Boolean(message.allowHttp),
-        hubProfiles, activeHubProfileId,
+        hasCustomCa: typeof message.hasCustomCa === 'boolean' ? message.hasCustomCa : Boolean(activeProfile?.hasCustomCa),
+        hubProfiles, activeHubProfileId, caDraft: null,
         appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion, dismissedUpdatePrompt: state.dismissedUpdatePrompt,
         limitsPrefs: state.limitsPrefs,
         displayPrefs: state.displayPrefs,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
+      };
+    }
+    case 'caCertDraft': {
+      const requestId = typeof message.requestId === 'string' ? message.requestId.trim().slice(0, 80) : '';
+      if (state.caDraft && state.caDraft.requestId && requestId && state.caDraft.requestId !== requestId) {
+        return state;
+      }
+      if (message.cancelled === true) {
+        return {
+          ...state,
+          caDraft: state.caDraft?.draftToken ? { ...state.caDraft, loading: false, error: '' } : null,
+        };
+      }
+      if (message.ok === true) {
+        const draftToken = typeof message.draftToken === 'string' ? message.draftToken.trim().slice(0, 80) : '';
+        const cert = sanitizeCaCertSummary(message.cert);
+        if (!draftToken || !cert) {
+          return {
+            ...state,
+            caDraft: { requestId, loading: false, draftToken: '', cert: null, error: '证书解析失败' },
+          };
+        }
+        return {
+          ...state,
+          caDraft: { requestId, loading: false, draftToken, cert, error: '' },
+        };
+      }
+      const error = typeof message.error === 'string' ? message.error.trim().slice(0, 300) : '证书解析失败';
+      return {
+        ...state,
+        caDraft: {
+          requestId,
+          loading: false,
+          draftToken: state.caDraft?.draftToken || '',
+          cert: state.caDraft?.cert || null,
+          error: error || '证书解析失败',
+        },
       };
     }
     case 'hubProfiles': {

@@ -14,6 +14,7 @@ export function useNativeMonitor() {
   const conversationSequence = useRef(0);
   const reportsSequence = useRef(0);
   const agManagerSequence = useRef(0);
+  const caCertSequence = useRef(0);
   const isBrowserPreview = typeof window !== 'undefined' && !window.HubNative;
 
   const update = useCallback((change: (previous: MonitorState) => MonitorState) => {
@@ -258,6 +259,86 @@ export function useNativeMonitor() {
     };
   }, [update, loadBrowserDemo]);
 
+  const pickCaCertificate = useCallback(() => {
+    const requestId = `ca-${Date.now()}-${++caCertSequence.current}`;
+    update(previous => ({
+      ...previous,
+      caDraft: {
+        requestId,
+        loading: true,
+        draftToken: previous.caDraft?.draftToken || '',
+        cert: previous.caDraft?.cert || null,
+        error: '',
+      },
+    }));
+    if (window.HubNative?.pickCaCertificate) {
+      window.HubNative.pickCaCertificate(requestId);
+    } else {
+      update(previous => receiveNativeMessage(previous, {
+        type: 'caCertDraft',
+        requestId,
+        ok: false,
+        error: '浏览器预览模式不支持系统文件选择器，请在 Android 客户端导入证书',
+      }));
+    }
+  }, [update]);
+
+  const validateCaCertificatePem = useCallback((pem: string) => {
+    const requestId = `ca-${Date.now()}-${++caCertSequence.current}`;
+    update(previous => ({
+      ...previous,
+      caDraft: {
+        requestId,
+        loading: true,
+        draftToken: previous.caDraft?.draftToken || '',
+        cert: previous.caDraft?.cert || null,
+        error: '',
+      },
+    }));
+    if (window.HubNative?.validateCaCertificatePem) {
+      window.HubNative.validateCaCertificatePem(pem, requestId);
+    } else if (isBrowserPreview) {
+      const trimmed = pem.trim();
+      if (!trimmed.includes('-----BEGIN CERTIFICATE-----')) {
+        update(previous => receiveNativeMessage(previous, {
+          type: 'caCertDraft',
+          requestId,
+          ok: false,
+          error: '请输入有效的 PEM CERTIFICATE 证书',
+        }));
+      } else {
+        update(previous => receiveNativeMessage(previous, {
+          type: 'caCertDraft',
+          requestId,
+          ok: true,
+          draftToken: `preview-${requestId}`,
+          cert: {
+            sha256: 'a'.repeat(64),
+            subject: 'CN=Preview Hub CA',
+            issuer: 'CN=Preview Hub CA',
+            notBefore: Date.now() - 86400_000,
+            notAfter: Date.now() + 365 * 86400_000,
+            certCount: 1,
+            isCa: true,
+          },
+        }));
+      }
+    } else {
+      update(previous => receiveNativeMessage(previous, {
+        type: 'caCertDraft',
+        requestId,
+        ok: false,
+        error: '当前客户端不支持自定义 CA 证书导入',
+      }));
+    }
+  }, [update, isBrowserPreview]);
+
+  const clearCaCertificateDraft = useCallback(() => {
+    const token = current.current.caDraft?.draftToken;
+    if (token) window.HubNative?.clearCaCertificateDraft?.(token);
+    update(previous => previous.caDraft ? { ...previous, caDraft: null } : previous);
+  }, [update]);
+
   return {
     state,
     update,
@@ -273,5 +354,8 @@ export function useNativeMonitor() {
     updateAgManagerFilter,
     saveLimitsPrefs,
     saveDisplayPrefs,
+    pickCaCertificate,
+    validateCaCertificatePem,
+    clearCaCertificateDraft,
   };
 }

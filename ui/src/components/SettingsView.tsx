@@ -1,22 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity,
+  AlertTriangle,
   ArrowUpRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   Eye,
   EyeOff,
+  FileUp,
   HelpCircle,
   Link2,
   Pencil,
   Play,
   Plus,
   Server,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react';
 import {
   ApprovalsState,
+  CaCertDraftState,
   DisplayPrefs,
   NotificationState,
   AppUpdateState,
@@ -28,14 +34,61 @@ import { AppUpdateCard } from './AppUpdateCard';
 import { WidgetGalleryCard } from './WidgetGalleryCard';
 import { CopyButton, InlineAlert, SectionHeader, ToggleSwitch } from './ui/Primitives';
 
+function isPrivateOrLoopbackHttpUrl(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return true;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return true;
+  }
+  if (parsed.protocol !== 'http:') return true;
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '::1') {
+    return true;
+  }
+  if (host.startsWith('127.') || host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('169.254.')) {
+    return true;
+  }
+  const rfc172 = /^172\.(\d+)\./.exec(host);
+  if (rfc172 && Number(rfc172[1]) >= 16 && Number(rfc172[1]) <= 31) return true;
+  const cgnat = /^100\.(\d+)\./.exec(host);
+  if (cgnat && Number(cgnat[1]) >= 64 && Number(cgnat[1]) <= 127) return true;
+  if (host.includes(':') && (host.startsWith('fc') || host.startsWith('fd') || /^fe[89ab]/.test(host))) {
+    return true;
+  }
+  return false;
+}
+
+function formatFingerprintShort(sha256: string | undefined): string {
+  if (!sha256) return '';
+  const clean = sha256.trim().toUpperCase();
+  if (clean.length < 16) return clean;
+  const pairs = clean.match(/.{1,2}/g) || [];
+  if (pairs.length <= 12) return pairs.join(':');
+  return `${pairs.slice(0, 6).join(':')}…${pairs.slice(-4).join(':')}`;
+}
+
+function formatCertDate(ms: number | undefined): string {
+  if (!ms || !Number.isFinite(ms) || ms <= 0) return '未知';
+  try {
+    return new Date(ms).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    return '未知';
+  }
+}
+
 interface SettingsViewProps {
   appUpdate: AppUpdateState;
   stats?: MonitorStats | null;
   fetchedAt?: number;
   connectionUrl: string;
   allowHttpInitial: boolean;
+  hasCustomCaInitial?: boolean;
   hubProfiles?: HubProfile[];
   activeHubProfileId?: string;
+  caDraft?: CaCertDraftState | null;
   connectPending: boolean;
   formError: string;
   displayPrefs?: DisplayPrefs;
@@ -45,11 +98,22 @@ interface SettingsViewProps {
   approvals: ApprovalsState;
   approvalsPending: boolean;
   isBrowserPreview?: boolean;
-  onConnect: (url: string, secret: string, allowHttp: boolean) => void;
+  onConnect: (url: string, secret: string, allowHttp: boolean, caDraftToken?: string) => void;
   onSelectHubProfile?: (id: string) => void;
-  onAddHubProfile?: (name: string, url: string, secret: string, allowHttp: boolean) => void;
-  onSaveHubProfile?: (id: string, name: string, url: string, secret: string, allowHttp: boolean) => void;
+  onAddHubProfile?: (name: string, url: string, secret: string, allowHttp: boolean, caDraftToken?: string) => void;
+  onSaveHubProfile?: (
+    id: string,
+    name: string,
+    url: string,
+    secret: string,
+    allowHttp: boolean,
+    caMode?: 'keep' | 'replace' | 'clear',
+    caDraftToken?: string,
+  ) => void;
   onDeleteHubProfile?: (id: string) => void;
+  onPickCaCertificate?: () => void;
+  onValidateCaPem?: (pem: string) => void;
+  onClearCaDraft?: () => void;
   onDisconnect: () => void;
   onLoadDemo?: () => void;
   onToggleMonitor: (enabled: boolean) => void;
@@ -66,8 +130,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   fetchedAt,
   connectionUrl,
   allowHttpInitial,
+  hasCustomCaInitial = false,
   hubProfiles = [],
   activeHubProfileId = '',
+  caDraft = null,
   connectPending,
   formError,
   displayPrefs = { separateQoderClients: false, exactTrendTokens: false },
@@ -82,6 +148,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onAddHubProfile,
   onSaveHubProfile,
   onDeleteHubProfile,
+  onPickCaCertificate,
+  onValidateCaPem,
+  onClearCaDraft,
   onDisconnect,
   onLoadDemo,
   onToggleMonitor,
@@ -101,10 +170,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [secret, setSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [allowHttp, setAllowHttp] = useState(allowHttpInitial);
+  const [caSectionOpen, setCaSectionOpen] = useState(false);
+  const [caClearRequested, setCaClearRequested] = useState(false);
+  const [pasteMode, setPasteMode] = useState(false);
+  const [pemInput, setPemInput] = useState('');
 
   useEffect(() => {
     setConfirmDisconnect(false);
   }, [connectionUrl]);
+
+  // Clear pasted PEM immediately once native accepts it so raw cert text never lingers in DOM state.
+  useEffect(() => {
+    if (caDraft?.draftToken && caDraft.cert) {
+      setPemInput('');
+      setPasteMode(false);
+      setCaClearRequested(false);
+      setCaSectionOpen(true);
+    }
+  }, [caDraft?.draftToken, caDraft?.cert]);
 
   const activeProfile = activeHubProfileId
     ? hubProfiles.find((profile) => profile.id === activeHubProfileId) || null
@@ -114,12 +197,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     formMode === 'edit'
       ? hubProfiles.find((profile) => profile.id === editingProfileId) || null
       : null;
+
+  const trimmedUrl = url.trim();
+  const isHttpScheme = trimmedUrl.toLowerCase().startsWith('http://');
+  const showCaSection = !isHttpScheme;
+  const effectiveEditCaMode: 'keep' | 'replace' | 'clear' =
+    isHttpScheme && editingProfile?.hasCustomCa
+      ? 'clear'
+      : caDraft?.draftToken
+        ? 'replace'
+        : caClearRequested
+          ? 'clear'
+          : 'keep';
+  const caChanged = Boolean(
+    editingProfile &&
+      ((effectiveEditCaMode === 'clear' && editingProfile.hasCustomCa) ||
+        (effectiveEditCaMode === 'replace' &&
+          Boolean(caDraft?.draftToken) &&
+          caDraft?.cert?.sha256 !== editingProfile.caFingerprint)),
+  );
   const destinationChanged = Boolean(
-    editingProfile && (url.trim() !== editingProfile.url || allowHttp !== editingProfile.allowHttp),
+    editingProfile && (trimmedUrl !== editingProfile.url || allowHttp !== editingProfile.allowHttp || caChanged),
   );
   const secretRequired = !editingProfile || destinationChanged;
+  const publicHttpWarning = allowHttp && isHttpScheme && !isPrivateOrLoopbackHttpUrl(trimmedUrl);
 
   const startAddProfile = () => {
+    onClearCaDraft?.();
     setFormMode('add');
     setEditingProfileId('');
     setConfirmDeleteId('');
@@ -128,10 +232,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUrl('');
     setSecret('');
     setAllowHttp(false);
+    setCaClearRequested(false);
+    setCaSectionOpen(false);
+    setPasteMode(false);
+    setPemInput('');
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   const startEditProfile = (profile: HubProfile) => {
+    onClearCaDraft?.();
     setFormMode('edit');
     setEditingProfileId(profile.id);
     setConfirmDeleteId('');
@@ -140,30 +249,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUrl(profile.url);
     setSecret('');
     setAllowHttp(profile.allowHttp);
+    setCaClearRequested(false);
+    setCaSectionOpen(Boolean(profile.hasCustomCa));
+    setPasteMode(false);
+    setPemInput('');
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   const cancelFormMode = () => {
+    onClearCaDraft?.();
     setFormMode('connect');
     setEditingProfileId('');
     setName('');
     setUrl(connectionUrl);
     setSecret('');
     setAllowHttp(allowHttpInitial);
+    setCaClearRequested(false);
+    setCaSectionOpen(false);
+    setPasteMode(false);
+    setPemInput('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedUrl = url.trim();
+    const draftToken = !isHttpScheme && caDraft?.draftToken ? caDraft.draftToken : '';
     if (formMode === 'edit' && editingProfile && onSaveHubProfile) {
-      onSaveHubProfile(editingProfile.id, name.trim(), trimmedUrl, secret, allowHttp);
+      onSaveHubProfile(editingProfile.id, name.trim(), trimmedUrl, secret, allowHttp, effectiveEditCaMode, draftToken);
       return;
     }
     if (formMode === 'add' && onAddHubProfile) {
-      onAddHubProfile(name.trim(), trimmedUrl, secret, allowHttp);
+      onAddHubProfile(name.trim(), trimmedUrl, secret, allowHttp, draftToken);
       return;
     }
-    onConnect(trimmedUrl, secret, allowHttp);
+    onConnect(trimmedUrl, secret, allowHttp, draftToken);
   };
 
   return (
@@ -183,6 +301,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {allowHttpInitial && (
                   <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-200 text-[11px] font-mono-tabular shrink-0">
                     HTTP
+                  </span>
+                )}
+                {(hasCustomCaInitial || activeProfile?.hasCustomCa) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-400/15 border border-sky-400/30 text-sky-200 text-[11px] font-medium shrink-0">
+                    <ShieldCheck className="w-3 h-3" />
+                    自定义 CA
                   </span>
                 )}
               </div>
@@ -297,6 +421,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       {profile.allowHttp && (
                         <span className="px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-200 text-[11px] font-mono-tabular">
                           HTTP
+                        </span>
+                      )}
+                      {profile.hasCustomCa && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-400/15 text-sky-200 text-[11px] font-medium">
+                          <ShieldCheck className="w-3 h-3" />
+                          自定义 CA
                         </span>
                       )}
                     </div>
@@ -454,7 +584,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               placeholder={
                 editingProfile
                   ? destinationChanged
-                    ? '地址或协议已变更，请重新输入密钥'
+                    ? '地址、协议或自定义 CA 已变更，请重新输入密钥'
                     : '留空将沿用当前保存的密钥'
                   : '输入 Hub 中配置的共享密钥'
               }
@@ -480,11 +610,174 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               }`}
             >
               {destinationChanged
-                ? '检测到 Hub 地址或 HTTP 选项已变更，出于安全校验需要重新填写共享密钥。'
+                ? '检测到 Hub 地址、HTTP 选项或自定义 CA 证书已变更，出于安全校验需要重新填写共享密钥。'
                 : '留空将沿用本机加密保存的原密钥；仅在轮换 Hub 密钥时填写新值。'}
             </p>
           )}
         </div>
+
+        {showCaSection && (
+          <div id="ca-cert-section" className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+            <button
+              id="ca-cert-toggle"
+              type="button"
+              onClick={() => setCaSectionOpen((prev) => !prev)}
+              aria-expanded={caSectionOpen}
+              className="w-full min-h-[44px] px-3.5 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-white/[0.03] transition-colors"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <ShieldCheck className="w-4 h-4 text-sky-300 shrink-0" />
+                <span className="text-xs font-semibold text-slate-200 truncate">
+                  自签名 / 私有 CA 证书（可选）
+                </span>
+                {caDraft?.cert ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-400/15 text-emerald-200 text-[10px] font-medium shrink-0">
+                    已载入待保存
+                  </span>
+                ) : editingProfile?.hasCustomCa && !caClearRequested ? (
+                  <span className="px-2 py-0.5 rounded-full bg-sky-400/15 text-sky-200 text-[10px] font-medium shrink-0">
+                    已配置
+                  </span>
+                ) : caClearRequested ? (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-200 text-[10px] font-medium shrink-0">
+                    保存后移除
+                  </span>
+                ) : null}
+              </span>
+              {caSectionOpen ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
+
+            {caSectionOpen && (
+              <div className="px-3.5 pb-3.5 pt-1 space-y-3 border-t border-white/[0.06]">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  若 Hub 使用自签名或私有 CA 签发的 HTTPS 证书，可导入公钥 CA 证书（.pem / .crt / .der）。证书仅作用于当前连接并强制校验证书 SAN 域名/IP，绝不影响应用更新。
+                </p>
+
+                {caDraft?.cert ? (
+                  <div className="rounded-xl bg-emerald-500/[0.08] border border-emerald-400/30 p-3 space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-emerald-200">新证书已校验（待保存）</span>
+                      <button
+                        id="clear-ca-draft"
+                        type="button"
+                        onClick={() => onClearCaDraft?.()}
+                        className="text-xs text-rose-300 hover:text-rose-200 font-medium px-2 py-1 rounded-lg bg-white/[0.04]"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    {caDraft.cert.subject && (
+                      <p className="text-slate-200 break-all">Subject: {caDraft.cert.subject}</p>
+                    )}
+                    {caDraft.cert.issuer && (
+                      <p className="text-slate-400 break-all">Issuer: {caDraft.cert.issuer}</p>
+                    )}
+                    <p className="font-mono-tabular text-sky-200 break-all">
+                      SHA-256: {formatFingerprintShort(caDraft.cert.sha256)}
+                    </p>
+                    <p className="text-slate-400">
+                      有效期至 {formatCertDate(caDraft.cert.notAfter)}
+                      {caDraft.cert.certCount > 1 ? ` · 共 ${caDraft.cert.certCount} 个证书` : ''}
+                    </p>
+                  </div>
+                ) : editingProfile?.hasCustomCa && !caClearRequested ? (
+                  <div className="rounded-xl glass-inset border border-sky-400/25 p-3 space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-sky-200">当前已绑定自定义 CA</span>
+                      <button
+                        id="clear-ca-cert"
+                        type="button"
+                        onClick={() => setCaClearRequested(true)}
+                        className="text-xs text-rose-300 hover:text-rose-200 font-medium px-2 py-1 rounded-lg bg-white/[0.04]"
+                      >
+                        移除证书
+                      </button>
+                    </div>
+                    {editingProfile.caSubject && (
+                      <p className="text-slate-200 break-all">Subject: {editingProfile.caSubject}</p>
+                    )}
+                    {editingProfile.caFingerprint && (
+                      <p className="font-mono-tabular text-sky-200 break-all">
+                        SHA-256: {formatFingerprintShort(editingProfile.caFingerprint)}
+                      </p>
+                    )}
+                    <p className="text-slate-400">
+                      有效期至 {formatCertDate(editingProfile.caNotAfter)}
+                      {editingProfile.caNotAfter && editingProfile.caNotAfter < Date.now() ? '（已过期）' : ''}
+                    </p>
+                  </div>
+                ) : caClearRequested && editingProfile?.hasCustomCa ? (
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-400/30 p-3 flex items-center justify-between gap-2 text-[11px] text-amber-200">
+                    <span>保存后将移除自定义 CA 并恢复系统默认根证书校验。</span>
+                    <button
+                      type="button"
+                      onClick={() => setCaClearRequested(false)}
+                      className="text-xs text-slate-100 px-2 py-1 rounded-lg bg-white/10 shrink-0"
+                    >
+                      撤销
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    id="pick-ca-cert"
+                    type="button"
+                    disabled={connectPending || Boolean(caDraft?.loading)}
+                    onClick={() => onPickCaCertificate?.()}
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl bg-sky-400/15 border border-sky-400/30 text-sky-200 text-xs font-semibold hover:bg-sky-400/22 active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    <FileUp className="w-3.5 h-3.5" />
+                    <span>{caDraft?.loading ? '正在校验…' : '选择证书文件'}</span>
+                  </button>
+                  <button
+                    id="toggle-paste-ca"
+                    type="button"
+                    disabled={connectPending || Boolean(caDraft?.loading)}
+                    onClick={() => setPasteMode((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    <span>{pasteMode ? '收起粘贴框' : '粘贴 PEM 证书'}</span>
+                  </button>
+                </div>
+
+                {pasteMode && (
+                  <div className="space-y-2">
+                    <textarea
+                      id="ca-pem-input"
+                      rows={4}
+                      value={pemInput}
+                      onChange={(e) => setPemInput(e.target.value)}
+                      placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                      spellCheck={false}
+                      autoComplete="off"
+                      className="w-full px-3 py-2 rounded-xl glass-inset text-xs font-mono-tabular text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                    />
+                    <button
+                      id="validate-ca-pem"
+                      type="button"
+                      disabled={!pemInput.trim() || Boolean(caDraft?.loading)}
+                      onClick={() => onValidateCaPem?.(pemInput)}
+                      className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-emerald-400/18 border border-emerald-400/35 text-emerald-100 text-xs font-semibold disabled:opacity-50"
+                    >
+                      校验并载入证书
+                    </button>
+                  </div>
+                )}
+
+                {caDraft?.error && (
+                  <InlineAlert id="ca-cert-error" tone="rose" role="alert">
+                    {caDraft.error}
+                  </InlineAlert>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <label
           className={`flex items-start gap-3 cursor-pointer rounded-2xl border px-3.5 py-2.5 min-h-[44px] transition-colors ${
@@ -525,6 +818,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </span>
           </span>
         </label>
+
+        {publicHttpWarning && (
+          <InlineAlert id="public-http-warning" tone="rose" role="alert">
+            <span className="inline-flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                检测到非局域网 / 公网 HTTP 地址：共享密钥与用量数据将在公网明文传输，极易被窃听或劫持。请为 Hub 启用 HTTPS（自签证书可在上方导入自定义 CA）。
+              </span>
+            </span>
+          </InlineAlert>
+        )}
 
         {formError && (
           <InlineAlert id="form-error" tone="rose" role="alert">

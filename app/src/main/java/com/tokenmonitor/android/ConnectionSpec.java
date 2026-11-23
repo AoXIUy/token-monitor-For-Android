@@ -8,8 +8,14 @@ final class ConnectionSpec {
     final String url;
     final String secret;
     final boolean allowHttp;
+    final String caCertPem;
+    final String caFingerprintSha256;
 
     ConnectionSpec(String address, String secret, boolean allowHttp) {
+        this(address, secret, allowHttp, "");
+    }
+
+    ConnectionSpec(String address, String secret, boolean allowHttp, String caCertPem) {
         try {
             URI uri = new URI(address.trim());
             String scheme = uri.getScheme();
@@ -22,7 +28,7 @@ final class ConnectionSpec {
             if ("http".equals(scheme) && !allowHttp) {
                 throw new IllegalArgumentException("局域网 HTTP 需要打开「允许 HTTP」，或使用 HTTPS");
             }
-            if (secret.isEmpty() || secret.length() > 4096) {
+            if (secret == null || secret.isEmpty() || secret.length() > 4096) {
                 throw new IllegalArgumentException("请输入 Hub 的 shared secret");
             }
             for (int i = 0; i < secret.length(); i++) {
@@ -30,12 +36,28 @@ final class ConnectionSpec {
                     throw new IllegalArgumentException("Secret 不能包含换行或控制字符");
                 }
             }
+            String rawCa = caCertPem == null ? "" : caCertPem.trim();
+            if (!rawCa.isEmpty()) {
+                if ("http".equals(scheme)) {
+                    throw new IllegalArgumentException("仅 HTTPS 连接支持导入自定义 CA 证书");
+                }
+                CertificateTrustPolicy.ParsedBundle parsed = CertificateTrustPolicy.parseStoredPem(rawCa);
+                this.caCertPem = parsed.canonicalPem;
+                this.caFingerprintSha256 = parsed.fingerprintSha256;
+            } else {
+                this.caCertPem = "";
+                this.caFingerprintSha256 = "";
+            }
             this.url = uri.toASCIIString().replaceAll("/+$", "");
             this.secret = secret;
             this.allowHttp = allowHttp;
         } catch (URISyntaxException error) {
             throw new IllegalArgumentException("Hub 地址格式无效");
         }
+    }
+
+    boolean hasCustomCa() {
+        return !caCertPem.isEmpty();
     }
 
     String endpoint(String path) {
@@ -101,8 +123,14 @@ final class ConnectionSpec {
         } catch (java.io.UnsupportedEncodingException error) { throw new IllegalStateException(error); }
     }
 
+    /** Stable destination key for SQLite quota history continuity across routine Hub CA rotations. */
     String fingerprint() {
         return digest(url + "\u0000" + secret + "\u0000" + allowHttp);
+    }
+
+    /** Trust-bound destination key (includes pinned CA fingerprint) for background monitoring and notifications. */
+    String trustFingerprint() {
+        return digest(url + "\u0000" + secret + "\u0000" + allowHttp + "\u0000" + caFingerprintSha256);
     }
 
     static String digest(String value) {

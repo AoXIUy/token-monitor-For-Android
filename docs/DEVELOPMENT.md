@@ -21,7 +21,11 @@
 
 `LocalContentClient` 使用 AndroidX `WebViewAssetLoader`，仅在固定 HTTPS 源上映射明确允许的 APK 资源。未知地址必须返回阻止响应，不能回退到网络。网页禁用直接联网及文件访问；Hub 请求通过原生层执行。
 
-`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()`、Antigravity 账号池快照 `antigravityManagerEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
+`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()`、Antigravity 账号池快照 `antigravityManagerEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，默认使用系统证书校验并允许按 HTTPS 连接配置独立的自定义 CA / 自签名证书。凭据与自定义 CA PEM 由 Android Keystore AES-256-GCM 加密保存，网页只能提交新值或查看脱敏摘要，不能读取已保存 secret 或原始 PEM。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
+
+自定义 CA / TLS 加固边界由 `CertificateTrustPolicy`（纯 Java 17，无 `android.*` 依赖）与 `res/xml/network_security_config.xml` 共同维护：
+- **证书导入与校验**：通过系统 SAF（`ACTION_OPEN_DOCUMENT`，不修改 Activity 启动 Intent）或设置页粘贴 PEM 导入 `.pem` / `.crt` / `.der`，限制 ≤ 24 KiB、最多 4 张证书、拒绝私钥块（`PRIVATE KEY`）、要求 RSA ≥ 2048 / EC ≥ 256 / EdDSA 并在导入时校验有效期。原生层返回短期 `draftToken` 与脱敏元数据（SHA-256 指纹、Subject、Issuer、有效期），不在 WebView、微件或日志中暴露原始 PEM；编辑配置时新增、替换或清除自定义 CA 均改变信任边界，必须重新输入 `secret`。
+- **连接隔离与协议限制**：`HubClient` 按连接实例绑定 `CertificateTrustPolicy.createPinnedSocketFactory()`（CA 锚点走标准 PKIX 校验，直签 `CA:FALSE` 自签名叶证书仅允许精确 DER 指纹匹配且不提升为 CA），通过 `Tls12PlusSocketFactory` 强制仅启用 TLS 1.3 / TLS 1.2，不修改 `HttpsURLConnection` 全局默认工厂，也不削弱系统 `HostnameVerifier`。`network_security_config.xml` 移除全局 `usesCleartextTraffic`，并将 GitHub 更新域名与 `appassets.androidplatform.net` 锁定为仅 HTTPS + 系统证书；`SessionMonitorService` 与通知跳转比对 `ConnectionSpec.trustFingerprint()`，而 `LimitsHistoryStore` 继续使用 `ConnectionSpec.fingerprint()` 以保持既有本地历史连续性。
 
 分析报告（按天 / 按周 / 按月）使用两个独立的有界队列 `reportsListNetwork` 和 `reportsDetailNetwork`，通过 `ConnectionSpec.reportsListEndpoint()` 与 `ConnectionSpec.reportDetailEndpoint()` 严格校验周期类型（`daily` / `weekly` / `monthly`）、期次键与格式（`both`），不提供向 Hub 写入配置或触发 `POST /api/reports/generate` 的突变能力；切换连接或进入后台时取消在途请求并清空缓存，使用连接代次与请求标识拒绝迟到响应。
 

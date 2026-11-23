@@ -303,3 +303,114 @@ test('hubProfiles strip secret fields and survive inactive profile updates', asy
   assert.equal(state.hubProfiles.length, 1);
   assert.equal(state.activeHubProfileId, '');
 });
+
+test('custom CA profile metadata and caCertDraft sanitize fields without leaking PEM or secret', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  let state = createInitialState();
+  const fp = 'a'.repeat(64);
+  const fakePem = '-----BEGIN CERTIFICATE-----\nSECRET_RAW_PEM\n-----END CERTIFICATE-----';
+
+  state = receiveNativeMessage(state, {
+    type: 'connection',
+    url: 'https://private.example.com',
+    allowHttp: false,
+    hasCustomCa: true,
+    activeHubProfileId: 'hub-tls',
+    hubProfiles: [
+      {
+        id: 'hub-tls',
+        name: 'Private Hub',
+        url: 'https://private.example.com',
+        allowHttp: false,
+        hasCustomCa: true,
+        caFingerprint: fp,
+        caSubject: 'CN=Private CA',
+        caNotAfter: 1893456000000,
+        caCertPem: fakePem,
+        secret: 'never-leak-secret',
+      },
+    ],
+  });
+  assert.equal(state.hasCustomCa, true);
+  assert.equal(state.hubProfiles.length, 1);
+  assert.deepEqual(state.hubProfiles[0], {
+    id: 'hub-tls',
+    name: 'Private Hub',
+    url: 'https://private.example.com',
+    allowHttp: false,
+    hasCustomCa: true,
+    caFingerprint: fp,
+    caSubject: 'CN=Private CA',
+    caNotAfter: 1893456000000,
+  });
+  assert.equal(JSON.stringify(state).includes('SECRET_RAW_PEM'), false);
+  assert.equal(JSON.stringify(state).includes('never-leak-secret'), false);
+
+  state = receiveNativeMessage(state, {
+    type: 'caCertDraft',
+    requestId: 'req-1',
+    ok: true,
+    draftToken: 'tok-abc',
+    cert: {
+      sha256: fp,
+      subject: 'CN=Private CA',
+      issuer: 'CN=Private CA',
+      notBefore: 1700000000000,
+      notAfter: 1893456000000,
+      certCount: 1,
+      isCa: true,
+      pem: fakePem,
+    },
+    caCertPem: fakePem,
+  });
+  assert.equal(state.caDraft?.loading, false);
+  assert.equal(state.caDraft?.draftToken, 'tok-abc');
+  assert.equal(state.caDraft?.cert?.sha256, fp);
+  assert.equal(state.caDraft?.error, '');
+  assert.equal(JSON.stringify(state).includes('SECRET_RAW_PEM'), false);
+
+  // Stale requestId must be ignored when a newer requestId is tracked
+  const afterReq1 = state;
+  state = receiveNativeMessage(state, {
+    type: 'caCertDraft',
+    requestId: 'req-stale',
+    ok: false,
+    error: 'stale error',
+  });
+  assert.deepEqual(state.caDraft, afterReq1.caDraft);
+
+  // Malformed sha256 in cert summary must fail closed rather than storing invalid metadata
+  state = { ...state, caDraft: { requestId: 'req-2', loading: true, draftToken: '', cert: null, error: '' } };
+  state = receiveNativeMessage(state, {
+    type: 'caCertDraft',
+    requestId: 'req-2',
+    ok: true,
+    draftToken: 'tok-bad',
+    cert: { sha256: 'not-hex', subject: 'CN=Bad' },
+  });
+  assert.equal(state.caDraft?.draftToken, '');
+  assert.equal(state.caDraft?.cert, null);
+  assert.ok(state.caDraft?.error);
+
+  // Cancelled picker clears draft when no previous draftToken exists
+  state = { ...state, caDraft: { requestId: 'req-3', loading: true, draftToken: '', cert: null, error: '' } };
+  state = receiveNativeMessage(state, {
+    type: 'caCertDraft',
+    requestId: 'req-3',
+    cancelled: true,
+  });
+  assert.equal(state.caDraft, null);
+
+  // Connection change clears ephemeral caDraft
+  state = receiveNativeMessage(state, {
+    type: 'caCertDraft',
+    requestId: 'req-4',
+    ok: true,
+    draftToken: 'tok-live',
+    cert: { sha256: fp, subject: 'CN=Private CA', issuer: 'CN=Private CA', notBefore: 1, notAfter: 2, certCount: 1, isCa: true },
+  });
+  assert.equal(state.caDraft?.draftToken, 'tok-live');
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://other.example.com', allowHttp: false, hasCustomCa: false });
+  assert.equal(state.caDraft, null);
+  assert.equal(state.hasCustomCa, false);
+});

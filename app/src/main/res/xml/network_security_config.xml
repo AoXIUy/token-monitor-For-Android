@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Lock update endpoints and local WebView asset origin strictly to HTTPS + system CAs only. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">api.github.com</domain>
+        <domain includeSubdomains="false">github.com</domain>
+        <domain includeSubdomains="false">objects.githubusercontent.com</domain>
+        <domain includeSubdomains="false">release-assets.githubusercontent.com</domain>
+        <domain includeSubdomains="false">appassets.androidplatform.net</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    <!-- Allow runtime opt-in LAN HTTP (enforced per-profile by ConnectionSpec.allowHttp + HubClient);
+         trust only system CAs globally (custom Hub CAs are scoped strictly per-connection in HubClient). -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

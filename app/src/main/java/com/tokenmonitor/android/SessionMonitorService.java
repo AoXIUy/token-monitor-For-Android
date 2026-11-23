@@ -91,7 +91,7 @@ public final class SessionMonitorService extends Service {
                 finishAll("请在系统通知设置中允许通知后开启", true);
                 return START_NOT_STICKY;
             }
-            if (running && connection != null && connection.fingerprint().equals(next.fingerprint())) {
+            if (running && connection != null && connection.trustFingerprint().equals(next.trustFingerprint())) {
                 refreshOngoingText(wantCompletions, wantApprovals, null);
                 main.removeCallbacks(poll);
                 main.post(poll);
@@ -223,7 +223,7 @@ public final class SessionMonitorService extends Service {
                         ConnectionSpec saved = new ConnectionStore(this).load();
                         boolean stillCompletions = preferences.enabled();
                         boolean stillApprovals = approvalStore.enabled();
-                        if (saved == null || !saved.fingerprint().equals(destination.fingerprint())) {
+                        if (saved == null || !saved.trustFingerprint().equals(destination.trustFingerprint())) {
                             finishAll("Hub 连接已变更，请重新开启监控", true);
                             return;
                         }
@@ -250,8 +250,8 @@ public final class SessionMonitorService extends Service {
                         if (stillCompletions && finalCompleted != null) {
                             for (SessionCompletionTracker.Observation row : finalCompleted) {
                                 // Claim durably before display so a restart/correction cannot alert twice.
-                                if (preferences.claim(destination.fingerprint(), row.eventId())) {
-                                    SessionNotifications.completion(this, destination.fingerprint(), row);
+                                if (preferences.claim(destination.trustFingerprint(), row.eventId())) {
+                                    SessionNotifications.completion(this, destination.trustFingerprint(), row);
                                 }
                             }
                         }
@@ -259,7 +259,7 @@ public final class SessionMonitorService extends Service {
                             if (finalApprovalStatus != null) {
                                 approvalStore.saveState(true, finalApprovalStatus, finalApprovalMessage);
                             }
-                            ApprovalNotifications.notifyNew(this, destination.fingerprint(), finalApprovals, System.currentTimeMillis(), approvalStore);
+                            ApprovalNotifications.notifyNew(this, destination.trustFingerprint(), finalApprovals, System.currentTimeMillis(), approvalStore);
                         }
                         main.postDelayed(poll, 5000);
                     } catch (Exception error) {

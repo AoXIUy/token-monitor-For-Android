@@ -275,11 +275,33 @@ export interface SessionStatusResult {
   nextChangeAt: number;
 }
 
+export interface CaCertSummary {
+  sha256: string;
+  subject: string;
+  issuer: string;
+  notBefore: number;
+  notAfter: number;
+  certCount: number;
+  isCa: boolean;
+}
+
+export interface CaCertDraftState {
+  requestId: string;
+  loading: boolean;
+  draftToken: string;
+  cert: CaCertSummary | null;
+  error: string;
+}
+
 export interface HubProfile {
   id: string;
   name: string;
   url: string;
   allowHttp: boolean;
+  hasCustomCa?: boolean;
+  caFingerprint?: string;
+  caSubject?: string;
+  caNotAfter?: number;
 }
 
 export interface HubNativeBridge {
@@ -288,10 +310,16 @@ export interface HubNativeBridge {
   quotaHistory?: (key: string) => void;
   ready?: () => void;
   connect: (url: string, secret: string, allowHttp: boolean) => void;
+  connectWithTls?: (url: string, secret: string, allowHttp: boolean, caDraftToken: string) => void;
   selectHubProfile?: (id: string) => void;
   addHubProfile?: (name: string, url: string, secret: string, allowHttp: boolean) => void;
+  addHubProfileWithTls?: (name: string, url: string, secret: string, allowHttp: boolean, caDraftToken: string) => void;
   saveHubProfile?: (id: string, name: string, url: string, secret: string, allowHttp: boolean) => void;
+  saveHubProfileWithTls?: (id: string, name: string, url: string, secret: string, allowHttp: boolean, caMode: 'keep' | 'replace' | 'clear', caDraftToken: string) => void;
   deleteHubProfile?: (id: string) => void;
+  pickCaCertificate?: (requestId: string) => void;
+  validateCaCertificatePem?: (pem: string, requestId: string) => void;
+  clearCaCertificateDraft?: (draftToken: string) => void;
   disconnect?: () => void;
   refresh?: () => void;
   subscriptions?: () => void;
@@ -376,8 +404,10 @@ export interface MonitorState {
   subscriptionError: string;
   connection: string;
   allowHttp: boolean;
+  hasCustomCa: boolean;
   hubProfiles: HubProfile[];
   activeHubProfileId: string;
+  caDraft: CaCertDraftState | null;
   status: ConnectionStatus;
   message: string;
   fetchedAt: number;

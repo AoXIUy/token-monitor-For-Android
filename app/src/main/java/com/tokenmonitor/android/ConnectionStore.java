@@ -26,12 +26,21 @@ final class ConnectionStore {
         final String name;
         final String url;
         final boolean allowHttp;
+        final boolean hasCustomCa;
+        final String caFingerprint;
+        final String caSubject;
+        final long caNotAfter;
 
-        ProfileSummary(String id, String name, String url, boolean allowHttp) {
+        ProfileSummary(String id, String name, String url, boolean allowHttp,
+                boolean hasCustomCa, String caFingerprint, String caSubject, long caNotAfter) {
             this.id = id;
             this.name = name;
             this.url = url;
             this.allowHttp = allowHttp;
+            this.hasCustomCa = hasCustomCa;
+            this.caFingerprint = caFingerprint == null ? "" : caFingerprint;
+            this.caSubject = caSubject == null ? "" : caSubject;
+            this.caNotAfter = Math.max(0L, caNotAfter);
         }
     }
 
@@ -41,17 +50,27 @@ final class ConnectionStore {
         String url;
         boolean allowHttp;
         String secret;
+        String caCertPem;
+        String caFingerprintSha256;
+        String caSubject;
+        long caNotAfter;
 
-        StoredProfile(String id, String name, String url, boolean allowHttp, String secret) {
+        StoredProfile(String id, String name, String url, boolean allowHttp, String secret,
+                String caCertPem, String caFingerprintSha256, String caSubject, long caNotAfter) {
             this.id = id;
             this.name = name;
             this.url = url;
             this.allowHttp = allowHttp;
             this.secret = secret;
+            this.caCertPem = caCertPem == null ? "" : caCertPem;
+            this.caFingerprintSha256 = caFingerprintSha256 == null ? "" : caFingerprintSha256;
+            this.caSubject = caSubject == null ? "" : caSubject;
+            this.caNotAfter = Math.max(0L, caNotAfter);
         }
 
         ProfileSummary summary() {
-            return new ProfileSummary(id, name, url, allowHttp);
+            return new ProfileSummary(id, name, url, allowHttp, !caCertPem.isEmpty(),
+                    caFingerprintSha256, caSubject, caNotAfter);
         }
     }
 
@@ -71,6 +90,7 @@ final class ConnectionStore {
     private static final String PREF_BINDING = "binding";
     private static final int VERSION = 2;
     private static final int MAX_NAME_LENGTH = 64;
+    private static final int MAX_PROFILES = 20;
     private final SharedPreferences preferences;
     private final Context context;
 
@@ -106,6 +126,18 @@ final class ConnectionStore {
         return trimmed.length() > MAX_NAME_LENGTH ? trimmed.substring(0, MAX_NAME_LENGTH) : trimmed;
     }
 
+    private static StoredProfile fromSpec(String id, String name, ConnectionSpec spec) {
+        String subject = "";
+        long notAfter = 0L;
+        if (spec.hasCustomCa()) {
+            CertificateTrustPolicy.ParsedBundle parsed = CertificateTrustPolicy.parseStoredPem(spec.caCertPem);
+            subject = parsed.subject;
+            notAfter = parsed.notAfterMs;
+        }
+        return new StoredProfile(id, cleanName(name, spec.url), spec.url, spec.allowHttp, spec.secret,
+                spec.caCertPem, spec.caFingerprintSha256, subject, notAfter);
+    }
+
     private static StoredProfile findById(StoreState state, String id) {
         if (id == null || id.isEmpty()) return null;
         for (StoredProfile profile : state.profiles) {
@@ -114,9 +146,14 @@ final class ConnectionStore {
         return null;
     }
 
-    private static StoredProfile findMatchingDestination(StoreState state, String url, boolean allowHttp) {
+    private static StoredProfile findMatchingDestination(StoreState state, String url, boolean allowHttp,
+            String caFingerprintSha256) {
+        String targetFp = caFingerprintSha256 == null ? "" : caFingerprintSha256;
         for (StoredProfile profile : state.profiles) {
-            if (url.equals(profile.url) && allowHttp == profile.allowHttp) return profile;
+            if (url.equals(profile.url) && allowHttp == profile.allowHttp
+                    && targetFp.equals(profile.caFingerprintSha256)) {
+                return profile;
+            }
         }
         return null;
     }
@@ -139,10 +176,10 @@ final class ConnectionStore {
                     String url = item.optString("url", "");
                     String secret = item.optString("secret", "");
                     boolean allowHttp = item.optBoolean("allowHttp");
+                    String caCertPem = item.optString("caCertPem", "");
                     if (id.isEmpty() || url.isEmpty() || secret.isEmpty()) continue;
-                    ConnectionSpec spec = new ConnectionSpec(url, secret, allowHttp);
-                    profiles.add(new StoredProfile(id, cleanName(item.optString("name", ""), spec.url),
-                            spec.url, spec.allowHttp, spec.secret));
+                    ConnectionSpec spec = new ConnectionSpec(url, secret, allowHttp, caCertPem);
+                    profiles.add(fromSpec(id, item.optString("name", ""), spec));
                 }
             }
             String activeId = data.optString("activeId", "");
@@ -152,7 +189,7 @@ final class ConnectionStore {
         ConnectionSpec legacy = new ConnectionSpec(data.getString("url"), data.getString("secret"), data.optBoolean("allowHttp"));
         String legacyId = "hub-" + ConnectionSpec.digest(legacy.url + "\n" + legacy.allowHttp).substring(0, 12);
         List<StoredProfile> profiles = new ArrayList<>();
-        profiles.add(new StoredProfile(legacyId, defaultProfileName(legacy.url), legacy.url, legacy.allowHttp, legacy.secret));
+        profiles.add(fromSpec(legacyId, defaultProfileName(legacy.url), legacy));
         return new StoreState(legacyId, profiles);
     }
 
@@ -164,12 +201,16 @@ final class ConnectionStore {
         }
         JSONArray array = new JSONArray();
         for (StoredProfile profile : state.profiles) {
-            array.put(new JSONObject()
+            JSONObject item = new JSONObject()
                     .put("id", profile.id)
                     .put("name", profile.name)
                     .put("url", profile.url)
                     .put("allowHttp", profile.allowHttp)
-                    .put("secret", profile.secret));
+                    .put("secret", profile.secret);
+            if (!profile.caCertPem.isEmpty()) {
+                item.put("caCertPem", profile.caCertPem);
+            }
+            array.put(item);
         }
         JSONObject data = new JSONObject()
                 .put("version", VERSION)
@@ -195,17 +236,27 @@ final class ConnectionStore {
         synchronized (UsageWidgetStore.LOCK) {
             StoreState state = readState();
             StoredProfile active = findById(state, state.activeId);
-            StoredProfile target = (active != null && spec.url.equals(active.url) && spec.allowHttp == active.allowHttp)
-                    ? active : findMatchingDestination(state, spec.url, spec.allowHttp);
+            StoredProfile target = (active != null && spec.url.equals(active.url)
+                    && spec.allowHttp == active.allowHttp
+                    && spec.caFingerprintSha256.equals(active.caFingerprintSha256))
+                    ? active : findMatchingDestination(state, spec.url, spec.allowHttp, spec.caFingerprintSha256);
             if (target == null) {
+                if (state.profiles.size() >= MAX_PROFILES) {
+                    throw new IllegalArgumentException("已保存的 Hub 连接数达到上限（最多 " + MAX_PROFILES + " 个）");
+                }
                 String id = "hub-" + UUID.randomUUID();
-                target = new StoredProfile(id, defaultProfileName(spec.url), spec.url, spec.allowHttp, spec.secret);
+                target = fromSpec(id, defaultProfileName(spec.url), spec);
                 state.profiles.add(target);
             } else {
-                target.name = cleanName(target.name, spec.url);
-                target.url = spec.url;
-                target.allowHttp = spec.allowHttp;
-                target.secret = spec.secret;
+                StoredProfile updated = fromSpec(target.id, target.name, spec);
+                target.name = updated.name;
+                target.url = updated.url;
+                target.allowHttp = updated.allowHttp;
+                target.secret = updated.secret;
+                target.caCertPem = updated.caCertPem;
+                target.caFingerprintSha256 = updated.caFingerprintSha256;
+                target.caSubject = updated.caSubject;
+                target.caNotAfter = updated.caNotAfter;
             }
             state.activeId = target.id;
             writeState(state, true, true);
@@ -213,11 +264,19 @@ final class ConnectionStore {
     }
 
     ConnectionSpec addProfile(String name, String address, String secret, boolean allowHttp) throws Exception {
+        return addProfile(name, address, secret, allowHttp, "");
+    }
+
+    ConnectionSpec addProfile(String name, String address, String secret, boolean allowHttp,
+            String caCertPem) throws Exception {
         synchronized (UsageWidgetStore.LOCK) {
-            ConnectionSpec spec = new ConnectionSpec(address, secret, allowHttp);
+            ConnectionSpec spec = new ConnectionSpec(address, secret, allowHttp, caCertPem);
             StoreState state = readState();
+            if (state.profiles.size() >= MAX_PROFILES) {
+                throw new IllegalArgumentException("已保存的 Hub 连接数达到上限（最多 " + MAX_PROFILES + " 个）");
+            }
             String id = "hub-" + UUID.randomUUID();
-            state.profiles.add(new StoredProfile(id, cleanName(name, spec.url), spec.url, spec.allowHttp, spec.secret));
+            state.profiles.add(fromSpec(id, name, spec));
             state.activeId = id;
             writeState(state, true, true);
             return spec;
@@ -225,21 +284,48 @@ final class ConnectionStore {
     }
 
     ConnectionSpec saveProfile(String id, String name, String address, String secret, boolean allowHttp) throws Exception {
+        return saveProfile(id, name, address, secret, allowHttp, "keep", "");
+    }
+
+    ConnectionSpec saveProfile(String id, String name, String address, String secret, boolean allowHttp,
+            String caMode, String caCertPem) throws Exception {
         synchronized (UsageWidgetStore.LOCK) {
             StoreState state = readState();
             StoredProfile existing = findById(state, id);
             if (existing == null) throw new IllegalArgumentException("未找到指定的 Hub 连接");
-            ConnectionSpec probe = new ConnectionSpec(address, "probe", allowHttp);
-            boolean sameDestination = probe.url.equals(existing.url) && probe.allowHttp == existing.allowHttp;
-            String candidateSecret = secret == null || secret.trim().isEmpty() ? null : secret;
-            if (candidateSecret == null && !sameDestination) {
-                throw new IllegalArgumentException("更改 Hub 地址或协议后请重新输入密钥");
+            String mode = caMode == null || caMode.trim().isEmpty() ? "keep" : caMode.trim();
+            String resolvedCaPem;
+            if ("keep".equals(mode)) {
+                resolvedCaPem = existing.caCertPem;
+            } else if ("clear".equals(mode)) {
+                resolvedCaPem = "";
+            } else if ("replace".equals(mode)) {
+                resolvedCaPem = caCertPem == null ? "" : caCertPem.trim();
+                if (resolvedCaPem.isEmpty()) {
+                    throw new IllegalArgumentException("请先选择或粘贴有效的 CA 证书");
+                }
+            } else {
+                throw new IllegalArgumentException("无效的证书更新模式");
             }
-            ConnectionSpec spec = new ConnectionSpec(address, candidateSecret != null ? candidateSecret : existing.secret, allowHttp);
-            existing.name = cleanName(name, spec.url);
-            existing.url = spec.url;
-            existing.allowHttp = spec.allowHttp;
-            existing.secret = spec.secret;
+            ConnectionSpec probe = new ConnectionSpec(address, "probe", allowHttp, resolvedCaPem);
+            boolean sameTrustBoundary = probe.url.equals(existing.url)
+                    && probe.allowHttp == existing.allowHttp
+                    && probe.caFingerprintSha256.equals(existing.caFingerprintSha256);
+            String candidateSecret = secret == null || secret.trim().isEmpty() ? null : secret;
+            if (candidateSecret == null && !sameTrustBoundary) {
+                throw new IllegalArgumentException("更改 Hub 地址、协议或自定义 CA 证书后请重新输入密钥");
+            }
+            ConnectionSpec spec = new ConnectionSpec(address,
+                    candidateSecret != null ? candidateSecret : existing.secret, allowHttp, resolvedCaPem);
+            StoredProfile updated = fromSpec(existing.id, name, spec);
+            existing.name = updated.name;
+            existing.url = updated.url;
+            existing.allowHttp = updated.allowHttp;
+            existing.secret = updated.secret;
+            existing.caCertPem = updated.caCertPem;
+            existing.caFingerprintSha256 = updated.caFingerprintSha256;
+            existing.caSubject = updated.caSubject;
+            existing.caNotAfter = updated.caNotAfter;
             state.activeId = existing.id;
             writeState(state, true, true);
             return spec;
@@ -253,7 +339,7 @@ final class ConnectionStore {
             if (existing == null) throw new IllegalArgumentException("未找到指定的 Hub 连接");
             state.activeId = existing.id;
             writeState(state, true, true);
-            return new ConnectionSpec(existing.url, existing.secret, existing.allowHttp);
+            return new ConnectionSpec(existing.url, existing.secret, existing.allowHttp, existing.caCertPem);
         }
     }
 
@@ -314,7 +400,7 @@ final class ConnectionStore {
             StoreState state = readState();
             StoredProfile active = findById(state, state.activeId);
             if (active == null) return null;
-            return new ConnectionSpec(active.url, active.secret, active.allowHttp);
+            return new ConnectionSpec(active.url, active.secret, active.allowHttp, active.caCertPem);
         }
     }
 

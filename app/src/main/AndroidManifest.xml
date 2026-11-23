@@ -13,7 +13,7 @@
         android:label="Token Monitor"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <provider android:name=".UpdateFileProvider" android:authorities="${applicationId}.updates"
             android:exported="false" android:grantUriPermissions="true">

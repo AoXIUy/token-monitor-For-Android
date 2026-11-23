@@ -66,14 +66,20 @@ public final class MainActivity extends Activity {
     private JSONObject latestStats;
     private boolean historyBusy;
     private String pendingHistoryKey;
+    private final ExecutorService certImportNetwork = Executors.newSingleThreadExecutor();
+    private final java.util.LinkedHashMap<String, CertificateTrustPolicy.ParsedBundle> caDrafts = new java.util.LinkedHashMap<>();
+    private String pendingCaPickRequestId;
     private String historyError = "";
     private static final int NOTIFICATION_REQUEST = 42;
+    private static final int CA_PICK_REQUEST = 43;
+    private static final int MAX_CA_DRAFTS = 4;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (savedInstanceState != null) pendingNotificationAction = savedInstanceState.getString("notificationAction");
         if (savedInstanceState != null) awaitingInstallPermission = savedInstanceState.getBoolean("installPermission");
+        if (savedInstanceState != null) pendingCaPickRequestId = savedInstanceState.getString("caPickRequestId");
         store = new ConnectionStore(this);
         SessionNotifications.channels(this);
         try { spec = store.load(); }
@@ -193,11 +199,18 @@ public final class MainActivity extends Activity {
         JSONArray list = new JSONArray();
         try {
             for (ConnectionStore.ProfileSummary profile : store.listProfiles()) {
-                list.put(new JSONObject()
+                JSONObject item = new JSONObject()
                         .put("id", profile.id)
                         .put("name", profile.name)
                         .put("url", profile.url)
-                        .put("allowHttp", profile.allowHttp));
+                        .put("allowHttp", profile.allowHttp);
+                if (profile.hasCustomCa) {
+                    item.put("hasCustomCa", true)
+                            .put("caFingerprint", profile.caFingerprint)
+                            .put("caSubject", profile.caSubject)
+                            .put("caNotAfter", profile.caNotAfter);
+                }
+                list.put(item);
             }
         } catch (Exception ignored) { }
         return list;
@@ -218,6 +231,7 @@ public final class MainActivity extends Activity {
     }
 
     private void activateConnection(ConnectionSpec next) {
+        caDrafts.clear();
         cancel();
         spec = next;
         failures = 0;
@@ -234,12 +248,16 @@ public final class MainActivity extends Activity {
         historyBusy = false;
         pendingHistoryKey = null;
         try {
-            emit(event("connection")
+            JSONObject payload = event("connection")
                     .put("url", spec == null ? "" : spec.url)
                     .put("allowHttp", spec != null && spec.allowHttp)
                     .put("activeHubProfileId", currentActiveProfileId())
                     .put("hubProfiles", serializedProfiles())
-                    .put("error", initialError));
+                    .put("error", initialError);
+            if (spec != null && spec.hasCustomCa()) {
+                payload.put("hasCustomCa", true);
+            }
+            emit(payload);
             initialError = "";
             notificationState();
             approvalAlertsState();
@@ -376,6 +394,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         if (pendingNotificationAction != null) outState.putString("notificationAction", pendingNotificationAction);
+        if (pendingCaPickRequestId != null) outState.putString("caPickRequestId", pendingCaPickRequestId);
         outState.putBoolean("installPermission", awaitingInstallPermission);
         if (updates != null) updates.save(outState);
         super.onSaveInstanceState(outState);
@@ -388,7 +407,7 @@ public final class MainActivity extends Activity {
             String approvalDest = getIntent().getStringExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION);
             getIntent().removeExtra(ApprovalNotifications.EXTRA_OPEN_APPROVALS);
             getIntent().removeExtra(ApprovalNotifications.EXTRA_APPROVAL_DESTINATION);
-            if (!spec.fingerprint().equals(approvalDest)) {
+            if (!spec.trustFingerprint().equals(approvalDest)) {
                 android.widget.Toast.makeText(this, "这条通知来自之前的 Hub 连接", android.widget.Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -402,7 +421,7 @@ public final class MainActivity extends Activity {
         if (key == null || key.length() > 1024) return;
         getIntent().removeExtra(SessionNotifications.EXTRA_KEY);
         getIntent().removeExtra(SessionNotifications.EXTRA_DESTINATION);
-        if (!spec.fingerprint().equals(destination)) {
+        if (!spec.trustFingerprint().equals(destination)) {
             android.widget.Toast.makeText(this, "这条通知来自之前的 Hub 连接", android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
@@ -581,7 +600,7 @@ public final class MainActivity extends Activity {
                         }
                         if (fetchedApprovals && approvalStore.enabled()) {
                             approvalStore.saveState(true, finalApprovalStatus, finalApprovalMessage);
-                            ApprovalNotifications.notifyNew(MainActivity.this, destination.fingerprint(), finalApprovalItems, System.currentTimeMillis(), approvalStore);
+                            ApprovalNotifications.notifyNew(MainActivity.this, destination.trustFingerprint(), finalApprovalItems, System.currentTimeMillis(), approvalStore);
                             approvalAlertsState(finalApprovalItems);
                         }
                     } catch (Exception ignored) { }
@@ -590,7 +609,10 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception error) {
                 String message = error instanceof HubClient.HubError ? error.getMessage()
-                        : error instanceof javax.net.ssl.SSLException ? "TLS 验证失败，请检查服务器证书和设备时间"
+                        : error instanceof javax.net.ssl.SSLException
+                                ? (destination.hasCustomCa()
+                                        ? "TLS 证书验证失败：请确认导入了正确的 Hub CA 证书、未过期且包含当前域名或 IP（SAN）"
+                                        : "TLS 证书验证失败：若使用自签名证书，请在连接设置中导入 CA 证书，并检查设备时间")
                         : "连接失败，请检查网络、Hub 地址和服务状态";
                 main.post(() -> {
                     if (epoch != generation || !foreground) return;
@@ -666,6 +688,15 @@ public final class MainActivity extends Activity {
             }, "无法加密保存连接，请检查设备存储后重试");
         }
 
+        @JavascriptInterface public void connectWithTls(String address, String secret, boolean allowHttp, String caDraftToken) {
+            applyProfileMutation(() -> {
+                String caPem = resolveCaDraftPem(caDraftToken);
+                ConnectionSpec candidate = new ConnectionSpec(address, secret, allowHttp, caPem);
+                store.save(candidate);
+                return candidate;
+            }, "无法加密保存连接，请检查设备存储后重试");
+        }
+
         @JavascriptInterface public void selectHubProfile(String id) {
             applyProfileMutation(() -> store.selectProfile(id), "无法读取已保存的连接，请重新输入 Hub 和密钥");
         }
@@ -674,8 +705,42 @@ public final class MainActivity extends Activity {
             applyProfileMutation(() -> store.addProfile(name, address, secret, allowHttp), "无法加密保存连接，请检查设备存储后重试");
         }
 
+        @JavascriptInterface public void addHubProfileWithTls(String name, String address, String secret, boolean allowHttp, String caDraftToken) {
+            applyProfileMutation(() -> {
+                String caPem = resolveCaDraftPem(caDraftToken);
+                return store.addProfile(name, address, secret, allowHttp, caPem);
+            }, "无法加密保存连接，请检查设备存储后重试");
+        }
+
         @JavascriptInterface public void saveHubProfile(String id, String name, String address, String secret, boolean allowHttp) {
             applyProfileMutation(() -> store.saveProfile(id, name, address, secret, allowHttp), "无法加密保存连接，请检查设备存储后重试");
+        }
+
+        @JavascriptInterface public void saveHubProfileWithTls(String id, String name, String address, String secret, boolean allowHttp, String caMode, String caDraftToken) {
+            applyProfileMutation(() -> {
+                String mode = caMode == null || caMode.trim().isEmpty() ? "keep" : caMode.trim();
+                String caPem = "replace".equals(mode) ? resolveRequiredCaDraftPem(caDraftToken) : "";
+                return store.saveProfile(id, name, address, secret, allowHttp, mode, caPem);
+            }, "无法加密保存连接，请检查设备存储后重试");
+        }
+
+        @JavascriptInterface public void pickCaCertificate(String requestId) {
+            if (requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+            main.post(() -> launchCaPicker(requestId));
+        }
+
+        @JavascriptInterface public void validateCaCertificatePem(String pem, String requestId) {
+            if (requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+            if (pem != null && pem.length() > CertificateTrustPolicy.MAX_CERT_BYTES * 2) {
+                main.post(() -> emitCaDraftError(requestId, "证书内容超过 24 KiB 大小限制"));
+                return;
+            }
+            main.post(() -> validatePastedCaPem(pem == null ? "" : pem, requestId));
+        }
+
+        @JavascriptInterface public void clearCaCertificateDraft(String draftToken) {
+            if (draftToken == null || draftToken.length() > 80) return;
+            main.post(() -> caDrafts.remove(draftToken));
         }
 
         @JavascriptInterface public void deleteHubProfile(String id) {
@@ -799,12 +864,165 @@ public final class MainActivity extends Activity {
             main.post(() -> {
                 try { SessionMonitorService.stop(MainActivity.this, "Hub 已断开，完成提醒已关闭", true); store.disconnectActive(); }
                 catch (Exception error) { status("offline", "无法断开或清理当前连接，请检查设备存储"); return; }
+                caDrafts.clear();
                 cancel();
                 spec = null;
                 subscriptionVersion = null;
                 connectionChanged();
             });
         }
+    }
+
+    private String resolveCaDraftPem(String draftToken) {
+        if (draftToken == null || draftToken.trim().isEmpty()) return "";
+        return resolveRequiredCaDraftPem(draftToken);
+    }
+
+    private String resolveRequiredCaDraftPem(String draftToken) {
+        String clean = draftToken == null ? "" : draftToken.trim();
+        CertificateTrustPolicy.ParsedBundle bundle = clean.isEmpty() ? null : caDrafts.get(clean);
+        if (bundle == null) {
+            throw new IllegalArgumentException("导入的 CA 证书已失效，请重新选择或粘贴");
+        }
+        return bundle.canonicalPem;
+    }
+
+    private String putCaDraft(CertificateTrustPolicy.ParsedBundle bundle) {
+        while (caDrafts.size() >= MAX_CA_DRAFTS) {
+            String oldest = caDrafts.keySet().iterator().next();
+            caDrafts.remove(oldest);
+        }
+        String token = java.util.UUID.randomUUID().toString();
+        caDrafts.put(token, bundle);
+        return token;
+    }
+
+    private void emitCaDraftSuccess(String requestId, String draftToken, CertificateTrustPolicy.ParsedBundle bundle) {
+        try {
+            JSONObject cert = new JSONObject()
+                    .put("sha256", bundle.fingerprintSha256)
+                    .put("subject", bundle.subject)
+                    .put("issuer", bundle.issuer)
+                    .put("notBefore", bundle.notBeforeMs)
+                    .put("notAfter", bundle.notAfterMs)
+                    .put("certCount", bundle.certCount)
+                    .put("isCa", bundle.isCa);
+            emit(event("caCertDraft")
+                    .put("requestId", requestId)
+                    .put("ok", true)
+                    .put("draftToken", draftToken)
+                    .put("cert", cert));
+        } catch (Exception ignored) { }
+    }
+
+    private void emitCaDraftError(String requestId, String message) {
+        try {
+            emit(event("caCertDraft")
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("error", message == null ? "证书解析失败" : message));
+        } catch (Exception ignored) { }
+    }
+
+    private void emitCaDraftCancelled(String requestId) {
+        try {
+            emit(event("caCertDraft")
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("cancelled", true));
+        } catch (Exception ignored) { }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void launchCaPicker(String requestId) {
+        if (!foreground || isDestroyed()) return;
+        pendingCaPickRequestId = requestId;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
+                "application/x-x509-ca-cert",
+                "application/x-pem-file",
+                "application/pkix-cert",
+                "application/octet-stream",
+                "text/plain"
+        });
+        try {
+            startActivityForResult(intent, CA_PICK_REQUEST);
+        } catch (Exception error) {
+            pendingCaPickRequestId = null;
+            emitCaDraftError(requestId, "无法打开系统文件选择器");
+        }
+    }
+
+    private void validatePastedCaPem(String pem, String requestId) {
+        certImportNetwork.execute(() -> {
+            try {
+                byte[] bytes = pem.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                CertificateTrustPolicy.ParsedBundle parsed = CertificateTrustPolicy.parseForImport(bytes, new java.util.Date());
+                main.post(() -> {
+                    if (isDestroyed()) return;
+                    String token = putCaDraft(parsed);
+                    emitCaDraftSuccess(requestId, token, parsed);
+                });
+            } catch (IllegalArgumentException error) {
+                String msg = error.getMessage();
+                main.post(() -> {
+                    if (!isDestroyed()) emitCaDraftError(requestId, msg);
+                });
+            } catch (Exception error) {
+                main.post(() -> {
+                    if (!isDestroyed()) emitCaDraftError(requestId, "无法解析粘贴的 PEM 证书");
+                });
+            }
+        });
+    }
+
+    private static byte[] readBoundedStream(java.io.InputStream input, int maxBytes) throws java.io.IOException {
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            if (output.size() + count > maxBytes) {
+                throw new IllegalArgumentException("证书文件超过 24 KiB 大小限制");
+            }
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != CA_PICK_REQUEST) return;
+        String requestId = pendingCaPickRequestId != null ? pendingCaPickRequestId : "saf";
+        pendingCaPickRequestId = null;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            emitCaDraftCancelled(requestId);
+            return;
+        }
+        android.net.Uri uri = data.getData();
+        certImportNetwork.execute(() -> {
+            try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
+                if (input == null) throw new IllegalArgumentException("无法读取所选证书文件");
+                byte[] raw = readBoundedStream(input, CertificateTrustPolicy.MAX_CERT_BYTES);
+                CertificateTrustPolicy.ParsedBundle parsed = CertificateTrustPolicy.parseForImport(raw, new java.util.Date());
+                main.post(() -> {
+                    if (isDestroyed()) return;
+                    String token = putCaDraft(parsed);
+                    emitCaDraftSuccess(requestId, token, parsed);
+                });
+            } catch (IllegalArgumentException error) {
+                String msg = error.getMessage();
+                main.post(() -> {
+                    if (!isDestroyed()) emitCaDraftError(requestId, msg);
+                });
+            } catch (Exception error) {
+                main.post(() -> {
+                    if (!isDestroyed()) emitCaDraftError(requestId, "无法读取所选证书文件");
+                });
+            }
+        });
     }
 
     private void cancelConversation() {
@@ -1080,8 +1298,10 @@ public final class MainActivity extends Activity {
         super.onStop();
     }
     @Override protected void onDestroy() {
+        caDrafts.clear();
         cancel();
         network.shutdownNow();
+        certImportNetwork.shutdownNow();
         conversationNetwork.shutdownNow();
         reportsListNetwork.shutdownNow();
         reportsDetailNetwork.shutdownNow();

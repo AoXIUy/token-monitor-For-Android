@@ -8,7 +8,7 @@ public final class ConnectionSpecChecks {
         catch (IllegalArgumentException expected) { checks++; return; }
         throw new AssertionError("Accepted invalid connection: " + url);
     }
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         ConnectionSpec prefixed = new ConnectionSpec("https://monitor.example.com/proxy/", "secret", false);
         if (!prefixed.endpoint("/api/stats").equals("https://monitor.example.com/proxy/api/stats")) throw new AssertionError("Lost proxy prefix");
         checks++;
@@ -91,6 +91,66 @@ public final class ConnectionSpecChecks {
         }
         try { prefixed.reportsListEndpoint("yearly", 20); throw new AssertionError("Accepted invalid report granularity"); }
         catch (IllegalArgumentException expected) { checks++; }
+
+        // Custom CA TLS checks: generate two distinct RSA-2048 certs via keytool in a temp dir
+        testCustomCaAndTrustFingerprint(prefixed);
+
         System.out.println(checks + " connection checks passed");
+    }
+
+    private static void testCustomCaAndTrustFingerprint(ConnectionSpec systemHttps) throws Exception {
+        java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("conn-spec-ca-");
+        try {
+            String keytool = java.nio.file.Paths.get(System.getProperty("java.home"), "bin",
+                    System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "keytool.exe" : "keytool").toString();
+            String[] pems = new String[2];
+            for (int i = 0; i < 2; i++) {
+                java.nio.file.Path p12 = tmp.resolve("ca-" + i + ".p12");
+                java.nio.file.Path pem = tmp.resolve("ca-" + i + ".pem");
+                Process p1 = new ProcessBuilder(keytool, "-genkeypair", "-storetype", "PKCS12",
+                        "-keystore", p12.toString(), "-storepass", "changeit", "-alias", "ca",
+                        "-keyalg", "RSA", "-keysize", "2048", "-dname", "CN=ConnSpec Test CA " + i,
+                        "-validity", "365", "-ext", "bc:c=ca:true").redirectErrorStream(true).start();
+                if (p1.waitFor() != 0) throw new IllegalStateException("keytool genkeypair failed");
+                Process p2 = new ProcessBuilder(keytool, "-exportcert", "-rfc",
+                        "-keystore", p12.toString(), "-storepass", "changeit", "-alias", "ca",
+                        "-file", pem.toString()).redirectErrorStream(true).start();
+                if (p2.waitFor() != 0) throw new IllegalStateException("keytool exportcert failed");
+                pems[i] = java.nio.file.Files.readString(pem);
+            }
+
+            ConnectionSpec withCa0 = new ConnectionSpec("https://monitor.example.com/proxy/", "secret", false, pems[0]);
+            ConnectionSpec withCa1 = new ConnectionSpec("https://monitor.example.com/proxy/", "secret", false, pems[1]);
+            if (!withCa0.hasCustomCa() || withCa0.caFingerprintSha256.length() != 64 || systemHttps.hasCustomCa()) {
+                throw new AssertionError("Unexpected custom CA state on ConnectionSpec");
+            }
+            checks++;
+            // LimitsHistoryStore continuity: fingerprint() must stay unchanged across system CA vs custom CA.
+            if (!systemHttps.fingerprint().equals(withCa0.fingerprint()) || !withCa0.fingerprint().equals(withCa1.fingerprint())) {
+                throw new AssertionError("fingerprint() must remain invariant when CA changes");
+            }
+            checks++;
+            // Security boundary: trustFingerprint() must diverge whenever CA changes.
+            if (systemHttps.trustFingerprint().equals(withCa0.trustFingerprint())
+                    || withCa0.trustFingerprint().equals(withCa1.trustFingerprint())) {
+                throw new AssertionError("trustFingerprint() must change when CA changes");
+            }
+            checks++;
+            // Custom CA on plain http:// must be rejected.
+            try {
+                new ConnectionSpec("http://127.0.0.1:17321", "secret", true, pems[0]);
+                throw new AssertionError("Accepted custom CA on plain http://");
+            } catch (IllegalArgumentException expected) { checks++; }
+            // Malformed CA PEM must be rejected.
+            try {
+                new ConnectionSpec("https://monitor.example.com", "secret", false, "not-a-cert");
+                throw new AssertionError("Accepted malformed CA PEM");
+            } catch (IllegalArgumentException expected) { checks++; }
+        } finally {
+            java.nio.file.Files.walk(tmp)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .map(java.nio.file.Path::toFile)
+                    .forEach(java.io.File::delete);
+        }
     }
 }

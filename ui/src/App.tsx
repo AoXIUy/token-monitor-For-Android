@@ -88,6 +88,9 @@ function Dashboard({
   updateAgManagerFilter,
   saveLimitsPrefs,
   saveDisplayPrefs,
+  pickCaCertificate,
+  validateCaCertificatePem,
+  clearCaCertificateDraft,
 }: Monitor) {
   const {
     page,
@@ -98,8 +101,10 @@ function Dashboard({
     subscriptionError,
     connection,
     allowHttp,
+    hasCustomCa,
     hubProfiles,
     activeHubProfileId,
+    caDraft,
     status,
     message,
     fetchedAt,
@@ -311,13 +316,19 @@ function Dashboard({
     }
   };
 
-  const handleConnect = (url: string, secret: string, allowHttpChecked: boolean) => {
+  const handleConnect = (url: string, secret: string, allowHttpChecked: boolean, caDraftToken = '') => {
     if (!window.HubNative?.connect) {
       loadBrowserDemo(url, allowHttpChecked);
       return;
     }
     update((previous) => ({ ...previous, connectPending: true, formError: '' }));
-    window.HubNative.connect(url, secret, allowHttpChecked);
+    if (caDraftToken && window.HubNative.connectWithTls) {
+      window.HubNative.connectWithTls(url, secret, allowHttpChecked, caDraftToken);
+    } else if (window.HubNative.connectWithTls) {
+      window.HubNative.connectWithTls(url, secret, allowHttpChecked, '');
+    } else {
+      window.HubNative.connect(url, secret, allowHttpChecked);
+    }
   };
 
   const handleSelectHubProfile = (id: string) => {
@@ -330,23 +341,55 @@ function Dashboard({
     if (target) loadBrowserDemo(target.url, target.allowHttp);
   };
 
-  const handleAddHubProfile = (name: string, url: string, secret: string, allowHttpChecked: boolean) => {
+  const handleAddHubProfile = (name: string, url: string, secret: string, allowHttpChecked: boolean, caDraftToken = '') => {
+    if (window.HubNative?.addHubProfileWithTls) {
+      update((previous) => ({ ...previous, connectPending: true, formError: '' }));
+      window.HubNative.addHubProfileWithTls(name, url, secret, allowHttpChecked, caDraftToken);
+      return;
+    }
     if (window.HubNative?.addHubProfile) {
       update((previous) => ({ ...previous, connectPending: true, formError: '' }));
       window.HubNative.addHubProfile(name, url, secret, allowHttpChecked);
       return;
     }
     const nextId = `demo-${Date.now().toString(36)}`;
-    const nextProfile = { id: nextId, name: name.trim() || url, url, allowHttp: allowHttpChecked };
+    const nextProfile = {
+      id: nextId,
+      name: name.trim() || url,
+      url,
+      allowHttp: allowHttpChecked,
+      ...(caDraftToken && caDraft?.cert
+        ? {
+            hasCustomCa: true,
+            caFingerprint: caDraft.cert.sha256,
+            caSubject: caDraft.cert.subject,
+            caNotAfter: caDraft.cert.notAfter,
+          }
+        : {}),
+    };
     update((previous) => ({
       ...previous,
       hubProfiles: [...previous.hubProfiles, nextProfile],
       activeHubProfileId: nextId,
+      caDraft: null,
     }));
     loadBrowserDemo(url, allowHttpChecked);
   };
 
-  const handleSaveHubProfile = (id: string, name: string, url: string, secret: string, allowHttpChecked: boolean) => {
+  const handleSaveHubProfile = (
+    id: string,
+    name: string,
+    url: string,
+    secret: string,
+    allowHttpChecked: boolean,
+    caMode: 'keep' | 'replace' | 'clear' = 'keep',
+    caDraftToken = '',
+  ) => {
+    if (window.HubNative?.saveHubProfileWithTls) {
+      update((previous) => ({ ...previous, connectPending: true, formError: '' }));
+      window.HubNative.saveHubProfileWithTls(id, name, url, secret, allowHttpChecked, caMode, caDraftToken);
+      return;
+    }
     if (window.HubNative?.saveHubProfile) {
       update((previous) => ({ ...previous, connectPending: true, formError: '' }));
       window.HubNative.saveHubProfile(id, name, url, secret, allowHttpChecked);
@@ -354,9 +397,31 @@ function Dashboard({
     }
     update((previous) => ({
       ...previous,
-      hubProfiles: previous.hubProfiles.map((profile) =>
-        profile.id === id ? { ...profile, name: name.trim() || url, url, allowHttp: allowHttpChecked } : profile),
+      hubProfiles: previous.hubProfiles.map((profile) => {
+        if (profile.id !== id) return profile;
+        const base = { id: profile.id, name: name.trim() || url, url, allowHttp: allowHttpChecked };
+        if (caMode === 'clear') return base;
+        if (caMode === 'replace' && caDraft?.cert) {
+          return {
+            ...base,
+            hasCustomCa: true,
+            caFingerprint: caDraft.cert.sha256,
+            caSubject: caDraft.cert.subject,
+            caNotAfter: caDraft.cert.notAfter,
+          };
+        }
+        return profile.hasCustomCa
+          ? {
+              ...base,
+              hasCustomCa: true,
+              caFingerprint: profile.caFingerprint,
+              caSubject: profile.caSubject,
+              caNotAfter: profile.caNotAfter,
+            }
+          : base;
+      }),
       activeHubProfileId: id,
+      caDraft: null,
     }));
     loadBrowserDemo(url, allowHttpChecked);
   };
@@ -865,8 +930,10 @@ function Dashboard({
               fetchedAt={fetchedAt}
               connectionUrl={connection}
               allowHttpInitial={allowHttp}
+              hasCustomCaInitial={hasCustomCa}
               hubProfiles={hubProfiles}
               activeHubProfileId={activeHubProfileId}
+              caDraft={caDraft}
               connectPending={connectPending}
               formError={formError}
               displayPrefs={state.displayPrefs}
@@ -881,6 +948,9 @@ function Dashboard({
               onAddHubProfile={handleAddHubProfile}
               onSaveHubProfile={handleSaveHubProfile}
               onDeleteHubProfile={handleDeleteHubProfile}
+              onPickCaCertificate={pickCaCertificate}
+              onValidateCaPem={validateCaCertificatePem}
+              onClearCaDraft={clearCaCertificateDraft}
               onDisconnect={handleDisconnect}
               onLoadDemo={() => loadBrowserDemo()}
               onToggleMonitor={handleToggleMonitor}
