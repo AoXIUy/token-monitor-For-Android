@@ -2,7 +2,7 @@ export type PageId = 'overview' | 'devices' | 'limits' | 'sessions' | 'sessionDe
 export type PeriodId = 'today' | 'month' | 'allTime';
 export type ReportGranularity = 'daily' | 'weekly' | 'monthly';
 export type BreakdownKind = 'clients' | 'devices' | 'models' | 'projects';
-export type QuotaTabId = 'limits' | 'subscriptions';
+export type QuotaTabId = 'limits' | 'subscriptions' | 'antigravityManager';
 export type ConnectionStatus = 'online' | 'offline' | 'loading' | 'disconnected';
 
 export interface ProjectUsage {
@@ -310,6 +310,8 @@ export interface HubNativeBridge {
   listReports?: (granularity: string, limit: number, requestId: string) => void;
   getReport?: (granularity: string, periodKey: string, requestId: string) => void;
   cancelReports?: () => void;
+  queryAntigravityManager?: (requestId: string) => void;
+  cancelAntigravityManager?: () => void;
 }
 
 export interface DisplayPrefs {
@@ -392,6 +394,65 @@ export interface MonitorState {
   displayPrefs: DisplayPrefs;
   limitAccountPresentation: LimitAccountPresentationMap;
   reports: ReportsState;
+  agManager: AgManagerState;
+}
+
+export interface AgManagerModelQuota {
+  name: string;
+  displayName: string;
+  percentage: number;
+  resetTime: string;
+}
+
+export interface AgManagerAccountSummary {
+  id: string;
+  email: string;
+  name: string;
+  subscriptionTier: 'FREE' | 'PRO' | 'ULTRA' | string;
+  disabled: boolean;
+  disabledReason: string;
+  validationBlocked: boolean;
+  validationMessage: string;
+  banned: boolean;
+  hasDeviceProfile: boolean;
+  quota: {
+    isForbidden: boolean;
+    forbiddenReason: string;
+    lastUpdated: number;
+    models: AgManagerModelQuota[];
+  };
+}
+
+export interface AgManagerDeviceSnapshot {
+  version: number;
+  deviceId: string;
+  hostname: string;
+  updatedAt: string;
+  settings: {
+    startupRefresh: boolean;
+    autoRefresh: boolean;
+    refreshIntervalMinutes: number;
+  };
+  activeAccounts: {
+    classic: string;
+    ide: string;
+    agy: string;
+    acp: string;
+  };
+  accounts: AgManagerAccountSummary[];
+}
+
+export interface AgManagerState {
+  loading: boolean;
+  error: string;
+  errorCode: string;
+  requestId: string;
+  updatedAt: string;
+  devices: AgManagerDeviceSnapshot[];
+  selectedDeviceId: string;
+  tierFilter: 'all' | 'PRO' | 'ULTRA' | 'FREE';
+  statusFilter: 'all' | 'available' | 'abnormal';
+  searchQuery: string;
 }
 
 export interface HubReportConfig {

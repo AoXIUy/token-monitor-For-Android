@@ -21,9 +21,11 @@
 
 `LocalContentClient` 使用 AndroidX `WebViewAssetLoader`，仅在固定 HTTPS 源上映射明确允许的 APK 资源。未知地址必须返回阻止响应，不能回退到网络。网页禁用直接联网及文件访问；Hub 请求通过原生层执行。
 
-`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
+`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()`、Antigravity 账号池快照 `antigravityManagerEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，使用系统证书校验。凭据由 Android Keystore 加密保存，网页只能提交新值，不能读取已保存 secret。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
 
 分析报告（按天 / 按周 / 按月）使用两个独立的有界队列 `reportsListNetwork` 和 `reportsDetailNetwork`，通过 `ConnectionSpec.reportsListEndpoint()` 与 `ConnectionSpec.reportDetailEndpoint()` 严格校验周期类型（`daily` / `weekly` / `monthly`）、期次键与格式（`both`），不提供向 Hub 写入配置或触发 `POST /api/reports/generate` 的突变能力；切换连接或进入后台时取消在途请求并清空缓存，使用连接代次与请求标识拒绝迟到响应。
+
+Antigravity 账号池只读视图（额度页内 `AG 账号池` 分段）使用独立的有界单线程队列 `agManagerNetwork` 通过 `ConnectionSpec.antigravityManagerEndpoint()` 查询 `GET /api/antigravity-manager`（响应上限 512 KiB，HTTP 404 降级提示 `unsupported_hub`），并复用 `MainActivity` 连接代次与请求标识拒绝迟到响应。桌面端凭据、设备指纹及账号切换/导入操作均不经过 Hub，Android 端仅做脱敏只读展示。
 
 在线对话使用独立有界执行队列，通过 `ConnectionSpec.conversationEndpoint()` 从设备 ID、会话键和分页游标构建固定 GET 地址，网页不能传入 URL 或文件路径。仅允许当前原生统计快照中对应设备的 Antigravity / Codex 会话键。正文响应限制 384 KiB；连接代次和查询代次共同拒绝迟到结果。返回列表、切换来源或进入后台时取消读取并清除页面正文，不进入历史数据库、微件或完成通知。详见 [SESSION_CONVERSATIONS.md](SESSION_CONVERSATIONS.md)。
 

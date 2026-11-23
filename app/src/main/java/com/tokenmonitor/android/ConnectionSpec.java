@@ -51,6 +51,10 @@ final class ConnectionSpec {
         return url + "/api/approval-alerts";
     }
 
+    String antigravityManagerEndpoint() {
+        return url + "/api/antigravity-manager";
+    }
+
     String reportsListEndpoint(String granularity, int limit) {
         String cleanGranularity = granularity == null ? "" : granularity.trim();
         if (!cleanGranularity.isEmpty()

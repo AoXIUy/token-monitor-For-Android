@@ -47,6 +47,10 @@ final class HubClient {
         return getUrl(spec, spec.reportDetailEndpoint(granularity, periodKey, "both"), 2 * 1024 * 1024);
     }
 
+    JSONObject antigravityManager(ConnectionSpec spec) throws Exception {
+        return getUrl(spec, spec.antigravityManagerEndpoint(), 512 * 1024);
+    }
+
     private JSONObject getUrl(ConnectionSpec spec, String url, int maxBytes) throws Exception {
         if (cancelled) throw new IOException("Cancelled");
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();

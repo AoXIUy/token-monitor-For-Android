@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { ApprovalsPanel } from './components/ApprovalsPanel';
+import { AntigravityManagerView } from './components/AntigravityManagerView';
 import { CompletionSettingsCard } from './components/CompletionSettingsCard';
 import { AppUpdateDialog } from './components/AppUpdateDialog';
 import { DeviceIcon } from './components/DeviceIcon';
@@ -82,6 +83,9 @@ function Dashboard({
   queryReportsList,
   queryReportDetail,
   clearReports,
+  queryAntigravityManager,
+  cancelAntigravityManager,
+  updateAgManagerFilter,
   saveLimitsPrefs,
   saveDisplayPrefs,
 }: Monitor) {
@@ -133,6 +137,14 @@ function Dashboard({
       setReportWindowOpen(false);
     }
   }, [connection, page, reportWindowOpen]);
+
+  useEffect(() => {
+    if (page === 'limits' && quotaTab === 'antigravityManager') {
+      if (connection) queryAntigravityManager();
+    } else {
+      cancelAntigravityManager();
+    }
+  }, [page, quotaTab, connection, queryAntigravityManager, cancelAntigravityManager]);
 
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
@@ -819,6 +831,7 @@ function Dashboard({
               options={[
                 { value: 'limits', label: '账户额度', dataAttrs: { 'data-quota': 'limits' } },
                 { value: 'subscriptions', label: '共享订阅', dataAttrs: { 'data-quota': 'subscriptions' } },
+                { value: 'antigravityManager', label: 'AG 账号池', dataAttrs: { 'data-quota': 'antigravityManager' } },
               ]}
             />
           )}
@@ -898,6 +911,15 @@ function Dashboard({
                   setReportWindowOpen(true);
                 }}
                 onCancel={clearReports}
+              />
+            </div>
+          ) : page === 'limits' && quotaTab === 'antigravityManager' ? (
+            <div id="content">
+              <AntigravityManagerView
+                state={state.agManager}
+                connected={Boolean(connection)}
+                onRefreshSnapshot={queryAntigravityManager}
+                onFilterChange={updateAgManagerFilter}
               />
             </div>
           ) : !stats ? (

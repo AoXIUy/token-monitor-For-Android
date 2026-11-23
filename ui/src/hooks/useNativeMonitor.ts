@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
 import type { DisplayPrefs, LimitsPrefs, MonitorState, ReportGranularity } from '../types/monitor';
-import { createDemoPayload, createDemoReports } from '../utils/demoData';
+import { createDemoAgManager, createDemoPayload, createDemoReports } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
 import { beginReportDetail, beginReportsList } from '../reportsState';
+import { beginAgManagerQuery, setAgManagerFilter } from '../agManagerState.js';
 import { loadBrowserLimitsPrefs, saveBrowserLimitsPrefs, sanitizeLimitsPrefs } from '../utils/limitsPrefs';
 import { loadBrowserDisplayPrefs, saveBrowserDisplayPrefs, sanitizeDisplayPrefs } from '../utils/displayPrefs';
 
@@ -12,6 +13,7 @@ export function useNativeMonitor() {
   const current = useRef(state);
   const conversationSequence = useRef(0);
   const reportsSequence = useRef(0);
+  const agManagerSequence = useRef(0);
   const isBrowserPreview = typeof window !== 'undefined' && !window.HubNative;
 
   const update = useCallback((change: (previous: MonitorState) => MonitorState) => {
@@ -32,6 +34,43 @@ export function useNativeMonitor() {
     update(previous => (previous.reports.listLoading || previous.reports.detailLoading)
       ? { ...previous, reports: { ...previous.reports, listLoading: false, detailLoading: false } }
       : previous);
+  }, [update]);
+
+  const queryAntigravityManager = useCallback(() => {
+    const requestId = `agm-${Date.now()}-${++agManagerSequence.current}`;
+    update(previous => ({ ...previous, agManager: beginAgManagerQuery(previous.agManager, { requestId }) }));
+    if (window.HubNative?.queryAntigravityManager) {
+      window.HubNative.queryAntigravityManager(requestId);
+    } else if (isBrowserPreview) {
+      const demo = createDemoAgManager();
+      update(previous => receiveNativeMessage(previous, {
+        type: 'antigravityManagerResult',
+        requestId,
+        payload: demo,
+      }));
+    } else {
+      update(previous => receiveNativeMessage(previous, {
+        type: 'antigravityManagerError',
+        requestId,
+        code: 'unsupported_hub',
+      }));
+    }
+  }, [update, isBrowserPreview]);
+
+  const cancelAntigravityManager = useCallback(() => {
+    window.HubNative?.cancelAntigravityManager?.();
+    update(previous => previous.agManager.loading
+      ? { ...previous, agManager: { ...previous.agManager, loading: false } }
+      : previous);
+  }, [update]);
+
+  const updateAgManagerFilter = useCallback((patch: {
+    deviceId?: string;
+    tierFilter?: 'all' | 'PRO' | 'ULTRA' | 'FREE';
+    statusFilter?: 'all' | 'available' | 'abnormal';
+    searchQuery?: string;
+  }) => {
+    update(previous => ({ ...previous, agManager: setAgManagerFilter(previous.agManager, patch) }));
   }, [update]);
 
   const queryReportsList = useCallback((granularity: '' | ReportGranularity = '', limit = 50) => {
@@ -159,6 +198,10 @@ export function useNativeMonitor() {
         type: 'appUpdate',
         ...demo.appUpdate,
       });
+      next = receiveNativeMessage(next, {
+        type: 'antigravityManagerResult',
+        payload: createDemoAgManager(now),
+      });
       return next;
     });
   }, [update]);
@@ -225,6 +268,9 @@ export function useNativeMonitor() {
     queryReportsList,
     queryReportDetail,
     clearReports,
+    queryAntigravityManager,
+    cancelAntigravityManager,
+    updateAgManagerFilter,
     saveLimitsPrefs,
     saveDisplayPrefs,
   };

@@ -39,6 +39,11 @@ public final class MainActivity extends Activity {
     private int reportsListGeneration;
     private HubClient reportsDetailClient;
     private int reportsDetailGeneration;
+    private final java.util.concurrent.ThreadPoolExecutor agManagerNetwork = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+    private HubClient agManagerClient;
+    private int agManagerGeneration;
     private final Runnable poll = () -> refresh(false);
     private WebView web;
     private ConnectionStore store;
@@ -421,6 +426,7 @@ public final class MainActivity extends Activity {
     private void cancel() {
         cancelConversation();
         cancelReports();
+        cancelAntigravityManager();
         generation++;
         historyBusy = false;
         pendingHistoryKey = null;
@@ -708,6 +714,12 @@ public final class MainActivity extends Activity {
             main.post(() -> readReportDetail(granularity, periodKey, requestId));
         }
         @JavascriptInterface public void cancelReports() { main.post(() -> MainActivity.this.cancelReports()); }
+        @JavascriptInterface public void queryAntigravityManager(String requestId) {
+            main.post(() -> MainActivity.this.queryAntigravityManager(requestId));
+        }
+        @JavascriptInterface public void cancelAntigravityManager() {
+            main.post(() -> MainActivity.this.cancelAntigravityManager());
+        }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
         @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }
@@ -845,6 +857,45 @@ public final class MainActivity extends Activity {
     private void cancelReports() {
         cancelReportsList();
         cancelReportsDetail();
+    }
+
+    private void cancelAntigravityManager() {
+        agManagerGeneration++;
+        agManagerNetwork.getQueue().clear();
+        if (agManagerClient != null) agManagerClient.cancel();
+        agManagerClient = null;
+    }
+
+    private void queryAntigravityManager(String requestId) {
+        cancelAntigravityManager();
+        if (!foreground || spec == null || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) return;
+        int epoch = generation;
+        int queryEpoch = agManagerGeneration;
+        ConnectionSpec destination = spec;
+        HubClient request = new HubClient();
+        agManagerClient = request;
+        agManagerNetwork.execute(() -> {
+            JSONObject payload;
+            try {
+                JSONObject data = request.antigravityManager(destination);
+                payload = event("antigravityManagerResult");
+                payload.put("requestId", requestId);
+                payload.put("payload", data);
+            } catch (Exception error) {
+                payload = event("antigravityManagerError");
+                try {
+                    payload.put("requestId", requestId);
+                    payload.put("code", mapReportHubError(error));
+                    payload.put("message", error.getMessage() == null ? "读取 Antigravity 账号池失败" : error.getMessage());
+                } catch (Exception ignored) { }
+            }
+            JSONObject finalPayload = payload;
+            main.post(() -> {
+                if (epoch != generation || queryEpoch != agManagerGeneration || !foreground) return;
+                agManagerClient = null;
+                emit(finalPayload);
+            });
+        });
     }
 
     private static String mapReportHubError(Exception error) {
@@ -1010,6 +1061,7 @@ public final class MainActivity extends Activity {
         conversationNetwork.shutdownNow();
         reportsListNetwork.shutdownNow();
         reportsDetailNetwork.shutdownNow();
+        agManagerNetwork.shutdownNow();
         if (updates != null) updates.close();
         if (downloads != null) downloads.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }

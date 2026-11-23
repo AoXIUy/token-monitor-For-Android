@@ -54,6 +54,14 @@ public final class ConnectionSpecChecks {
             throw new AssertionError("Invalid local approval alerts endpoint: " + local.approvalAlertsEndpoint());
         }
         checks++;
+        if (!prefixed.antigravityManagerEndpoint().equals("https://monitor.example.com/proxy/api/antigravity-manager")) {
+            throw new AssertionError("Invalid antigravity manager endpoint: " + prefixed.antigravityManagerEndpoint());
+        }
+        checks++;
+        if (!local.antigravityManagerEndpoint().equals("http://[::1]:17321/api/antigravity-manager")) {
+            throw new AssertionError("Invalid local antigravity manager endpoint: " + local.antigravityManagerEndpoint());
+        }
+        checks++;
         if (!prefixed.reportsListEndpoint("", 50).equals("https://monitor.example.com/proxy/api/reports?limit=50")) {
             throw new AssertionError("Invalid reports list endpoint: " + prefixed.reportsListEndpoint("", 50));
         }

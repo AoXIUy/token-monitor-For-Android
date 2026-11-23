@@ -1374,3 +1374,95 @@ export function createDemoReports(nowMs: number = Date.now()): {
     },
   };
 }
+
+export function createDemoAgManager(nowMs: number = Date.now()) {
+  const nowIso = new Date(nowMs).toISOString();
+  const inTwoHours = new Date(nowMs + 2 * 3600 * 1000).toISOString();
+  const inFiveHours = new Date(nowMs + 5 * 3600 * 1000).toISOString();
+  return {
+    version: 1,
+    updatedAt: nowIso,
+    devices: [
+      {
+        version: 1,
+        deviceId: 'demo-workstation',
+        hostname: 'workstation-dev',
+        updatedAt: nowIso,
+        settings: {
+          startupRefresh: false,
+          autoRefresh: false,
+          refreshIntervalMinutes: 10,
+        },
+        activeAccounts: {
+          classic: 'alice.ultra@example.com',
+          ide: 'alice.ultra@example.com',
+          agy: 'bob.pro@example.com',
+          acp: '',
+        },
+        accounts: [
+          {
+            id: 'agm-demo-1',
+            email: 'alice.ultra@example.com',
+            name: 'Alice Ultra',
+            subscriptionTier: 'ULTRA',
+            disabled: false,
+            disabledReason: '',
+            validationBlocked: false,
+            validationMessage: '',
+            banned: false,
+            hasDeviceProfile: true,
+            quota: {
+              isForbidden: false,
+              forbiddenReason: '',
+              lastUpdated: Math.floor(nowMs / 1000),
+              models: [
+                { name: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6', percentage: 85, resetTime: inTwoHours },
+                { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 92, resetTime: inFiveHours },
+                { name: 'gemini-3-flash', displayName: 'Gemini 3 Flash', percentage: 100, resetTime: inFiveHours },
+              ],
+            },
+          },
+          {
+            id: 'agm-demo-2',
+            email: 'bob.pro@example.com',
+            name: 'Bob Pro',
+            subscriptionTier: 'PRO',
+            disabled: false,
+            disabledReason: '',
+            validationBlocked: false,
+            validationMessage: '',
+            banned: false,
+            hasDeviceProfile: false,
+            quota: {
+              isForbidden: false,
+              forbiddenReason: '',
+              lastUpdated: Math.floor((nowMs - 600_000) / 1000),
+              models: [
+                { name: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6', percentage: 15, resetTime: inTwoHours },
+                { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 48, resetTime: inFiveHours },
+              ],
+            },
+          },
+          {
+            id: 'agm-demo-3',
+            email: 'carol.free@example.com',
+            name: 'Carol Verify',
+            subscriptionTier: 'FREE',
+            disabled: false,
+            disabledReason: '',
+            validationBlocked: true,
+            validationMessage: 'Account validation required',
+            banned: false,
+            hasDeviceProfile: false,
+            quota: {
+              isForbidden: true,
+              forbiddenReason: 'Account validation required',
+              lastUpdated: Math.floor((nowMs - 3600_000) / 1000),
+              models: [],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}

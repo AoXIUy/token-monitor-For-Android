@@ -1,6 +1,11 @@
 // @ts-check
 import { receiveConversation } from './conversationState.js';
 import { createInitialReportsState, receiveReportDetail, receiveReportsList } from './reportsState.js';
+import {
+  createInitialAgManagerState,
+  receiveAgManagerError,
+  receiveAgManagerResult,
+} from './agManagerState.js';
 
 /** @param {unknown} value @returns {value is import('./types/monitor').ConnectionStatus} */
 function isConnectionStatus(value) {
@@ -109,6 +114,7 @@ export function createInitialState() {
     displayPrefs: { separateQoderClients: false, exactTrendTokens: false },
     limitAccountPresentation: {},
     reports: createInitialReportsState(),
+    agManager: createInitialAgManagerState(),
   };
 }
 
@@ -127,6 +133,10 @@ export function receiveNativeMessage(state, message) {
       return { ...state, reports: receiveReportsList(state.reports, message) };
     case 'reportDetail':
       return { ...state, reports: receiveReportDetail(state.reports, message) };
+    case 'antigravityManagerResult':
+      return { ...state, agManager: receiveAgManagerResult(state.agManager, message) };
+    case 'antigravityManagerError':
+      return { ...state, agManager: receiveAgManagerError(state.agManager, message) };
     case 'appUpdate': {
       /** @param {string} key @param {number} limit */
       const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
@@ -262,6 +272,9 @@ export function receiveNativeMessage(state, message) {
       reports: message.foreground
         ? state.reports
         : { ...state.reports, listLoading: false, detailLoading: false },
+      agManager: message.foreground
+        ? state.agManager
+        : { ...state.agManager, loading: false },
     };
     case 'notifications':
       return {
