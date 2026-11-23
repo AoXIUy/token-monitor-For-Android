@@ -264,6 +264,13 @@ export function formatExact(value: unknown): string {
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (!text) return false;
   try {
+    if (typeof window !== 'undefined' && window.HubNative?.copyText) {
+      if (window.HubNative.copyText(text)) return true;
+    }
+  } catch {
+    // Fall through to web clipboard APIs if the native bridge call fails
+  }
+  try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
       return true;

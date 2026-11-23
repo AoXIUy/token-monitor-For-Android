@@ -720,6 +720,30 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void cancelAntigravityManager() {
             main.post(() -> MainActivity.this.cancelAntigravityManager());
         }
+        @JavascriptInterface public boolean copyText(String text) {
+            if (text == null || text.isEmpty() || text.length() > 256 * 1024) return false;
+            java.util.concurrent.atomic.AtomicBoolean copied = new java.util.concurrent.atomic.AtomicBoolean(false);
+            java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            boolean posted = main.post(() -> {
+                try {
+                    if (!foreground || isDestroyed()) return;
+                    android.content.ClipboardManager manager = getSystemService(android.content.ClipboardManager.class);
+                    if (manager == null) return;
+                    manager.setPrimaryClip(android.content.ClipData.newPlainText("Token Monitor", text));
+                    copied.set(true);
+                } catch (Exception ignored) {
+                } finally {
+                    done.countDown();
+                }
+            });
+            if (!posted) return false;
+            try {
+                return done.await(1, java.util.concurrent.TimeUnit.SECONDS) && copied.get();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
         @JavascriptInterface public void checkForUpdates() { main.post(() -> updates.check(true)); }
         @JavascriptInterface public void automaticUpdates(boolean enabled) { main.post(() -> updates.automatic(enabled)); }
         @JavascriptInterface public void dismissAppUpdatePrompt() { main.post(() -> updates.dismissPrompt()); }

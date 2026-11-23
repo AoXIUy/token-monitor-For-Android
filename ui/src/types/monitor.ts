@@ -312,6 +312,7 @@ export interface HubNativeBridge {
   cancelReports?: () => void;
   queryAntigravityManager?: (requestId: string) => void;
   cancelAntigravityManager?: () => void;
+  copyText?: (text: string) => boolean;
 }
 
 export interface DisplayPrefs {

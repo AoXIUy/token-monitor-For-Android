@@ -393,3 +393,267 @@ test('buildAgQuotaCells falls back gracefully to summarized models or top models
   assert.deepEqual(buildAgQuotaCells({ quota: { models: [] } }, nowMs), []);
   assert.deepEqual(buildAgQuotaCells(null, nowMs), []);
 });
+
+test('agManagerState handles Hub wire schema nulls, duplicate ids, and all abnormal flags', async () => {
+  const {
+    createInitialAgManagerState,
+    beginAgManagerQuery,
+    receiveAgManagerResult,
+    isAgAccountAbnormal,
+  } = await stateModule;
+
+  let state = createInitialAgManagerState();
+  state = beginAgManagerQuery(state, { requestId: 'req-wire' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-wire',
+    payload: {
+      ok: true,
+      updatedAt: '2026-11-23T11:00:00Z',
+      devices: [
+        {
+          version: 1,
+          deviceId: 'host-wire',
+          hostname: 'Wire-PC',
+          updatedAt: '2026-11-23T11:00:00Z',
+          settings: { startupRefresh: false, autoRefresh: true, refreshIntervalMinutes: 10 },
+          activeAccounts: { classic: 'id-1', ide: null, agy: null, acp: null },
+          accounts: [
+            {
+              id: 'id-1',
+              accountKey: 'acct-key-1',
+              email: 'first@example.com',
+              name: 'First',
+              subscriptionTier: 'ULTRA',
+              disabled: false,
+              banned: false,
+              validationBlocked: false,
+              banCode: '',
+              forbiddenModels: ['claude-opus-4-6'],
+              quota: { lastUpdatedAt: 1763895600, isForbidden: false, groups: [], models: [] },
+            },
+            {
+              id: 'id-1',
+              email: 'duplicate@example.com',
+              subscriptionTier: 'FREE',
+              quota: null,
+            },
+            {
+              id: 'id-2',
+              email: 'disabled@example.com',
+              subscriptionTier: 'PRO',
+              disabled: true,
+              quota: null,
+            },
+            {
+              id: 'id-3',
+              email: 'banned@example.com',
+              subscriptionTier: 'FREE',
+              banned: true,
+              banCode: 'TOS',
+              quota: null,
+            },
+            {
+              id: 'id-4',
+              email: 'verify@example.com',
+              subscriptionTier: 'FREE',
+              validationBlocked: true,
+              quota: null,
+            },
+            {
+              id: 'id-5',
+              email: 'forbidden@example.com',
+              subscriptionTier: 'FREE',
+              quota: { isForbidden: true, models: [] },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const accounts = state.devices[0].accounts;
+  assert.equal(accounts.length, 5);
+  assert.equal(accounts[0].email, 'first@example.com');
+  assert.equal(accounts[0].quota.lastUpdated, 1763895600);
+  assert.equal(accounts[1].quota.isForbidden, false);
+  assert.deepEqual(accounts[1].quota.models, []);
+  assert.deepEqual(accounts[1].quota.groups, []);
+  assert.deepEqual(state.devices[0].activeAccounts, { classic: 'id-1', ide: '', agy: '', acp: '' });
+
+  assert.equal(isAgAccountAbnormal(accounts[0]), false);
+  assert.equal(isAgAccountAbnormal(accounts[1]), true);
+  assert.equal(isAgAccountAbnormal(accounts[2]), true);
+  assert.equal(isAgAccountAbnormal(accounts[3]), true);
+  assert.equal(isAgAccountAbnormal(accounts[4]), true);
+});
+
+test('buildAgQuotaCells keeps dedicated codename-only and secondary Claude groups full-width', async () => {
+  const { buildAgQuotaCells } = await stateModule;
+  const nowMs = Date.parse('2026-11-23T10:00:00Z');
+
+  const hydrogenOnly = buildAgQuotaCells({
+    quota: {
+      groups: [
+        {
+          displayName: 'Hydrogen',
+          description: 'Dedicated Hydrogen pool',
+          buckets: [
+            { bucketId: 'h-wk', window: 'weekly', remainingFraction: 0.9, resetTime: '2026-11-28T10:00:00Z', displayName: 'Hydrogen Weekly' },
+          ],
+        },
+      ],
+      models: [],
+    },
+  }, nowMs);
+
+  assert.equal(hydrogenOnly.length, 1);
+  assert.deepEqual(hydrogenOnly[0], {
+    id: 'extra-0-h-wk',
+    family: 'gemini',
+    title: 'Hydrogen · weekly',
+    resetText: '5d 0h',
+    resetTone: 'weekly',
+    pct: 90,
+    isFull: true,
+    ariaLabel: 'Hydrogen · weekly: 90% (5d 0h)',
+  });
+
+  const secondaryClaude = buildAgQuotaCells({
+    quota: {
+      groups: [
+        {
+          displayName: 'Claude / GPT',
+          description: '',
+          buckets: [
+            { bucketId: 'c-5h', window: '5h', remainingFraction: 0.6, resetTime: '2026-11-23T12:00:00Z', displayName: 'Claude 5h' },
+          ],
+        },
+        {
+          displayName: 'Claude 3P Overflow',
+          description: '',
+          buckets: [
+            { bucketId: 'c3p-wk', window: 'weekly', remainingFraction: 0.3, resetTime: '2026-11-26T10:00:00Z', displayName: 'Claude 3P Weekly' },
+          ],
+        },
+      ],
+      models: [],
+    },
+  }, nowMs);
+
+  assert.equal(secondaryClaude.length, 2);
+  assert.equal(secondaryClaude[0].id, 'claude-5h');
+  assert.equal(secondaryClaude[0].isFull, false);
+  assert.deepEqual(secondaryClaude[1], {
+    id: 'extra-0-c3p-wk',
+    family: 'claude',
+    title: 'Claude 3P Overflow · weekly',
+    resetText: '3d 0h',
+    resetTone: 'weekly',
+    pct: 30,
+    isFull: true,
+    ariaLabel: 'Claude 3P Overflow · weekly: 30% (3d 0h)',
+  });
+});
+
+test('agManagerState filtering, error rejection, device fallback, and nativeState lifecycle', async () => {
+  const {
+    createInitialAgManagerState,
+    beginAgManagerQuery,
+    receiveAgManagerResult,
+    receiveAgManagerError,
+    setAgManagerFilter,
+    selectVisibleAgManagerAccounts,
+  } = await stateModule;
+  const { createInitialState, receiveNativeMessage } = await nativeModule;
+
+  let state = createInitialAgManagerState();
+  state = beginAgManagerQuery(state, { requestId: 'req-a' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-a',
+    payload: {
+      devices: [
+        {
+          deviceId: 'dev-1',
+          hostname: 'First',
+          accounts: [
+            {
+              id: 'a1',
+              email: 'one@example.com',
+              quota: {
+                groups: [{ displayName: 'Hydrogen', buckets: [{ bucketId: 'h1', window: '5h', remainingFraction: 0.8 }] }],
+                models: [{ name: 'gemini-4', displayName: 'Gemini Hydrogen Preview', percentage: 80 }],
+              },
+            },
+          ],
+        },
+        {
+          deviceId: 'dev-2',
+          hostname: 'Second',
+          accounts: [{ id: 'a2', email: 'two@example.com', quota: { models: [] } }],
+        },
+      ],
+    },
+  });
+
+  state = setAgManagerFilter(state, { deviceId: 'dev-2' });
+  assert.equal(state.selectedDeviceId, 'dev-2');
+
+  // Search matches group displayName and model displayName.
+  let filtered = setAgManagerFilter(state, { deviceId: 'dev-1', searchQuery: 'hydrogen' });
+  assert.equal(selectVisibleAgManagerAccounts(filtered).visibleAccounts.length, 1);
+  filtered = setAgManagerFilter(state, { deviceId: 'dev-1', searchQuery: 'Hydrogen Preview' });
+  assert.equal(selectVisibleAgManagerAccounts(filtered).visibleAccounts.length, 1);
+
+  // Refresh preserves selected device when still present, falls back when removed.
+  state = beginAgManagerQuery(state, { requestId: 'req-b' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-b',
+    payload: {
+      devices: [
+        { deviceId: 'dev-1', accounts: [] },
+        { deviceId: 'dev-2', accounts: [] },
+      ],
+    },
+  });
+  assert.equal(state.selectedDeviceId, 'dev-2');
+
+  state = beginAgManagerQuery(state, { requestId: 'req-c' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-c',
+    payload: { devices: [{ deviceId: 'dev-1', accounts: [] }] },
+  });
+  assert.equal(state.selectedDeviceId, 'dev-1');
+
+  // Stale error is ignored; fresh error preserves custom message or defaults cleanly.
+  state = beginAgManagerQuery(state, { requestId: 'req-err-active' });
+  const ignoredErr = receiveAgManagerError(state, { requestId: 'req-err-stale', code: 'read_failed', message: 'Stale error' });
+  assert.equal(ignoredErr, state);
+
+  const customErr = receiveAgManagerError(state, { requestId: 'req-err-active', code: 'unauthorized', message: '认证失败，请检查 Hub secret' });
+  assert.equal(customErr.loading, false);
+  assert.equal(customErr.errorCode, 'unauthorized');
+  assert.equal(customErr.error, '认证失败，请检查 Hub secret');
+
+  const defaultErr = receiveAgManagerError(state, { requestId: 'req-err-active' });
+  assert.equal(defaultErr.errorCode, 'read_failed');
+  assert.equal(defaultErr.error, '读取 Antigravity 账号池失败');
+
+  // nativeState keeps devices on background lifecycle (only clears loading) and resets on connection change/disconnect.
+  let native = createInitialState();
+  native = receiveNativeMessage(native, {
+    type: 'connection',
+    url: 'https://hub-one.test',
+  });
+  native = receiveNativeMessage(native, {
+    type: 'antigravityManagerResult',
+    payload: { devices: [{ deviceId: 'dev-1', accounts: [{ id: 'a1', email: 'a@b.com' }] }] },
+  });
+  native = { ...native, agManager: { ...native.agManager, loading: true } };
+  native = receiveNativeMessage(native, { type: 'lifecycle', foreground: false });
+  assert.equal(native.agManager.loading, false);
+  assert.equal(native.agManager.devices.length, 1);
+
+  native = receiveNativeMessage(native, { type: 'connection', url: '' });
+  assert.equal(native.agManager.devices.length, 0);
+  assert.equal(native.agManager.selectedDeviceId, '');
+});

@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 
@@ -1387,6 +1388,472 @@ public final class StartupTest {
                 assertFalse(authorizations.isEmpty());
                 assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer v94-test-secret")));
             } finally {
+                scenario.close();
+                scenario = null;
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
+    @Test public void antigravityManagerViewFetchesSnapshotRendersCardsFiltersAndResumesOnForeground() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
+        long nowSec = System.currentTimeMillis() / 1000L;
+        String nowIso = java.time.Instant.now().toString();
+        String inThreeHours = java.time.Instant.now().plusSeconds(3L * 3600L).toString();
+        String inFourDays = java.time.Instant.now().plusSeconds(4L * 86400L).toString();
+        String inSixDays = java.time.Instant.now().plusSeconds(6L * 86400L).toString();
+        String agManagerPayload = new org.json.JSONObject()
+                .put("ok", true)
+                .put("updatedAt", nowIso)
+                .put("devices", new org.json.JSONArray()
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "pc-1")
+                                .put("hostname", "Main-PC")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject()
+                                        .put("startupRefresh", false)
+                                        .put("autoRefresh", true)
+                                        .put("refreshIntervalMinutes", 15))
+                                .put("activeAccounts", new org.json.JSONObject()
+                                        .put("classic", "agm-1")
+                                        .put("ide", "agm-1")
+                                        .put("agy", "bob@example.com")
+                                        .put("acp", org.json.JSONObject.NULL))
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "agm-1")
+                                                .put("email", "alice@example.com")
+                                                .put("name", "Alice Ultra")
+                                                .put("subscriptionTier", "ULTRA")
+                                                .put("hasDeviceProfile", true)
+                                                .put("lastUsedAt", nowSec - 60)
+                                                .put("refresh_token", "1//secret-rt")
+                                                .put("accessToken", "ya29.secret-at")
+                                                .put("quota", new org.json.JSONObject()
+                                                        .put("lastUpdatedAt", nowSec)
+                                                        .put("isForbidden", false)
+                                                        .put("groups", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("displayName", "Gemini")
+                                                                        .put("secretToken", "must-strip-group")
+                                                                        .put("buckets", new org.json.JSONArray()
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "gemini-5h")
+                                                                                        .put("window", "5h")
+                                                                                        .put("remainingFraction", 0.92)
+                                                                                        .put("resetTime", inThreeHours)
+                                                                                        .put("displayName", "Gemini 5h"))
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "gemini-weekly")
+                                                                                        .put("window", "weekly")
+                                                                                        .put("remainingFraction", 0.78)
+                                                                                        .put("resetTime", inFourDays)
+                                                                                        .put("displayName", "Gemini Weekly"))))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("displayName", "Claude / GPT")
+                                                                        .put("buckets", new org.json.JSONArray()
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "claude-5h")
+                                                                                        .put("window", "5h")
+                                                                                        .put("remainingFraction", 0.85)
+                                                                                        .put("resetTime", inThreeHours)
+                                                                                        .put("displayName", "Claude 5h"))
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "claude-weekly")
+                                                                                        .put("window", "weekly")
+                                                                                        .put("remainingFraction", 0.64)
+                                                                                        .put("resetTime", inFourDays)
+                                                                                        .put("displayName", "Claude Weekly"))))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("displayName", "Hydrogen")
+                                                                        .put("description", "Dedicated pool")
+                                                                        .put("buckets", new org.json.JSONArray()
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "hydrogen-weekly")
+                                                                                        .put("window", "weekly")
+                                                                                        .put("remainingFraction", 0.90)
+                                                                                        .put("resetTime", inSixDays)
+                                                                                        .put("displayName", "Hydrogen Weekly")))))
+                                                        .put("models", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-4-hydrogen-preview")
+                                                                        .put("displayName", "Gemini 4 Hydrogen")
+                                                                        .put("percentage", 90)
+                                                                        .put("resetTime", inSixDays))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "claude-sonnet-4-6-thinking")
+                                                                        .put("displayName", "Claude Sonnet 4.6")
+                                                                        .put("percentage", 85)
+                                                                        .put("resetTime", inThreeHours))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gpt-oss-120b-medium")
+                                                                        .put("displayName", "GPT OSS 120B")
+                                                                        .put("percentage", 85)
+                                                                        .put("resetTime", inThreeHours))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-3-pro-high")
+                                                                        .put("displayName", "Gemini 3 Pro High")
+                                                                        .put("percentage", 92)
+                                                                        .put("resetTime", inThreeHours))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-3-flash")
+                                                                        .put("displayName", "<img id=unsafe-agm-model>Gemini 3 Flash")
+                                                                        .put("percentage", 100)
+                                                                        .put("resetTime", inThreeHours)))))
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "agm-2")
+                                                .put("email", "bob@example.com")
+                                                .put("name", "Bob Pro")
+                                                .put("subscriptionTier", "PRO")
+                                                .put("quota", new org.json.JSONObject()
+                                                        .put("lastUpdatedAt", nowSec - 300)
+                                                        .put("models", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "claude-opus-4-6-thinking")
+                                                                        .put("displayName", "Claude Opus 4.6")
+                                                                        .put("percentage", 15)
+                                                                        .put("resetTime", inThreeHours))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-3-pro-high")
+                                                                        .put("displayName", "Gemini 3 Pro High")
+                                                                        .put("percentage", 48)
+                                                                        .put("resetTime", inThreeHours))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-3-flash")
+                                                                        .put("displayName", "Gemini 3 Flash")
+                                                                        .put("percentage", 82)
+                                                                        .put("resetTime", inThreeHours)))))
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "agm-3")
+                                                .put("email", "carol@example.com")
+                                                .put("subscriptionTier", "FREE")
+                                                .put("validationBlocked", true)
+                                                .put("validationMessage", "<img id=unsafe-agm-err>Verify required")
+                                                .put("quota", org.json.JSONObject.NULL))))
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "pc-2")
+                                .put("hostname", "Backup-PC")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject()
+                                        .put("startupRefresh", false)
+                                        .put("autoRefresh", false)
+                                        .put("refreshIntervalMinutes", 10))
+                                .put("activeAccounts", new org.json.JSONObject())
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "agm-4")
+                                                .put("email", "dave@example.com")
+                                                .put("subscriptionTier", "FREE")
+                                                .put("banned", true)
+                                                .put("quota", new org.json.JSONObject()
+                                                        .put("groups", new org.json.JSONArray())
+                                                        .put("models", new org.json.JSONArray()))))))
+                .toString();
+
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            if (header.startsWith("Authorization: ")) authorizations.add(header);
+                        }
+                        if (first.contains("/api/sync/settings/limitAccountPresentation ")) {
+                            byte[] errPayload = "{\"error\":\"not_found\"}".getBytes(StandardCharsets.UTF_8);
+                            socket.getOutputStream().write(("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: "
+                                    + errPayload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                            socket.getOutputStream().write(errPayload);
+                            continue;
+                        }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/antigravity-manager ")) {
+                            body = agManagerPayload;
+                        } else {
+                            body = testStats(false);
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-ag-manager-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'agm-test-secret', true)");
+                awaitScript("document.querySelector('.token-total')");
+
+                evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+                awaitScript("document.getElementById('filters') && document.querySelector('[data-quota=\"antigravityManager\"]')");
+                evaluate("document.querySelector('[data-quota=\"antigravityManager\"]').click()");
+                awaitScript("document.getElementById('ag-manager-view') && document.querySelectorAll('[data-agm-account]').length === 3");
+
+                assertEquals("true", evaluate("!document.getElementById('filters')"));
+                assertEquals("true", evaluate("(() => {"
+                        + " const view = document.getElementById('ag-manager-view');"
+                        + " const text = view ? view.innerText : '';"
+                        + " return text.includes('自动刷新 15m') && text.includes('总计') && text.includes('Ultra') && text.includes('Pro') && text.includes('Free') && text.includes('异常');"
+                        + " })()"));
+
+                // Verify agm-1 active styling, localized slots, tier, fingerprint, capabilities, timestamp, and 5 cells.
+                assertEquals("true", evaluate("(() => {"
+                        + " const card = document.querySelector('[data-agm-account=\"agm-1\"]');"
+                        + " if (!card) return false;"
+                        + " const email = card.querySelector('[data-selectable=\"true\"]');"
+                        + " const text = card.innerText;"
+                        + " const bars = card.querySelectorAll('[role=\"progressbar\"]');"
+                        + " const fifthWrap = bars[4] ? bars[4].parentElement : null;"
+                        + " return Boolean(email) && email.className.includes('text-sky-300')"
+                        + " && text.includes('经典款') && text.includes('IDE') && text.includes('◆ ULTRA') && text.includes('独立指纹')"
+                        + " && text.includes('Hydrogen') && text.includes('Claude 4.6') && text.includes('GPT-120B')"
+                        + " && /\\d{4}\\/\\d{2}\\/\\d{2} \\d{2}:\\d{2}/.test(text)"
+                        + " && bars.length === 5 && Boolean(fifthWrap) && fifthWrap.className.includes('col-span-2') && fifthWrap.innerText.includes('Hydrogen · weekly');"
+                        + " })()"));
+
+                // Verify agm-2 models-only fallback grid (3 cells, odd 3rd cell spans full width).
+                assertEquals("true", evaluate("(() => {"
+                        + " const card = document.querySelector('[data-agm-account=\"agm-2\"]');"
+                        + " if (!card) return false;"
+                        + " const text = card.innerText;"
+                        + " const bars = card.querySelectorAll('[role=\"progressbar\"]');"
+                        + " const thirdWrap = bars[2] ? bars[2].parentElement : null;"
+                        + " return text.includes('AGY') && text.includes('◆ PRO') && bars.length === 3"
+                        + " && text.includes('Gemini Pro') && text.includes('Claude / GPT') && text.includes('Gemini Flash')"
+                        + " && Boolean(thirdWrap) && thirdWrap.className.includes('col-span-2');"
+                        + " })()"));
+
+                // Verify agm-3 abnormal badge, escaped error note, empty quota fallback, and zero secret leaks.
+                assertEquals("true", evaluate("(() => {"
+                        + " const card = document.querySelector('[data-agm-account=\"agm-3\"]');"
+                        + " const bodyText = document.body.innerText;"
+                        + " return Boolean(card)"
+                        + " && card.innerText.includes('待验证') && card.innerText.includes('FREE') && card.innerText.includes('暂无模型额度快照')"
+                        + " && card.innerText.includes('<img id=unsafe-agm-err>Verify required')"
+                        + " && !document.getElementById('unsafe-agm-err') && !document.getElementById('unsafe-agm-model')"
+                        + " && !bodyText.includes('1//secret-rt') && !bodyText.includes('ya29.secret-at') && !bodyText.includes('must-strip-group');"
+                        + " })()"));
+
+                // Verify expand & collapse models list on agm-1 + XSS escaping on model displayName.
+                evaluate("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-expanded=\"false\"]').click()");
+                awaitScript("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-expanded=\"true\"]').innerText.includes('收起模型 (5)')");
+                assertEquals("true", evaluate("document.querySelector('[data-agm-account=\"agm-1\"]').innerText.includes('<img id=unsafe-agm-model>Gemini 3 Flash') && !document.getElementById('unsafe-agm-model')"));
+                evaluate("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-expanded=\"true\"]').click()");
+                awaitScript("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-expanded=\"false\"]').innerText.includes('展开模型 (5)')");
+
+                // Verify email copy button feedback & actual Android ClipboardManager content.
+                scenario.onActivity(activity -> {
+                    android.content.ClipboardManager cm = activity.getSystemService(android.content.ClipboardManager.class);
+                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("clear", ""));
+                });
+                evaluate("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-label*=\"复制邮箱\"]').click()");
+                awaitScript("(() => {"
+                        + " const btn = document.querySelector('[data-agm-account=\"agm-1\"] button[aria-label*=\"alice@example.com\"]');"
+                        + " return Boolean(btn) && (btn.innerText.includes('已复制') || btn.innerText.includes('复制失败'));"
+                        + " })()");
+                AtomicReference<String> copyBtnText = new AtomicReference<>(evaluate("document.querySelector('[data-agm-account=\"agm-1\"] button[aria-label*=\"alice@example.com\"]').innerText"));
+                AtomicReference<String> clipboardText = new AtomicReference<>("");
+                scenario.onActivity(activity -> {
+                    android.content.ClipboardManager cm = activity.getSystemService(android.content.ClipboardManager.class);
+                    if (cm != null && cm.hasPrimaryClip() && cm.getPrimaryClip().getItemCount() > 0) {
+                        CharSequence seq = cm.getPrimaryClip().getItemAt(0).getText();
+                        if (seq != null) clipboardText.set(seq.toString());
+                    }
+                });
+                assertTrue("Expected copy button to succeed with 已复制 and write clipboard, but btn=" + copyBtnText.get() + " clipboard=" + clipboardText.get(),
+                        copyBtnText.get().contains("已复制") && "alice@example.com".equals(clipboardText.get()));
+
+                // Verify status, tier, search, and device filters.
+                evaluate("Array.from(document.querySelectorAll('[aria-label=\"按状态筛选\"] button')).find(b => b.innerText.includes('异常')).click()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 1 && Boolean(document.querySelector('[data-agm-account=\"agm-3\"]'))");
+                evaluate("Array.from(document.querySelectorAll('[aria-label=\"按状态筛选\"] button')).find(b => b.innerText.includes('全部')).click()");
+                evaluate("Array.from(document.querySelectorAll('[aria-label=\"按套餐筛选\"] button')).find(b => b.innerText.trim() === 'PRO').click()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 1 && Boolean(document.querySelector('[data-agm-account=\"agm-2\"]'))");
+                evaluate("Array.from(document.querySelectorAll('[aria-label=\"按套餐筛选\"] button')).find(b => b.innerText.trim() === '全套餐').click()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 3");
+
+                evaluate("(() => {"
+                        + " const input = document.getElementById('ag-manager-search');"
+                        + " const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;"
+                        + " setter.call(input, 'hydrogen');"
+                        + " input.dispatchEvent(new Event('input', { bubbles: true }));"
+                        + " })()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 1 && Boolean(document.querySelector('[data-agm-account=\"agm-1\"]'))");
+
+                evaluate("(() => {"
+                        + " const input = document.getElementById('ag-manager-search');"
+                        + " const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;"
+                        + " setter.call(input, 'no-such-account-xyz');"
+                        + " input.dispatchEvent(new Event('input', { bubbles: true }));"
+                        + " })()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 0 && document.getElementById('ag-manager-view').innerText.includes('无匹配账号')");
+
+                evaluate("(() => {"
+                        + " const input = document.getElementById('ag-manager-search');"
+                        + " const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;"
+                        + " setter.call(input, '');"
+                        + " input.dispatchEvent(new Event('input', { bubbles: true }));"
+                        + " })()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 3");
+
+                evaluate("Array.from(document.querySelectorAll('#ag-manager-devices button')).find(b => b.innerText.includes('Backup-PC')).click()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 1 && document.querySelector('[data-agm-account=\"agm-4\"]').innerText.includes('已封禁')");
+                evaluate("Array.from(document.querySelectorAll('#ag-manager-devices button')).find(b => b.innerText.includes('Main-PC')).click()");
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 3");
+
+                // Verify mobile viewport width & no card horizontal overflow.
+                assertEquals("true", evaluate("(() => {"
+                        + " if (document.documentElement.scrollWidth > window.innerWidth + 1) return false;"
+                        + " return Array.from(document.querySelectorAll('[data-agm-account]')).every(card => {"
+                        + "   const r = card.getBoundingClientRect();"
+                        + "   return r.width > 0 && r.left >= -1 && r.right <= window.innerWidth + 1;"
+                        + " });"
+                        + " })()"));
+
+                // Verify manual refresh triggers an additional GET /api/antigravity-manager.
+                long countBeforeManual = requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count();
+                evaluate("document.getElementById('ag-manager-refresh').click()");
+                long deadline = System.currentTimeMillis() + 20_000;
+                while (requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count() <= countBeforeManual
+                        && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+                long countAfterManual = requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count();
+                assertTrue("Manual refresh must re-query /api/antigravity-manager", countAfterManual > countBeforeManual);
+
+                // Verify background -> foreground lifecycle recovery re-queries /api/antigravity-manager.
+                long countBeforeBg = countAfterManual;
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);
+                Thread.sleep(200);
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);
+                deadline = System.currentTimeMillis() + 20_000;
+                while (requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count() <= countBeforeBg
+                        && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+                assertTrue("Returning to foreground on AG pool tab must re-query /api/antigravity-manager",
+                        requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count() > countBeforeBg);
+                awaitScript("document.querySelectorAll('[data-agm-account]').length === 3");
+
+                // Verify switching back to 账户额度 restores global #filters bar.
+                evaluate("document.querySelector('[data-quota=\"limits\"]').click()");
+                awaitScript("Boolean(document.getElementById('filters'))");
+
+                assertTrue(requests.contains("GET /api/antigravity-manager HTTP/1.1"));
+                assertTrue(requests.stream().allMatch(line -> line.startsWith("GET ")));
+                assertFalse(authorizations.isEmpty());
+                assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer agm-test-secret")));
+
+                evaluate("window.HubNative.disconnect()");
+                awaitConnectionPage();
+            } finally {
+                if (scenario != null) {
+                    scenario.close();
+                    scenario = null;
+                }
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
+    @Test public void antigravityManagerDegradesOn404UnauthorizedAndOversizedResponses() throws Exception {
+        awaitConnectionPage();
+        AtomicInteger agMode = new AtomicInteger(0);
+        StringBuilder bigPadding = new StringBuilder(540 * 1024);
+        for (int i = 0; i < 540 * 1024; i++) bigPadding.append('a');
+        byte[] oversizedBody = ("{\"ok\":true,\"devices\":[{\"deviceId\":\"big\",\"hostname\":\"" + bigPadding + "\",\"accounts\":[]}]}")
+                .getBytes(StandardCharsets.UTF_8);
+
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            // consume headers
+                        }
+                        if (first.contains("/api/antigravity-manager ")) {
+                            int mode = agMode.get();
+                            if (mode == 0) {
+                                byte[] err = "{\"error\":\"not_found\"}".getBytes(StandardCharsets.UTF_8);
+                                socket.getOutputStream().write(("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: "
+                                        + err.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                                socket.getOutputStream().write(err);
+                            } else if (mode == 1) {
+                                byte[] err = "{\"error\":\"unauthorized\"}".getBytes(StandardCharsets.UTF_8);
+                                socket.getOutputStream().write(("HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: "
+                                        + err.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                                socket.getOutputStream().write(err);
+                            } else {
+                                try {
+                                    socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                            + oversizedBody.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                                    socket.getOutputStream().write(oversizedBody);
+                                } catch (java.io.IOException ignoredClientAbort) {
+                                    // HubClient aborts once > 512 KiB is read.
+                                }
+                            }
+                            continue;
+                        }
+                        String body = first.contains("/api/subscriptions ")
+                                ? "{\"subscriptions\":[],\"updatedAt\":\"\"}"
+                                : testStats(false);
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-ag-manager-errors");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'agm-err-secret', true)");
+                awaitScript("document.querySelector('.token-total')");
+
+                // Mode 0: HTTP 404 -> unsupported_hub degradation
+                evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+                awaitScript("document.querySelector('[data-quota=\"antigravityManager\"]')");
+                evaluate("document.querySelector('[data-quota=\"antigravityManager\"]').click()");
+                awaitScript("document.getElementById('ag-manager-view') && document.getElementById('ag-manager-view').innerText.includes('Hub 版本较旧或未启用 Antigravity 账号池同步')");
+
+                // Mode 1: HTTP 401 -> unauthorized degradation
+                agMode.set(1);
+                evaluate("document.getElementById('ag-manager-refresh').click()");
+                awaitScript("document.getElementById('ag-manager-view').innerText.includes('认证失败，请检查 Hub secret')");
+
+                // Mode 2: >512 KiB -> response size guard
+                agMode.set(2);
+                evaluate("document.getElementById('ag-manager-refresh').click()");
+                awaitScript("document.getElementById('ag-manager-view').innerText.includes('Hub 响应超过大小限制')");
+            } finally {
+                if (scenario != null) {
+                    scenario.close();
+                    scenario = null;
+                }
                 server.close();
                 responder.join(5000);
             }

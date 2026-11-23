@@ -528,9 +528,8 @@ export function buildAgQuotaCells(account, nowMs = Date.now()) {
   if (groups.length > 0) {
     const claudeGroup = groups.find((g) => isClaudeOr3pGroup(g)) || null;
     const nonClaude = groups.filter((g) => g !== claudeGroup);
-    const geminiGroup = nonClaude.find((g) => !isDedicatedCodenameGroup(g) && String(g.displayName || '').toLowerCase().includes('gemini'))
-      || nonClaude.find((g) => !isDedicatedCodenameGroup(g))
-      || nonClaude[0]
+    const geminiGroup = nonClaude.find((g) => !isDedicatedCodenameGroup(g) && !isClaudeOr3pGroup(g) && String(g.displayName || '').toLowerCase().includes('gemini'))
+      || nonClaude.find((g) => !isDedicatedCodenameGroup(g) && !isClaudeOr3pGroup(g))
       || null;
     const extraGroups = nonClaude.filter((g) => g !== geminiGroup);
 

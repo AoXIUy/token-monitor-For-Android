@@ -139,12 +139,12 @@ function Dashboard({
   }, [connection, page, reportWindowOpen]);
 
   useEffect(() => {
-    if (page === 'limits' && quotaTab === 'antigravityManager') {
-      if (connection) queryAntigravityManager();
+    if (page === 'limits' && quotaTab === 'antigravityManager' && connection && foreground) {
+      queryAntigravityManager();
     } else {
       cancelAntigravityManager();
     }
-  }, [page, quotaTab, connection, queryAntigravityManager, cancelAntigravityManager]);
+  }, [page, quotaTab, connection, foreground, queryAntigravityManager, cancelAntigravityManager]);
 
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
