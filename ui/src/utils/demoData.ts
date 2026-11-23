@@ -1379,6 +1379,8 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
   const nowIso = new Date(nowMs).toISOString();
   const inTwoHours = new Date(nowMs + 2 * 3600 * 1000).toISOString();
   const inFiveHours = new Date(nowMs + 5 * 3600 * 1000).toISOString();
+  const inFourDays = new Date(nowMs + (4 * 24 + 6) * 3600 * 1000).toISOString();
+  const inSixDays = new Date(nowMs + (6 * 24 + 3) * 3600 * 1000).toISOString();
   return {
     version: 1,
     updatedAt: nowIso,
@@ -1390,7 +1392,7 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
         updatedAt: nowIso,
         settings: {
           startupRefresh: false,
-          autoRefresh: false,
+          autoRefresh: true,
           refreshIntervalMinutes: 10,
         },
         activeAccounts: {
@@ -1411,12 +1413,40 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
             validationMessage: '',
             banned: false,
             hasDeviceProfile: true,
+            lastUsedAt: Math.floor((nowMs - 120_000) / 1000),
             quota: {
               isForbidden: false,
               forbiddenReason: '',
               lastUpdated: Math.floor(nowMs / 1000),
+              groups: [
+                {
+                  displayName: 'Gemini',
+                  description: 'Gemini 3 / 4 shared pool',
+                  buckets: [
+                    { bucketId: 'gemini-5h', window: '5h', remainingFraction: 0.92, resetTime: inFiveHours, displayName: 'Gemini 5h' },
+                    { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0.78, resetTime: inFourDays, displayName: 'Gemini Weekly' },
+                  ],
+                },
+                {
+                  displayName: 'Claude / GPT',
+                  description: 'Third-party reasoning pool',
+                  buckets: [
+                    { bucketId: 'claude-5h', window: '5h', remainingFraction: 0.85, resetTime: inTwoHours, displayName: 'Claude 5h' },
+                    { bucketId: 'claude-weekly', window: 'weekly', remainingFraction: 0.64, resetTime: inFourDays, displayName: 'Claude Weekly' },
+                  ],
+                },
+                {
+                  displayName: 'Hydrogen',
+                  description: 'Dedicated Gemini 4 Hydrogen pool',
+                  buckets: [
+                    { bucketId: 'hydrogen-weekly', window: 'weekly', remainingFraction: 0.9, resetTime: inSixDays, displayName: 'Hydrogen Weekly' },
+                  ],
+                },
+              ],
               models: [
+                { name: 'gemini-4-hydrogen-preview', displayName: 'Gemini 4 Hydrogen', percentage: 90, resetTime: inSixDays },
                 { name: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6', percentage: 85, resetTime: inTwoHours },
+                { name: 'gpt-oss-120b-medium', displayName: 'GPT OSS 120B', percentage: 85, resetTime: inTwoHours },
                 { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 92, resetTime: inFiveHours },
                 { name: 'gemini-3-flash', displayName: 'Gemini 3 Flash', percentage: 100, resetTime: inFiveHours },
               ],
@@ -1433,6 +1463,7 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
             validationMessage: '',
             banned: false,
             hasDeviceProfile: false,
+            lastUsedAt: Math.floor((nowMs - 600_000) / 1000),
             quota: {
               isForbidden: false,
               forbiddenReason: '',
@@ -1440,6 +1471,7 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
               models: [
                 { name: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6', percentage: 15, resetTime: inTwoHours },
                 { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 48, resetTime: inFiveHours },
+                { name: 'gemini-3-flash', displayName: 'Gemini 3 Flash', percentage: 82, resetTime: inFiveHours },
               ],
             },
           },
@@ -1454,10 +1486,12 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
             validationMessage: 'Account validation required',
             banned: false,
             hasDeviceProfile: false,
+            lastUsedAt: Math.floor((nowMs - 3600_000) / 1000),
             quota: {
               isForbidden: true,
               forbiddenReason: 'Account validation required',
               lastUpdated: Math.floor((nowMs - 3600_000) / 1000),
+              groups: [],
               models: [],
             },
           },

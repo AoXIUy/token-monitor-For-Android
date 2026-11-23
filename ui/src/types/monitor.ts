@@ -397,11 +397,41 @@ export interface MonitorState {
   agManager: AgManagerState;
 }
 
+export interface AgManagerQuotaBucket {
+  bucketId: string;
+  window: string;
+  remainingFraction: number;
+  resetTime: string;
+  displayName: string;
+}
+
+export interface AgManagerQuotaGroup {
+  displayName: string;
+  description: string;
+  buckets: AgManagerQuotaBucket[];
+}
+
 export interface AgManagerModelQuota {
   name: string;
   displayName: string;
   percentage: number;
   resetTime: string;
+}
+
+export interface AgManagerCapabilityPill {
+  label: string;
+  tone: 'violet' | 'amber' | 'emerald';
+}
+
+export interface AgManagerQuotaCell {
+  id: string;
+  family: 'gemini' | 'claude' | 'other';
+  title: string;
+  resetText: string;
+  resetTone: '5h' | 'weekly' | '';
+  pct: number;
+  isFull: boolean;
+  ariaLabel: string;
 }
 
 export interface AgManagerAccountSummary {
@@ -415,10 +445,12 @@ export interface AgManagerAccountSummary {
   validationMessage: string;
   banned: boolean;
   hasDeviceProfile: boolean;
+  lastUsedAt?: number;
   quota: {
     isForbidden: boolean;
     forbiddenReason: string;
     lastUpdated: number;
+    groups?: AgManagerQuotaGroup[];
     models: AgManagerModelQuota[];
   };
 }

@@ -116,3 +116,280 @@ test('nativeState wires antigravityManager messages and resets on Hub switch', a
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://other-hub.test' });
   assert.equal(state.agManager.devices.length, 0);
 });
+
+test('agManagerState sanitizes quota.groups cleanly, clamps fractions, and strips secrets', async () => {
+  const {
+    createInitialAgManagerState,
+    beginAgManagerQuery,
+    receiveAgManagerResult,
+  } = await stateModule;
+
+  let state = createInitialAgManagerState();
+  state = beginAgManagerQuery(state, { requestId: 'req-groups' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-groups',
+    payload: {
+      devices: [
+        {
+          deviceId: 'pc-groups',
+          hostname: 'Groups-PC',
+          accounts: [
+            {
+              id: 'acc-1',
+              email: 'groups@example.com',
+              subscriptionTier: 'google_one_pro',
+              lastUsedAt: 1763890000,
+              quota: {
+                last_updated: 1763892000,
+                groups: [
+                  {
+                    display_name: 'Gemini',
+                    description: 'Gemini pool',
+                    secretToken: 'must-not-leak-group',
+                    buckets: [
+                      {
+                        bucket_id: 'gemini-5h',
+                        window: '5h',
+                        remaining_fraction: 1.4,
+                        reset_time: '2026-11-23T15:00:00Z',
+                        display_name: 'Gemini 5h',
+                        accessToken: 'must-not-leak-bucket',
+                      },
+                      {
+                        bucketId: 'gemini-weekly',
+                        window: 'weekly',
+                        remainingFraction: -0.2,
+                        resetTime: '2026-11-28T10:00:00Z',
+                        displayName: 'Gemini Weekly',
+                      },
+                      {
+                        bucketId: 'invalid-null-fraction',
+                        window: '5h',
+                        remainingFraction: null,
+                      },
+                      {
+                        bucketId: 'invalid-nan-fraction',
+                        window: '5h',
+                        remainingFraction: 'not-a-number',
+                      },
+                    ],
+                  },
+                  {
+                    displayName: '',
+                    buckets: [{ bucketId: 'skip', window: '5h', remainingFraction: 0.5 }],
+                  },
+                ],
+                models: [],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const serialized = JSON.stringify(state);
+  assert.equal(serialized.includes('must-not-leak-group'), false);
+  assert.equal(serialized.includes('must-not-leak-bucket'), false);
+
+  const acc = state.devices[0].accounts[0];
+  assert.equal(acc.subscriptionTier, 'PRO');
+  assert.equal(acc.lastUsedAt, 1763890000);
+  assert.equal(acc.quota.lastUpdated, 1763892000);
+  assert.equal(acc.quota.groups.length, 1);
+  assert.equal(acc.quota.groups[0].displayName, 'Gemini');
+  assert.equal(acc.quota.groups[0].buckets.length, 2);
+  assert.deepEqual(acc.quota.groups[0].buckets[0], {
+    bucketId: 'gemini-5h',
+    window: '5h',
+    remainingFraction: 1,
+    resetTime: '2026-11-23T15:00:00Z',
+    displayName: 'Gemini 5h',
+  });
+  assert.equal(acc.quota.groups[0].buckets[1].remainingFraction, 0);
+});
+
+test('formatAgSlotLabel maps known slots and uppercases unknown ones', async () => {
+  const { formatAgSlotLabel } = await stateModule;
+  assert.equal(formatAgSlotLabel('classic'), '经典款');
+  assert.equal(formatAgSlotLabel('Classic'), '经典款');
+  assert.equal(formatAgSlotLabel('ide'), 'IDE');
+  assert.equal(formatAgSlotLabel('agy'), 'AGY');
+  assert.equal(formatAgSlotLabel('acp'), 'ACP');
+  assert.equal(formatAgSlotLabel('custom_slot'), 'CUSTOM_SLOT');
+  assert.equal(formatAgSlotLabel(''), '');
+  assert.equal(formatAgSlotLabel(null), '');
+});
+
+test('formatAgCompactTimestamp normalizes seconds, ms, and ISO strings', async () => {
+  const { formatAgCompactTimestamp } = await stateModule;
+  const sampleMs = new Date(2026, 10, 23, 8, 5, 0).getTime();
+  const sampleSec = Math.floor(sampleMs / 1000);
+
+  assert.equal(formatAgCompactTimestamp(sampleSec), '2026/11/23 08:05');
+  assert.equal(formatAgCompactTimestamp(sampleMs), '2026/11/23 08:05');
+  assert.equal(formatAgCompactTimestamp(String(sampleSec)), '2026/11/23 08:05');
+  assert.equal(formatAgCompactTimestamp(new Date(sampleMs).toISOString()), '2026/11/23 08:05');
+
+  assert.equal(formatAgCompactTimestamp(0), '');
+  assert.equal(formatAgCompactTimestamp(-100), '');
+  assert.equal(formatAgCompactTimestamp(NaN), '');
+  assert.equal(formatAgCompactTimestamp('invalid'), '');
+  assert.equal(formatAgCompactTimestamp(null), '');
+  assert.equal(formatAgCompactTimestamp(undefined), '');
+});
+
+test('inferAgCapabilityPills infers Gemini 4+ codename, Claude version, and GPT size', async () => {
+  const { inferAgCapabilityPills } = await stateModule;
+
+  const full = inferAgCapabilityPills({
+    quota: {
+      models: [
+        { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 90, resetTime: '' },
+        { name: 'gemini-4-pro-high', displayName: 'Gemini 4 Pro', percentage: 90, resetTime: '' },
+        { name: 'gemini-4-hydrogen-preview', displayName: 'Gemini 4 Hydrogen', percentage: 90, resetTime: '' },
+        { name: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6', percentage: 85, resetTime: '' },
+        { name: 'gpt-oss-120b-medium', displayName: 'GPT OSS 120B', percentage: 85, resetTime: '' },
+      ],
+    },
+  });
+  assert.deepEqual(full, [
+    { label: 'Hydrogen', tone: 'violet' },
+    { label: 'Claude 4.6', tone: 'amber' },
+    { label: 'GPT-120B', tone: 'emerald' },
+  ]);
+
+  const argonAndFallbacks = inferAgCapabilityPills({
+    quota: {
+      models: [
+        { name: 'orchestrator-g1-pro', displayName: 'Argon', percentage: 100, resetTime: '' },
+        { name: 'claude-thinking', displayName: 'Claude Thinking', percentage: 80, resetTime: '' },
+        { name: 'gpt-5', displayName: 'GPT 5', percentage: 70, resetTime: '' },
+      ],
+    },
+  });
+  assert.deepEqual(argonAndFallbacks, [
+    { label: 'Argon', tone: 'violet' },
+    { label: 'Claude', tone: 'amber' },
+    { label: 'GPT', tone: 'emerald' },
+  ]);
+
+  assert.deepEqual(inferAgCapabilityPills({ quota: { models: [] } }), []);
+  assert.deepEqual(inferAgCapabilityPills(null), []);
+});
+
+test('buildAgQuotaCells pairs group buckets and appends full-width dedicated groups', async () => {
+  const { buildAgQuotaCells } = await stateModule;
+  const nowMs = Date.parse('2026-11-23T10:00:00Z');
+
+  const cells = buildAgQuotaCells({
+    quota: {
+      groups: [
+        {
+          displayName: 'Gemini',
+          description: '',
+          buckets: [
+            { bucketId: 'g-5h', window: '5h', remainingFraction: 0.92, resetTime: '2026-11-23T12:30:00Z', displayName: 'Gemini 5h' },
+            { bucketId: 'g-wk', window: 'weekly', remainingFraction: 0.78, resetTime: '2026-11-27T16:00:00Z', displayName: 'Gemini Weekly' },
+          ],
+        },
+        {
+          displayName: 'Claude / GPT',
+          description: '',
+          buckets: [
+            { bucketId: 'c-5h', window: '5h', remainingFraction: 0.45, resetTime: '2026-11-23T11:15:00Z', displayName: 'Claude 5h' },
+            { bucketId: 'c-wk', window: '7d', remainingFraction: 0.12, resetTime: '2026-11-23T09:00:00Z', displayName: 'Claude Weekly' },
+          ],
+        },
+        {
+          displayName: 'Hydrogen',
+          description: 'Dedicated pool',
+          buckets: [
+            { bucketId: 'h-wk', window: 'weekly', remainingFraction: 0.9, resetTime: '2026-11-28T10:00:00Z', displayName: 'Hydrogen Weekly' },
+          ],
+        },
+      ],
+      models: [],
+    },
+  }, nowMs);
+
+  assert.equal(cells.length, 5);
+  assert.deepEqual(cells.map((c) => c.id), [
+    'gemini-5h',
+    'claude-5h',
+    'gemini-weekly',
+    'claude-weekly',
+    'extra-0-h-wk',
+  ]);
+  assert.deepEqual(cells[0], {
+    id: 'gemini-5h',
+    family: 'gemini',
+    title: '',
+    resetText: '2h 30m',
+    resetTone: '5h',
+    pct: 92,
+    isFull: false,
+    ariaLabel: 'Gemini 5h: 92% (2h 30m)',
+  });
+  assert.equal(cells[1].family, 'claude');
+  assert.equal(cells[1].resetTone, '5h');
+  assert.equal(cells[1].resetText, '1h 15m');
+  assert.equal(cells[1].pct, 45);
+  assert.equal(cells[2].resetText, '4d 6h');
+  assert.equal(cells[2].resetTone, 'weekly');
+  assert.equal(cells[3].resetText, '已就绪');
+  assert.equal(cells[3].pct, 12);
+  assert.deepEqual(cells[4], {
+    id: 'extra-0-h-wk',
+    family: 'gemini',
+    title: 'Hydrogen · weekly',
+    resetText: '5d 0h',
+    resetTone: 'weekly',
+    pct: 90,
+    isFull: true,
+    ariaLabel: 'Hydrogen · weekly: 90% (5d 0h)',
+  });
+});
+
+test('buildAgQuotaCells falls back gracefully to summarized models or top models', async () => {
+  const { buildAgQuotaCells } = await stateModule;
+  const nowMs = Date.parse('2026-11-23T10:00:00Z');
+
+  const summarized = buildAgQuotaCells({
+    quota: {
+      groups: [{ displayName: 'Empty Group', description: '', buckets: [] }],
+      models: [
+        { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 60, resetTime: '2026-11-23T14:00:00Z' },
+        { name: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', percentage: 48, resetTime: '2026-11-23T13:00:00Z' },
+        { name: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6', percentage: 15, resetTime: '2026-11-23T11:30:00Z' },
+        { name: 'gpt-oss-120b', displayName: 'GPT 120B', percentage: 40, resetTime: '2026-11-23T12:00:00Z' },
+        { name: 'gemini-3-flash', displayName: 'Gemini 3 Flash', percentage: 82, resetTime: '' },
+      ],
+    },
+  }, nowMs);
+
+  assert.equal(summarized.length, 3);
+  assert.deepEqual(summarized.map((c) => ({ id: c.id, family: c.family, title: c.title, pct: c.pct, isFull: c.isFull, resetText: c.resetText })), [
+    { id: 'model-gemini-pro', family: 'gemini', title: 'Gemini Pro', pct: 48, isFull: false, resetText: '3h 0m' },
+    { id: 'model-claude-gpt', family: 'claude', title: 'Claude / GPT', pct: 15, isFull: false, resetText: '1h 30m' },
+    { id: 'model-gemini-flash', family: 'gemini', title: 'Gemini Flash', pct: 82, isFull: true, resetText: '—' },
+  ]);
+
+  const genericModels = buildAgQuotaCells({
+    quota: {
+      models: [
+        { name: 'deepseek-r1', displayName: 'DeepSeek R1', percentage: 75, resetTime: '2026-11-23T10:45:00Z' },
+        { name: 'qwen-3-coder', displayName: 'Qwen 3 Coder', percentage: 50, resetTime: '' },
+      ],
+    },
+  }, nowMs);
+  assert.equal(genericModels.length, 2);
+  assert.equal(genericModels[0].family, 'other');
+  assert.equal(genericModels[0].title, 'DeepSeek R1');
+  assert.equal(genericModels[0].resetText, '45m');
+  assert.equal(genericModels[0].isFull, false);
+  assert.equal(genericModels[1].isFull, false);
+
+  assert.deepEqual(buildAgQuotaCells({ quota: { models: [] } }, nowMs), []);
+  assert.deepEqual(buildAgQuotaCells(null, nowMs), []);
+});

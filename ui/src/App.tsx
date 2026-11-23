@@ -514,12 +514,13 @@ function Dashboard({
       return next;
     });
 
+  const isAgManagerView = page === 'limits' && quotaTab === 'antigravityManager';
   const showFilters =
     page !== 'settings' &&
     page !== 'devices' &&
     page !== 'sessionDetail' &&
     page !== 'reports' &&
-    !(page === 'limits' && quotaTab === 'subscriptions');
+    !(page === 'limits' && (quotaTab === 'subscriptions' || quotaTab === 'antigravityManager'));
 
   useEffect(() => {
     if (!showFilters && devicePickerOpen) setDevicePickerOpen(false);
@@ -604,7 +605,11 @@ function Dashboard({
         </div>
       </header>
 
-      <div className="w-full max-w-[460px] mx-auto flex-1 flex flex-col relative z-10">
+      <div
+        className={`w-full mx-auto flex-1 flex flex-col relative z-10 ${
+          isAgManagerView ? 'max-w-[460px] sm:max-w-2xl lg:max-w-5xl' : 'max-w-[460px]'
+        }`}
+      >
         <main className="flex-1 px-4 pt-3 pb-24">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="min-w-0">
