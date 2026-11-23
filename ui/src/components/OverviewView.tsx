@@ -1101,8 +1101,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         const displayTitle = account.productLabel || providerName(provider.provider);
                         const subLabel =
                           account.displayName ||
-                          provider.accountName ||
-                          provider.accountEmail ||
+                          (provider.provider === 'devin'
+                            ? provider.accountEmail || provider.accountName
+                            : provider.accountName || provider.accountEmail) ||
                           provider.planLabel ||
                           account.regionLabel ||
                           '';

@@ -57,9 +57,9 @@
     },
     {
       "path": "src/shared/limits/windowText.js",
-      "sha256": "15fb522d7fc4da663658df3e6680cf6cf4dfa6978c7a17eba8cd2becb7dac064",
+      "sha256": "046dad3ee0cc2ecbd9c65a6d9d34c482a05d1dc7132e6ea017f78fdeda7bcc62",
       "sourcePath": "src/shared/limits/windowText.js",
-      "sourceCommit": "82e00510cf93fc61415571ccc04d4ab58e68202f"
+      "sourceCommit": "39606ac3453a88dcd6601b7f213dc15798f91548"
     },
     {
       "path": "src/shared/sessionRealtime.js",
@@ -69,6 +69,6 @@
       "sourceCommit": "4361dd9234824bd7040adb653833fb4b8de397af"
     }
   ],
-  "upstreamVersion": "0.95.0",
-  "upstreamCommit": "4a36ad4f487271a5cd2450914a9ce56376295501"
+  "upstreamVersion": "0.96.0",
+  "upstreamCommit": "39606ac3453a88dcd6601b7f213dc15798f91548"
 }

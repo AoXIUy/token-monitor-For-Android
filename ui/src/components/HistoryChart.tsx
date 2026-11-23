@@ -202,6 +202,7 @@ export function HistoryChart({
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
           />
         )}
 

@@ -796,15 +796,25 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   (provider.provider === 'mimo' && account.productLabel)
                     ? ''
                     : provider.accountLabel);
-                const accountTitle =
-                  account.displayName || provider.accountName || provider.accountEmail;
+                const preferEmailPrimary =
+                  provider.provider === 'devin' &&
+                  !account.displayName &&
+                  Boolean(provider.accountEmail);
+                const accountTitle = preferEmailPrimary
+                  ? provider.accountEmail
+                  : account.displayName || provider.accountName || provider.accountEmail;
+                const secondaryAccountName = preferEmailPrimary
+                  ? provider.accountName && provider.accountName !== provider.accountEmail
+                    ? provider.accountName
+                    : ''
+                  : account.displayName &&
+                    provider.accountName &&
+                    provider.accountName !== account.displayName
+                  ? provider.accountName
+                  : '';
                 const subMeta = [
                   accountTitle,
-                  account.displayName &&
-                  provider.accountName &&
-                  provider.accountName !== account.displayName
-                    ? provider.accountName
-                    : '',
+                  secondaryAccountName,
                   planOrAccountLabel,
                 ].filter(Boolean);
 
@@ -868,11 +878,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         <p className="text-xs text-slate-300 break-words">{subMeta.join(' · ')}</p>
                       )}
 
-                      {(account.displayName || provider.accountName) && provider.accountEmail && (
-                        <p className="text-[11px] font-mono-tabular text-slate-400 truncate">
-                          {provider.accountEmail}
-                        </p>
-                      )}
+                      {!preferEmailPrimary &&
+                        (account.displayName || provider.accountName) &&
+                        provider.accountEmail && (
+                          <p className="text-[11px] font-mono-tabular text-slate-400 truncate">
+                            {provider.accountEmail}
+                          </p>
+                        )}
 
                       {account.sourceLabel && (
                         <p className="text-[11px] text-slate-400 break-words">

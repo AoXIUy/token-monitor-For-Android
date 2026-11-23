@@ -30,6 +30,9 @@ public final class WidgetPolicyChecks {
         check("MiniMax Code".equals(WidgetLayoutPolicy.providerLabel("mcode", "")));
         check("视频".equals(WidgetLayoutPolicy.windowLabel("minimax", "weekly", "Video")));
         check("周度".equals(WidgetLayoutPolicy.windowLabel("other", "weekly", "Video")));
+        check("Standard".equals(WidgetLayoutPolicy.windowLabel("notion", "billing", "Standard")));
+        check("Select".equals(WidgetLayoutPolicy.windowLabel("notion", "billing", "Select")));
+        check("账期".equals(WidgetLayoutPolicy.windowLabel("notion", "billing", "Untrusted Custom")));
         check("OpenDesign".equals(WidgetLayoutPolicy.providerLabel("opendesign", "web")));
         check("Alibaba Cloud".equals(WidgetLayoutPolicy.providerLabel("alibaba", "cli")));
         check("GLM".equals(WidgetLayoutPolicy.providerLabel("zai", "api")));

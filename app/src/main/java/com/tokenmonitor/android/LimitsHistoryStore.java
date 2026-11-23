@@ -20,6 +20,7 @@ import java.util.Set;
 final class LimitsHistoryStore extends SQLiteOpenHelper {
     static final String DATABASE = "limits-history.sqlite";
     private static final String UNIDENTIFIED_CLAUDE = "sha256:09367c2f144ddb36c5b877f5fb5bb1267ce8676be252618cd642aa9dc8d1d78f";
+    private static final String QODER_DEFAULT_SLOT_KEY = "sha256:c325fbf2f2b9a182e7edbdf6f2163efde2b6b8c460a7c93bcc607c8cf31a5b52";
     private final String scope;
 
     LimitsHistoryStore(Context context, String scope) {
@@ -73,7 +74,8 @@ final class LimitsHistoryStore extends SQLiteOpenHelper {
         return key.isEmpty()
                 || "antigravity".equals(id) && provider.optString("accountEmail").isEmpty()
                 || "kiro".equals(id) && "cli".equals(source) && provider.optString("accountEmail").isEmpty()
-                || "claude".equals(id) && "cli".equals(source) && UNIDENTIFIED_CLAUDE.equals(key);
+                || "claude".equals(id) && "cli".equals(source) && UNIDENTIFIED_CLAUDE.equals(key)
+                || "qoder".equals(id) && QODER_DEFAULT_SLOT_KEY.equals(key);
     }
 
     // Mirrors upstream historyIdentity.historyAccountKey. A reporting device is

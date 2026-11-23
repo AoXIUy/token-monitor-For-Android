@@ -17,6 +17,21 @@
   if (root) root.MonitorModel = api;
 })(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels, currencyApi) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
+  const QODER_DEFAULT_SLOT_KEY = 'sha256:c325fbf2f2b9a182e7edbdf6f2163efde2b6b8c460a7c93bcc607c8cf31a5b52';
+  const ANTIGRAVITY_GROUP_ORDER = ['gemini', 'claude/gpt', 'gemini 4 argon'];
+  function isCalendarDayKey(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const ms = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
+  }
+  function antigravityGroupedWindow(window) {
+    const kind = String(window?.kind || '').trim().toLowerCase();
+    const suffix = kind === 'session' ? /\s+5-hour$/i : kind === 'weekly' ? /\s+weekly$/i : null;
+    const label = String(window?.label || '').trim();
+    if (!suffix || !suffix.test(label)) return null;
+    const group = label.replace(suffix, '').trim();
+    return group ? { group, kind } : null;
+  }
   function numeric(value) {
     return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
   }
@@ -362,10 +377,12 @@
       : provider.provider === 'muse' ? '来源设备未知' : '';
     // Claude organizations can share an email. Muse CLI is device-scoped;
     // its independent web reading keeps one identity across winning devices.
+    // Qoder migration's provisional default slot key is also device-scoped.
+    const qoderDefaultSlot = provider.provider === 'qoder' && provider.accountKey === QODER_DEFAULT_SLOT_KEY;
     const key = JSON.stringify([
       provider.provider, provider.accountKey || provider.accountEmail || provider.accountName || '',
       provider.profileName || '', provider.workspaceKind || '',
-      museSource === 'cli' || (!provider.accountKey && museSource !== 'web') ? sourceId : '',
+      museSource === 'cli' || (!provider.accountKey && museSource !== 'web') || qoderDefaultSlot ? sourceId : '',
       museSource,
       provider.adapterId || '', provider.region || '',
       minimaxSource,
@@ -377,6 +394,8 @@
         : provider.accountLabel === 'Pay-as-you-go' ? 'MiniMax API' : provider.accountLabel === 'Token Plan' ? 'MiniMax Token Plan' : 'MiniMax' : '';
     const regionLabel = provider.provider === 'minimax'
       ? ({ cn: '中国', en: '国际' })[provider.region] || ''
+      : provider.provider === 'qoder'
+        ? ({ global: '国际站', cn: '中国站' })[provider.region] || ''
       : provider.provider === 'alibaba'
         ? ({ cn: '中国站 · 团队版', intl: '国际站 · 团队版', 'cn-personal': '中国站 · 个人版', 'intl-personal': '国际站 · 个人版' })[provider.region] || ''
         : '';
@@ -536,7 +555,36 @@
     };
   }
   function limitWindows(provider) {
-    const windows = provider.windows || [];
+    let windows = provider.windows || [];
+    if (provider.provider === 'antigravity' && windows.length > 0) {
+      const candidates = windows.filter(window => window.kind === 'session' || window.kind === 'weekly');
+      const parsed = candidates.map(antigravityGroupedWindow);
+      if (parsed.length > 0 && parsed.every(Boolean)) {
+        const groups = new Map();
+        const others = [];
+        for (const window of windows) {
+          const meta = antigravityGroupedWindow(window);
+          if (!meta) {
+            others.push(window);
+            continue;
+          }
+          const key = meta.group.toLowerCase();
+          if (!groups.has(key)) groups.set(key, { session: [], weekly: [] });
+          groups.get(key)[meta.kind].push(window);
+        }
+        const orderedKeys = [...groups.keys()].sort((a, b) => {
+          const rankA = ANTIGRAVITY_GROUP_ORDER.indexOf(a);
+          const rankB = ANTIGRAVITY_GROUP_ORDER.indexOf(b);
+          const normA = rankA < 0 ? ANTIGRAVITY_GROUP_ORDER.length : rankA;
+          const normB = rankB < 0 ? ANTIGRAVITY_GROUP_ORDER.length : rankB;
+          return normA - normB;
+        });
+        windows = [...orderedKeys.flatMap(key => [...groups.get(key).session, ...groups.get(key).weekly]), ...others];
+      } else {
+        // Legacy flat model pools without a finite percentage are hidden; real 0% exhausted pools stay visible.
+        windows = windows.filter(window => numeric(window?.remainingPercent) !== null || numeric(window?.usedPercent) !== null);
+      }
+    }
     // Older Hub snapshots can carry a wallet solely on the account. Display
     // the actual amount without inventing a quota denominator or history.
     if (numeric(provider.balance?.amount) === null || windows.some(window => balance.isCreditsWindow(window))) return windows;
@@ -555,7 +603,7 @@
     return provider.status === 'ok';
   }
   function daily(stats) {
-    return (stats?.historyPreview?.daily || []).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
+    return (stats?.historyPreview?.daily || []).filter((row) => isCalendarDayKey(row?.date))
       .slice().sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
   }
   function activityDays(stats) {

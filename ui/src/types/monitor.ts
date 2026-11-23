@@ -118,6 +118,7 @@ export interface LimitProvider {
   sourceDetail?: string;
   provider: string;
   accountKey?: string;
+  accountKeyPortable?: boolean;
   accountKeyAliases?: string[];
   relatedAccountKey?: string;
   profileName?: string;

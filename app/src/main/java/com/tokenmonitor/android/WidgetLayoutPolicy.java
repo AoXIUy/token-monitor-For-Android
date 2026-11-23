@@ -123,7 +123,12 @@ final class WidgetLayoutPolicy {
     }
 
     static String windowLabel(String provider, String kind, String label) {
-        return "minimax".equals(provider) && "Video".equals(label) ? "视频" : windowLabel(kind);
+        if ("minimax".equals(provider) && "Video".equals(label)) return "视频";
+        if ("notion".equals(provider)) {
+            if ("Standard".equals(label)) return "Standard";
+            if ("Select".equals(label)) return "Select";
+        }
+        return windowLabel(kind);
     }
 
     static final class HistorySummary {

@@ -299,4 +299,44 @@ public final class LimitsHistoryStoreTest {
         assertEquals(4.0, today(p, now + 60000).getDouble("value"), 0);
         assertEquals(2, store.getReadableDatabase().getVersion());
     }
+
+    @Test public void qoderDefaultSlotIsolatesByDeviceAndNotionPoolsRecordIndependently() throws Exception {
+        String provisionalKey = "sha256:c325fbf2f2b9a182e7edbdf6f2163efde2b6b8c460a7c93bcc607c8cf31a5b52";
+        JSONObject qoderA = provider(provisionalKey, "pc-a", now, 20)
+                .put("provider", "qoder").put("region", "global").put("source", "web");
+        JSONObject qoderB = provider(provisionalKey, "pc-b", now, 65)
+                .put("provider", "qoder").put("region", "global").put("source", "web");
+        record(qoderA, qoderB);
+        qoderA.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        qoderA.getJSONArray("windows").getJSONObject(0).put("usedPercent", 28);
+        qoderB.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        qoderB.getJSONArray("windows").getJSONObject(0).put("usedPercent", 70);
+        record(qoderA, qoderB);
+
+        assertEquals(8.0, today(qoderA, now + 60000).getDouble("value"), 0);
+        assertEquals(5.0, today(qoderB, now + 60000).getDouble("value"), 0);
+
+        JSONObject notion = new JSONObject()
+                .put("provider", "notion")
+                .put("accountKey", "sha256:notion-ws")
+                .put("source", "web")
+                .put("sourceDeviceId", "pc-a")
+                .put("status", "ok")
+                .put("updatedAt", java.time.Instant.ofEpochMilli(now).toString())
+                .put("windows", new JSONArray()
+                        .put(new JSONObject().put("kind", "billing").put("label", "Standard").put("used", 1000).put("limit", 4000).put("usedPercent", 25))
+                        .put(new JSONObject().put("kind", "billing").put("label", "Select").put("used", 500).put("limit", 2000).put("usedPercent", 25)));
+        record(notion);
+        notion.put("updatedAt", java.time.Instant.ofEpochMilli(now + 60000).toString());
+        notion.getJSONArray("windows").getJSONObject(0).put("used", 1400).put("usedPercent", 35);
+        notion.getJSONArray("windows").getJSONObject(1).put("used", 800).put("usedPercent", 40);
+        record(notion);
+
+        JSONArray notionWindows = store.query(notion, now + 60000).getJSONArray("windows");
+        assertEquals(2, notionWindows.length());
+        assertEquals("Standard", notionWindows.getJSONObject(0).getJSONObject("window").getString("label"));
+        assertEquals(10.0, notionWindows.getJSONObject(0).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13).getDouble("value"), 0);
+        assertEquals("Select", notionWindows.getJSONObject(1).getJSONObject("window").getString("label"));
+        assertEquals(15.0, notionWindows.getJSONObject(1).getJSONObject("distribution").getJSONArray("buckets").getJSONObject(13).getDouble("value"), 0);
+    }
 }
