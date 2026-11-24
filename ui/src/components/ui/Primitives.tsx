@@ -179,7 +179,9 @@ export function SegmentedControl<T extends string>({
       id={id}
       role="group"
       aria-label={ariaLabel}
-      className={`${isFullWidth ? 'flex w-full' : 'inline-flex'} glass-inset ${
+      className={`${
+        isFullWidth ? 'flex w-full' : 'inline-flex max-w-full overflow-x-auto no-scrollbar'
+      } glass-inset ${
         isSm ? 'p-0.5 rounded-xl gap-0.5' : 'p-1 rounded-2xl gap-1'
       } ${className}`}
     >

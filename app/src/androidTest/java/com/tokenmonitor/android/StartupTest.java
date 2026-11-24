@@ -1772,6 +1772,178 @@ public final class StartupTest {
         }
     }
 
+    @Test public void antigravityManagerMultiDeviceSwitcherStaysBoundedAndSwitchesCleanly() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        String nowIso = java.time.Instant.now().toString();
+        String inTwoHours = java.time.Instant.now().plusSeconds(7200L).toString();
+        String agManagerPayload = new org.json.JSONObject()
+                .put("ok", true)
+                .put("updatedAt", nowIso)
+                .put("devices", new org.json.JSONArray()
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "dev-debian")
+                                .put("hostname", "debian")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject().put("autoRefresh", true).put("refreshIntervalMinutes", 10))
+                                .put("activeAccounts", new org.json.JSONObject().put("classic", "shared-acc-1"))
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "shared-acc-1")
+                                                .put("email", "first-host@example.com")
+                                                .put("subscriptionTier", "ULTRA")
+                                                .put("quota", new org.json.JSONObject()
+                                                        .put("models", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "gemini-3-pro")
+                                                                        .put("displayName", "Gemini 3 Pro")
+                                                                        .put("percentage", 90)
+                                                                        .put("resetTime", inTwoHours)))))))
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "pc-ir5n5uq")
+                                .put("hostname", "DESKTOP-IR5N5UQ")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject().put("autoRefresh", true).put("refreshIntervalMinutes", 15))
+                                .put("activeAccounts", new org.json.JSONObject().put("ide", "shared-acc-1"))
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "shared-acc-1")
+                                                .put("email", "second-host@example.com")
+                                                .put("subscriptionTier", "PRO")
+                                                .put("quota", new org.json.JSONObject()
+                                                        .put("models", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("name", "claude-sonnet-4-6")
+                                                                        .put("displayName", "Claude Sonnet 4.6")
+                                                                        .put("percentage", 80)
+                                                                        .put("resetTime", inTwoHours)))))))
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "pc-uuo5f81")
+                                .put("hostname", "DESKTOP-UUO5F81")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject().put("autoRefresh", false).put("refreshIntervalMinutes", 10))
+                                .put("activeAccounts", new org.json.JSONObject())
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "uuo-1")
+                                                .put("email", "third-host@example.com")
+                                                .put("subscriptionTier", "FREE")
+                                                .put("quota", new org.json.JSONObject().put("models", new org.json.JSONArray())))))
+                        .put(new org.json.JSONObject()
+                                .put("version", 1)
+                                .put("deviceId", "pc-fourth")
+                                .put("hostname", "DESKTOP-998877A")
+                                .put("updatedAt", nowIso)
+                                .put("settings", new org.json.JSONObject().put("autoRefresh", false).put("refreshIntervalMinutes", 10))
+                                .put("activeAccounts", new org.json.JSONObject())
+                                .put("accounts", new org.json.JSONArray()
+                                        .put(new org.json.JSONObject()
+                                                .put("id", "fourth-1")
+                                                .put("email", "fourth-host@example.com")
+                                                .put("subscriptionTier", "PRO")
+                                                .put("quota", new org.json.JSONObject().put("models", new org.json.JSONArray()))))))
+                .toString();
+
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            // consume headers
+                        }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/antigravity-manager ")) {
+                            body = agManagerPayload;
+                        } else {
+                            body = testStats(false);
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-ag-manager-multidevice");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'agm-multi-secret', true)");
+                awaitScript("document.querySelector('.token-total')");
+
+                evaluate("document.querySelector('[data-page=\"limits\"]').click()");
+                awaitScript("document.querySelector('[data-quota=\"antigravityManager\"]')");
+                evaluate("document.querySelector('[data-quota=\"antigravityManager\"]').click()");
+                awaitScript("document.querySelectorAll('#ag-manager-devices button').length === 4 && Boolean(document.querySelector('[data-agm-account=\"shared-acc-1\"]'))");
+
+                // Host rail must stay bounded inside viewport while scrolling horizontally across 4 long hostnames.
+                assertEquals("true", evaluate("(() => {"
+                        + " const rail = document.getElementById('ag-manager-devices');"
+                        + " if (!rail) return false;"
+                        + " const r = rail.getBoundingClientRect();"
+                        + " return document.documentElement.scrollWidth <= window.innerWidth + 1"
+                        + "   && r.left >= -1 && r.right <= window.innerWidth + 1"
+                        + "   && rail.scrollWidth > rail.clientWidth;"
+                        + " })()"));
+
+                // Expand models on Host 1 before switching devices.
+                evaluate("document.querySelector('[data-agm-account=\"shared-acc-1\"] button[aria-expanded=\"false\"]').click()");
+                awaitScript("document.querySelector('[data-agm-account=\"shared-acc-1\"] button[aria-expanded=\"true\"]')");
+
+                // Clicking the 4th host button inside the scrollable rail switches cleanly.
+                evaluate("Array.from(document.querySelectorAll('#ag-manager-devices button')).find(b => b.innerText.includes('DESKTOP-998877A')).click()");
+                awaitScript("document.body.innerText.includes('fourth-host@example.com')");
+
+                // Switching via bottom-sheet picker to Host 2 resets card expand state for same account.id.
+                evaluate("document.getElementById('ag-manager-device-picker-trigger').click()");
+                awaitScript("Boolean(document.querySelector('#ag-device-picker-dialog[open]'))");
+                evaluate("document.querySelector('[data-agm-picker-device=\"pc-ir5n5uq\"]').click()");
+                awaitScript("!document.querySelector('#ag-device-picker-dialog[open]') && document.body.innerText.includes('second-host@example.com')");
+                assertEquals("true", evaluate("document.querySelector('[data-agm-account=\"shared-acc-1\"] button[aria-expanded]').getAttribute('aria-expanded') === 'false'"));
+
+                // Android Back navigation dismisses the AG device picker dialog.
+                evaluate("document.getElementById('ag-manager-device-picker-trigger').click()");
+                awaitScript("Boolean(document.querySelector('#ag-device-picker-dialog[open]'))");
+                assertEquals("true", evaluate("Boolean(window.handleBackNavigation())"));
+                awaitScript("!document.querySelector('#ag-device-picker-dialog[open]')");
+
+                // Top-header #refresh button refreshes AG pool when on AG tab.
+                long agRequestsBefore = requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count();
+                evaluate("document.getElementById('refresh').click()");
+                long deadline = System.currentTimeMillis() + 20_000;
+                while (requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count() <= agRequestsBefore
+                        && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+                assertTrue("Top header refresh on AG pool tab must re-query /api/antigravity-manager",
+                        requests.stream().filter(line -> line.startsWith("GET /api/antigravity-manager ")).count() > agRequestsBefore);
+
+                evaluate("window.HubNative.disconnect()");
+                awaitConnectionPage();
+            } finally {
+                if (scenario != null) {
+                    scenario.close();
+                    scenario = null;
+                }
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
     @Test public void antigravityManagerDegradesOn404UnauthorizedAndOversizedResponses() throws Exception {
         awaitConnectionPage();
         AtomicInteger agMode = new AtomicInteger(0);

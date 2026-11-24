@@ -487,6 +487,23 @@ export interface AgManagerAccountSummary {
   };
 }
 
+export interface AgManagerActiveSlotBinding {
+  slot: string;
+  label: string;
+  target: string;
+  email: string;
+}
+
+export interface AgManagerDeviceSummary {
+  total: number;
+  available: number;
+  abnormal: number;
+  ultra: number;
+  pro: number;
+  free: number;
+  activeSlots: AgManagerActiveSlotBinding[];
+}
+
 export interface AgManagerDeviceSnapshot {
   version: number;
   deviceId: string;

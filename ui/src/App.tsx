@@ -293,6 +293,12 @@ function Dashboard({
   ]);
 
   const handleRefresh = () => {
+    if (isAgManagerView) {
+      if (connection) {
+        queryAntigravityManager();
+      }
+      return;
+    }
     if (window.HubNative?.refresh) {
       window.HubNative.refresh();
       return;
@@ -580,6 +586,7 @@ function Dashboard({
     });
 
   const isAgManagerView = page === 'limits' && quotaTab === 'antigravityManager';
+  const isRefreshing = isAgManagerView ? state.agManager.loading : status === 'loading';
   const showFilters =
     page !== 'settings' &&
     page !== 'devices' &&
@@ -697,14 +704,14 @@ function Dashboard({
               <button
                 id="refresh"
                 type="button"
-                disabled={status === 'loading'}
+                disabled={isRefreshing}
                 onClick={handleRefresh}
                 aria-label="刷新数据"
                 className="w-11 h-11 rounded-full glass-pill-bar hover:border-white/25 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${
-                    status === 'loading' ? 'animate-spin text-sky-400' : ''
+                    isRefreshing ? 'animate-spin text-sky-400' : ''
                   }`}
                 />
               </button>
@@ -773,6 +780,26 @@ function Dashboard({
                 </span>
               </InlineAlert>
             )}
+
+          {page === 'limits' && (
+            <SegmentedControl<QuotaTabId>
+              id="quota-tabs"
+              ariaLabel="额度视图"
+              value={quotaTab}
+              className="mb-3"
+              onChange={(qId) => {
+                setQuotaTab(qId);
+                if (qId === 'subscriptions') {
+                  window.HubNative?.subscriptions?.();
+                }
+              }}
+              options={[
+                { value: 'limits', label: '账户额度', dataAttrs: { 'data-quota': 'limits' } },
+                { value: 'subscriptions', label: '共享订阅', dataAttrs: { 'data-quota': 'subscriptions' } },
+                { value: 'antigravityManager', label: 'AG 账号池', dataAttrs: { 'data-quota': 'antigravityManager' } },
+              ]}
+            />
+          )}
 
           {showFilters && (
             <div id="filters" className="mb-3 space-y-2">
@@ -884,26 +911,6 @@ function Dashboard({
                 </span>
               </div>
             </div>
-          )}
-
-          {page === 'limits' && (
-            <SegmentedControl<QuotaTabId>
-              id="quota-tabs"
-              ariaLabel="额度视图"
-              value={quotaTab}
-              className="mb-3"
-              onChange={(qId) => {
-                setQuotaTab(qId);
-                if (qId === 'subscriptions') {
-                  window.HubNative?.subscriptions?.();
-                }
-              }}
-              options={[
-                { value: 'limits', label: '账户额度', dataAttrs: { 'data-quota': 'limits' } },
-                { value: 'subscriptions', label: '共享订阅', dataAttrs: { 'data-quota': 'subscriptions' } },
-                { value: 'antigravityManager', label: 'AG 账号池', dataAttrs: { 'data-quota': 'antigravityManager' } },
-              ]}
-            />
           )}
 
           {page === 'sessions' && (

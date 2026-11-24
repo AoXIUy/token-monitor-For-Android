@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Calendar,
   ChevronDown,
   Clock,
   CreditCard,
@@ -8,7 +9,9 @@ import {
   EyeOff,
   Gauge,
   History,
+  Link2,
   RotateCcw,
+  Server,
   Sparkles,
 } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
@@ -57,6 +60,7 @@ interface LimitsViewProps {
 
 type StatusFilterId = 'all' | 'collected' | 'warn' | 'abnormal';
 type LimitSortId = 'default' | 'pressure' | 'updated';
+type SubKindFilterId = 'all' | 'subscription' | 'topup';
 
 export const LimitsView: React.FC<LimitsViewProps> = ({
   providers,
@@ -80,6 +84,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   const [sortBy, setSortBy] = useState<LimitSortId>('default');
   const [showHiddenDrawer, setShowHiddenDrawer] = useState(false);
   const [lastHidden, setLastHidden] = useState<{ hash: string; title: string } | null>(null);
+  const [subKindFilter, setSubKindFilter] = useState<SubKindFilterId>('all');
+  const [subSearch, setSubSearch] = useState('');
 
   const hideUncollected = prefs.hideUncollected;
   const showRemaining = prefs.showRemaining;
@@ -101,6 +107,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     setLastHidden(null);
   }, [deviceId]);
 
+  useEffect(() => {
+    if (quotaTab !== 'subscriptions') {
+      setSubKindFilter('all');
+      setSubSearch('');
+    }
+  }, [quotaTab]);
+
   const hiddenSet = useMemo(() => new Set(hiddenHashes), [hiddenHashes]);
 
   useEffect(() => {
@@ -108,6 +121,68 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       setLastHidden(null);
     }
   }, [lastHidden, hiddenSet]);
+
+  const subscriptionSummary = useMemo(() => {
+    const rows = subscriptions?.subscriptions || [];
+    const monthlyMap = new Map<string, { currency: string; sum: number; count: number }>();
+    const topupMap = new Map<string, { currency: string; sum: number; count: number }>();
+    let otherRecurringCount = 0;
+    let nearestTargetMs = Infinity;
+    let nearestRenewal: {
+      title: string;
+      countdown: string;
+      targetDate: string;
+    } | null = null;
+    const nowMs = Date.now();
+
+    for (const row of rows) {
+      const amt = MonitorModel.subscriptionAmount(row);
+      const currency = (row.currency || 'USD').toUpperCase();
+      if (row.kind === 'subscription') {
+        const interval = String(row.interval || '').toLowerCase();
+        const intervalCount = MonitorModel.count(row.intervalCount) || 1;
+        if (interval === 'month' && intervalCount === 1 && amt !== null && amt > 0) {
+          const prev = monthlyMap.get(currency) || { currency, sum: 0, count: 0 };
+          prev.sum += amt;
+          prev.count += 1;
+          monthlyMap.set(currency, prev);
+        } else {
+          otherRecurringCount += 1;
+        }
+      } else if (row.kind === 'topup') {
+        if (amt !== null && amt > 0) {
+          const prev = topupMap.get(currency) || { currency, sum: 0, count: 0 };
+          prev.sum += amt;
+          prev.count += 1;
+          topupMap.set(currency, prev);
+        }
+      }
+
+      const renewalTarget = row.nextRenewalOverride || row.endDate;
+      if (renewalTarget) {
+        const parsedMs = Date.parse(renewalTarget);
+        if (Number.isFinite(parsedMs) && parsedMs > nowMs && parsedMs < nearestTargetMs) {
+          nearestTargetMs = parsedMs;
+          nearestRenewal = {
+            title: row.planName || providerName(row.provider),
+            countdown: formatRelativeCountdown(
+              renewalTarget,
+              nowMs,
+              row.autoRenew ? '即将续费' : '已到期',
+            ),
+            targetDate: renewalTarget,
+          };
+        }
+      }
+    }
+
+    return {
+      monthlyCurrencies: Array.from(monthlyMap.values()),
+      topupCurrencies: Array.from(topupMap.values()),
+      otherRecurringCount,
+      nearestRenewal,
+    };
+  }, [subscriptions]);
 
   const groups = useMemo(
     () => MonitorModel.limitGroups(providers, stats, deviceId, limitAccountPresentation),
@@ -203,6 +278,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     const warn = collected.filter((item) => item.isWarn);
     const healthy = collected.filter((item) => item.isHealthy);
     const abnormal = allItems.filter((item) => item.isAbnormal);
+    const abnormalSeg = abnormal.length;
+    const warnSeg = allItems.filter((item) => !item.isAbnormal && item.isWarn).length;
+    const healthySeg = allItems.filter(
+      (item) => !item.isAbnormal && !item.isWarn && item.hasHistory && item.isHealthy,
+    ).length;
+    const uncollectedSeg = Math.max(0, allItems.length - abnormalSeg - warnSeg - healthySeg);
     return {
       total: allItems.length,
       collectedCount: collected.length,
@@ -210,13 +291,43 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       warnCount: warn.length,
       healthyCount: healthy.length,
       abnormalCount: abnormal.length,
+      healthySeg,
+      warnSeg,
+      abnormalSeg,
+      uncollectedSeg,
     };
+  }, [allItems]);
+
+  const nextResetSpotlight = useMemo(() => {
+    const nowMs = Date.now();
+    let bestMs = Infinity;
+    let best: { title: string; windowLabel: string; countdown: string } | null = null;
+    for (const item of allItems) {
+      if (!item.hasHistory && !item.isHealthy) continue;
+      for (const { win, q } of item.quotas) {
+        if (!win.resetsAt) continue;
+        const parsedMs = Date.parse(win.resetsAt);
+        if (!Number.isFinite(parsedMs) || parsedMs <= nowMs || parsedMs >= bestMs) continue;
+        bestMs = parsedMs;
+        best = {
+          title: item.displayTitle,
+          windowLabel: q.label,
+          countdown: formatRelativeCountdown(
+            win.resetsAt,
+            nowMs,
+            win.boundaryKind === 'expiry' ? '已到期' : '即将重置',
+          ),
+        };
+      }
+    }
+    return best;
   }, [allItems]);
 
   const keyword = search.trim().toLocaleLowerCase();
 
   const {
     visibleGroups,
+    visibleCount,
     autoHiddenItems,
     manualHiddenItems,
     hiddenSearchMatches,
@@ -281,8 +392,11 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       filteredGroups.sort((a, b) => b.maxUpdatedMs - a.maxUpdatedMs);
     }
 
+    const totalVisible = filteredGroups.reduce((acc, g) => acc + g.items.length, 0);
+
     return {
       visibleGroups: filteredGroups,
+      visibleCount: totalVisible,
       autoHiddenItems: autoHidden,
       manualHiddenItems: manualHidden,
       hiddenSearchMatches: hiddenMatches,
@@ -294,6 +408,24 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     const totalCount = rows?.length || 0;
     const subCount = rows?.filter((r) => r.kind === 'subscription').length || 0;
     const topupCount = rows?.filter((r) => r.kind === 'topup').length || 0;
+    const subKeyword = subSearch.trim().toLocaleLowerCase();
+    const filteredRows = (rows || []).filter((row) => {
+      if (subKindFilter !== 'all' && row.kind !== subKindFilter) return false;
+      if (!subKeyword) return true;
+      const hay = [
+        row.planName,
+        providerName(row.provider),
+        row.provider,
+        row.binding?.accountEmail,
+        row.binding?.profileName,
+        row.note,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase();
+      return hay.includes(subKeyword);
+    });
+    const nowMs = Date.now();
 
     return (
       <div className="space-y-3.5">
@@ -320,156 +452,309 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           />
         ) : (
           <>
-            <section className="glass-hero rounded-3xl p-4 sm:p-5 flex items-center justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium text-sky-300">Hub 共享订阅账本</p>
-                <p className="text-xl font-bold text-white tabular-nums mt-0.5">
-                  <span className="font-mono-tabular">{totalCount}</span> 项记录
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  不随设备或统计周期筛选 · 保持原币种
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5 text-[11px] tabular-nums shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-emerald-200">
-                  周期订阅 <span className="font-mono-tabular">{subCount}</span>
-                </span>
-                {topupCount > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-sky-200">
-                    预存充值 <span className="font-mono-tabular">{topupCount}</span>
+            <section className="glass-hero rounded-3xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium text-sky-300">Hub 共享订阅账本</p>
+                  <p className="text-xl font-bold text-white tabular-nums mt-0.5">
+                    <span className="font-mono-tabular">{totalCount}</span> 项记录
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    不随设备或统计周期筛选 · 保持原币种
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 text-[11px] tabular-nums shrink-0">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-emerald-200">
+                    周期订阅 <span className="font-mono-tabular">{subCount}</span>
                   </span>
-                )}
+                  {topupCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-sky-200">
+                      预存充值 <span className="font-mono-tabular">{topupCount}</span>
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {(subscriptionSummary.monthlyCurrencies.length > 0 ||
+                subscriptionSummary.topupCurrencies.length > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {subscriptionSummary.monthlyCurrencies.map((entry) => (
+                    <div
+                      key={`monthly-${entry.currency}`}
+                      className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-medium text-slate-300">
+                          月度订阅 ({entry.currency})
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 tabular-nums">
+                          {entry.count} 项按月计费
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-emerald-300 font-mono-tabular shrink-0">
+                        {MonitorModel.money(entry.sum, entry.currency)}/月
+                      </div>
+                    </div>
+                  ))}
+                  {subscriptionSummary.topupCurrencies.map((entry) => (
+                    <div
+                      key={`topup-${entry.currency}`}
+                      className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-medium text-slate-300">
+                          累计预存 ({entry.currency})
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 tabular-nums">
+                          {entry.count} 项预存账户
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-sky-300 font-mono-tabular shrink-0">
+                        {MonitorModel.money(entry.sum, entry.currency)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(subscriptionSummary.nearestRenewal || subscriptionSummary.otherRecurringCount > 0) && (
+                <div className="flex items-center justify-between gap-2 text-[11px] pt-2 border-t border-white/10 flex-wrap">
+                  {subscriptionSummary.nearestRenewal ? (
+                    <span className="inline-flex items-center gap-1.5 text-slate-300 min-w-0">
+                      <Calendar className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                      <span className="truncate">
+                        最近续费 · <strong className="text-slate-100">{subscriptionSummary.nearestRenewal.title}</strong>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">
+                      含 {subscriptionSummary.otherRecurringCount} 项非按月周期订阅
+                    </span>
+                  )}
+                  {subscriptionSummary.nearestRenewal?.countdown && (
+                    <span className="px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 font-medium tabular-nums shrink-0">
+                      {subscriptionSummary.nearestRenewal.countdown}
+                    </span>
+                  )}
+                </div>
+              )}
             </section>
 
-            {rows.map((row, index) => {
-              const key = row.id || `${row.provider}-${index}`;
-              const intervalLabel =
-                ({ month: '月', year: '年', week: '周', day: '天' } as Record<string, string>)[
-                  row.interval || ''
-                ] ||
-                row.interval ||
-                '';
-              const amount = MonitorModel.subscriptionAmount(row);
-              const isExpanded = Boolean(openTopUps[key]);
-              const renewalTarget = row.nextRenewalOverride || row.endDate;
-              const renewalCountdown = formatRelativeCountdown(
-                renewalTarget,
-                Date.now(),
-                row.autoRenew ? '即将续费' : '已到期',
-              );
-
-              return (
-                <section key={key} className="glass-panel rounded-3xl p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-semibold text-slate-100 break-words">
-                        {row.planName || providerName(row.provider)}
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate">
-                        {providerName(row.provider)} ·{' '}
-                        {row.binding?.accountEmail || row.binding?.profileName || '未绑定账户'}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-[11px] font-medium text-emerald-200 shrink-0 whitespace-nowrap">
-                      {row.kind === 'subscription' ? '周期订阅' : '预存充值'}
-                    </span>
-                  </div>
-
-                  <div className="my-3.5 flex items-baseline justify-between gap-2 flex-wrap">
-                    <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                      <div className="text-2xl font-bold text-emerald-300 font-mono-tabular">
-                        {MonitorModel.money(amount, row.currency)}
-                      </div>
-                      <span className="text-xs text-slate-400 tabular-nums">
-                        {row.kind === 'subscription'
-                          ? `每 ${MonitorModel.count(row.intervalCount) || 1} ${intervalLabel} · ${
-                              row.autoRenew ? '自动续费' : '不自动续费'
-                            }`
-                          : '累计充值金额'}
-                      </span>
-                    </div>
-                    {renewalCountdown && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-[11px] text-sky-200 tabular-nums shrink-0">
-                        <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
-                        <span>{renewalCountdown}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <dl className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl glass-inset text-xs">
-                    <div className="min-w-0">
-                      <dt className="text-[11px] text-slate-400">开始日期</dt>
-                      <dd className="font-mono-tabular text-slate-200 mt-0.5">
-                        {row.startDate || '—'}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px] text-slate-400">结束日期</dt>
-                      <dd className="font-mono-tabular text-slate-200 mt-0.5">
-                        {row.endDate || '—'}
-                      </dd>
-                    </div>
-                    {row.nextRenewalOverride && (
-                      <div className="col-span-2 min-w-0 pt-1.5 border-t border-white/[0.06]">
-                        <dt className="text-[11px] text-slate-400">下次续费</dt>
-                        <dd className="font-mono-tabular text-sky-300 mt-0.5">
-                          {row.nextRenewalOverride}
-                        </dd>
-                      </div>
-                    )}
-                  </dl>
-
-                  {row.note && (
-                    <p className="text-xs text-slate-300 mt-3 pt-2.5 border-t border-white/[0.06] leading-relaxed break-words">
-                      {row.note}
-                    </p>
-                  )}
-
-                  {row.topUps && row.topUps.length > 0 && (
-                    <div className="mt-3 pt-2.5 border-t border-white/[0.06]">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenTopUps((prev) => ({ ...prev, [key]: !prev[key] }))
-                        }
-                        aria-expanded={isExpanded}
-                        className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-sky-300 hover:text-sky-200 transition-colors"
-                      >
-                        <span className="tabular-nums">充值记录（{row.topUps.length} 笔）</span>
-                        <ChevronDown
-                          aria-hidden="true"
-                          className={`w-4 h-4 transition-transform duration-150 ${
-                            isExpanded ? 'rotate-180 text-sky-400' : ''
+            {((subCount > 0 && topupCount > 0) || totalCount > 4 || subSearch !== '') && (
+              <div className="space-y-2.5">
+                {(totalCount > 4 || subSearch !== '') && (
+                  <SearchField
+                    value={subSearch}
+                    onChange={setSubSearch}
+                    placeholder="搜索方案、服务商、邮箱或备注…"
+                    ariaLabel="搜索共享订阅"
+                    clearAriaLabel="清除订阅搜索"
+                  />
+                )}
+                {subCount > 0 && topupCount > 0 && (
+                  <div
+                    role="group"
+                    aria-label="按订阅类型筛选"
+                    className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
+                  >
+                    {(
+                      [
+                        ['all', `全部 ${totalCount}`],
+                        ['subscription', `周期订阅 ${subCount}`],
+                        ['topup', `预存充值 ${topupCount}`],
+                      ] as const
+                    ).map(([kindId, label]) => {
+                      const active = subKindFilter === kindId;
+                      return (
+                        <button
+                          key={kindId}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setSubKindFilter(kindId)}
+                          className={`shrink-0 min-h-[36px] px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
+                            active
+                              ? 'bg-sky-500/20 border-sky-400/40 text-sky-100'
+                              : 'glass-inset text-slate-300 hover:border-white/20'
                           }`}
-                        />
-                      </button>
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-                      {isExpanded && (
-                        <div className="mt-2 space-y-1.5">
-                          {row.topUps.map((topup, tIdx) => (
-                            <div
-                              key={`${topup.date}-${tIdx}`}
-                              className="flex items-center justify-between text-xs py-2.5 px-3 rounded-xl glass-inset font-mono-tabular"
-                            >
-                              <span className="text-slate-300">{topup.date}</span>
-                              <span className="text-emerald-300 font-semibold">
-                                {MonitorModel.money(
-                                  MonitorModel.numeric(topup.amountMinor) === null
-                                    ? null
-                                    : topup.amountMinor / 100,
-                                  row.currency,
-                                )}
-                              </span>
-                            </div>
-                          ))}
+            {filteredRows.length === 0 ? (
+              <EmptyState
+                compact
+                icon={<CreditCard className="w-5 h-5" />}
+                title="没有匹配的订阅记录"
+                description="尝试清空搜索关键词或切回全部订阅类型。"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubKindFilter('all');
+                      setSubSearch('');
+                    }}
+                    className="min-h-[40px] px-4 rounded-xl bg-sky-500/18 border border-sky-400/35 text-xs font-semibold text-sky-100 inline-flex items-center gap-1.5 active:scale-[0.98] transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>重置筛选</span>
+                  </button>
+                }
+              />
+            ) : (
+              filteredRows.map((row, index) => {
+                const key = row.id || `${row.provider}-${index}`;
+                const intervalLabel =
+                  ({ month: '月', year: '年', week: '周', day: '天' } as Record<string, string>)[
+                    row.interval || ''
+                  ] ||
+                  row.interval ||
+                  '';
+                const amount = MonitorModel.subscriptionAmount(row);
+                const isExpanded = Boolean(openTopUps[key]);
+                const renewalTarget = row.nextRenewalOverride || row.endDate;
+                const renewalCountdown = formatRelativeCountdown(
+                  renewalTarget,
+                  nowMs,
+                  row.autoRenew ? '即将续费' : '已到期',
+                );
+                const renewalTargetMs = renewalTarget ? Date.parse(renewalTarget) : NaN;
+                const renewalDiffMs = Number.isFinite(renewalTargetMs)
+                  ? renewalTargetMs - nowMs
+                  : Infinity;
+                const renewalBadgeTone =
+                  renewalDiffMs <= 0
+                    ? 'bg-rose-500/14 border-rose-400/30 text-rose-200'
+                    : renewalDiffMs <= 7 * 86400_000
+                      ? 'bg-amber-500/14 border-amber-400/30 text-amber-200'
+                      : 'bg-sky-500/12 border-sky-400/25 text-sky-200';
+                const pTone = clientTone(row.provider);
+
+                return (
+                  <section key={key} className="glass-panel rounded-3xl p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        <span
+                          aria-hidden="true"
+                          className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${pTone.dot}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-semibold text-slate-100 break-words">
+                            {row.planName || providerName(row.provider)}
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5 truncate">
+                            {providerName(row.provider)} ·{' '}
+                            {row.binding?.accountEmail || row.binding?.profileName || '未绑定账户'}
+                          </p>
                         </div>
+                      </div>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-[11px] font-medium text-emerald-200 shrink-0 whitespace-nowrap">
+                        {row.kind === 'subscription' ? '周期订阅' : '预存充值'}
+                      </span>
+                    </div>
+
+                    <div className="my-3.5 flex items-baseline justify-between gap-2 flex-wrap">
+                      <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+                        <div className="text-2xl font-bold text-emerald-300 font-mono-tabular">
+                          {MonitorModel.money(amount, row.currency)}
+                        </div>
+                        <span className="text-xs text-slate-400 tabular-nums">
+                          {row.kind === 'subscription'
+                            ? `每 ${MonitorModel.count(row.intervalCount) || 1} ${intervalLabel} · ${
+                                row.autoRenew ? '自动续费' : '不自动续费'
+                              }`
+                            : '累计充值金额'}
+                        </span>
+                      </div>
+                      {renewalCountdown && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-medium tabular-nums shrink-0 ${renewalBadgeTone}`}
+                        >
+                          <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          <span>{renewalCountdown}</span>
+                        </span>
                       )}
                     </div>
-                  )}
-                </section>
-              );
-            })}
+
+                    <dl className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl glass-inset text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-[11px] text-slate-400">开始日期</dt>
+                        <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                          {row.startDate || '—'}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[11px] text-slate-400">结束日期</dt>
+                        <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                          {row.endDate || '—'}
+                        </dd>
+                      </div>
+                      {row.nextRenewalOverride && (
+                        <div className="col-span-2 min-w-0 pt-1.5 border-t border-white/[0.06]">
+                          <dt className="text-[11px] text-slate-400">下次续费</dt>
+                          <dd className="font-mono-tabular text-sky-300 mt-0.5">
+                            {row.nextRenewalOverride}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+
+                    {row.note && (
+                      <p className="text-xs text-slate-300 mt-3 pt-2.5 border-t border-white/[0.06] leading-relaxed break-words">
+                        {row.note}
+                      </p>
+                    )}
+
+                    {row.topUps && row.topUps.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenTopUps((prev) => ({ ...prev, [key]: !prev[key] }))
+                          }
+                          aria-expanded={isExpanded}
+                          className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-sky-300 hover:text-sky-200 transition-colors"
+                        >
+                          <span className="tabular-nums">充值记录（{row.topUps.length} 笔）</span>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={`w-4 h-4 transition-transform duration-150 ${
+                              isExpanded ? 'rotate-180 text-sky-400' : ''
+                            }`}
+                          />
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2 space-y-1.5">
+                            {row.topUps.map((topup, tIdx) => (
+                              <div
+                                key={`${topup.date}-${tIdx}`}
+                                className="flex items-center justify-between text-xs py-2.5 px-3 rounded-xl glass-inset font-mono-tabular"
+                              >
+                                <span className="text-slate-300">{topup.date}</span>
+                                <span className="text-emerald-300 font-semibold">
+                                  {MonitorModel.money(
+                                    MonitorModel.numeric(topup.amountMinor) === null
+                                      ? null
+                                      : topup.amountMinor / 100,
+                                    row.currency,
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
+            )}
 
             <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-2 pb-2 tabular-nums">
               共享列表更新 <span className="font-mono-tabular">{formatShortTime(subscriptions.updatedAt)}</span>
@@ -515,13 +800,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     sortBy !== 'default';
 
   const statusFilterOptions: Array<[StatusFilterId, string]> = [
-    ['all', '全部'],
-    ['collected', '有采集'],
+    ['all', `全部 ${summary.total}`],
+    ['collected', `有采集 ${summary.collectedCount}`],
     ...(summary.warnCount > 0 ? ([['warn', `预警 ${summary.warnCount}`]] as Array<[StatusFilterId, string]>) : []),
     ...(summary.abnormalCount > 0
       ? ([['abnormal', `异常 ${summary.abnormalCount}`]] as Array<[StatusFilterId, string]>)
       : []),
   ];
+
+  const hasLimitsFilter = search !== '' || statusFilter !== 'all' || sortBy !== 'default';
 
   return (
     <div className="space-y-3.5">
@@ -581,25 +868,145 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           </button>
         </div>
 
-        {/* Static telemetry counters — visually distinct from interactive filter chips */}
-        <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap text-xs tabular-nums pt-1 border-t border-white/10">
-          <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium">
-            <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>正常 {summary.healthyCount}</span>
-          </span>
-          {summary.warnCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-rose-300 font-medium">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>预警 {summary.warnCount}</span>
-            </span>
-          )}
-          {summary.abnormalCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-amber-300 font-medium">
-              <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span>异常/未配置 {summary.abnormalCount}</span>
-            </span>
-          )}
+        {/* Proportional health distribution bar (outside [data-limit-account]) */}
+        {summary.total > 0 && (
+          <div
+            aria-label={`健康分布：正常 ${summary.healthySeg}，预警 ${summary.warnSeg}，异常 ${summary.abnormalSeg}，无历史 ${summary.uncollectedSeg}`}
+            className="h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden flex gap-0.5"
+          >
+            {summary.healthySeg > 0 && (
+              <div
+                style={{ width: `${(summary.healthySeg / summary.total) * 100}%` }}
+                className="h-full bg-emerald-400/90 rounded-full"
+              />
+            )}
+            {summary.warnSeg > 0 && (
+              <div
+                style={{ width: `${(summary.warnSeg / summary.total) * 100}%` }}
+                className="h-full bg-rose-400/90 rounded-full"
+              />
+            )}
+            {summary.abnormalSeg > 0 && (
+              <div
+                style={{ width: `${(summary.abnormalSeg / summary.total) * 100}%` }}
+                className="h-full bg-amber-400/90 rounded-full"
+              />
+            )}
+            {summary.uncollectedSeg > 0 && (
+              <div
+                style={{ width: `${(summary.uncollectedSeg / summary.total) * 100}%` }}
+                className="h-full bg-slate-500/70 rounded-full"
+              />
+            )}
+          </div>
+        )}
+
+        {/* 4-column interactive KPI telemetry strip */}
+        <div className="grid grid-cols-4 gap-1 p-1.5 rounded-2xl glass-inset tabular-nums">
+          <button
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) => (prev === 'collected' ? 'all' : 'collected'))
+            }
+            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 ${
+              statusFilter === 'collected'
+                ? 'bg-sky-500/22 ring-1 ring-sky-400/45 text-sky-100'
+                : 'hover:bg-white/[0.05]'
+            }`}
+          >
+            <div className="text-sm font-bold font-mono-tabular text-sky-200 leading-tight">
+              {summary.collectedCount}
+            </div>
+            <div className="text-[10px] text-slate-300 font-medium mt-0.5">有采集</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 ${
+              statusFilter === 'all'
+                ? 'bg-white/[0.08] text-white'
+                : 'hover:bg-white/[0.05]'
+            }`}
+          >
+            <div className="text-sm font-bold font-mono-tabular text-emerald-300 leading-tight">
+              {summary.healthyCount}
+            </div>
+            <div className="text-[10px] text-emerald-300/90 font-medium mt-0.5">正常</div>
+          </button>
+
+          <button
+            type="button"
+            disabled={summary.warnCount === 0}
+            onClick={() =>
+              setStatusFilter((prev) => (prev === 'warn' ? 'all' : 'warn'))
+            }
+            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 ${
+              statusFilter === 'warn'
+                ? 'bg-rose-500/22 ring-1 ring-rose-400/45 text-rose-100'
+                : 'hover:bg-white/[0.05]'
+            }`}
+          >
+            <div
+              className={`text-sm font-bold font-mono-tabular leading-tight ${
+                summary.warnCount > 0 ? 'text-rose-300' : 'text-slate-500'
+              }`}
+            >
+              {summary.warnCount}
+            </div>
+            <div
+              className={`text-[10px] font-medium mt-0.5 ${
+                summary.warnCount > 0 ? 'text-rose-300/90' : 'text-slate-500'
+              }`}
+            >
+              预警
+            </div>
+          </button>
+
+          <button
+            type="button"
+            disabled={summary.abnormalCount === 0}
+            onClick={() =>
+              setStatusFilter((prev) => (prev === 'abnormal' ? 'all' : 'abnormal'))
+            }
+            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 ${
+              statusFilter === 'abnormal'
+                ? 'bg-amber-500/22 ring-1 ring-amber-400/45 text-amber-100'
+                : 'hover:bg-white/[0.05]'
+            }`}
+          >
+            <div
+              className={`text-sm font-bold font-mono-tabular leading-tight ${
+                summary.abnormalCount > 0 ? 'text-amber-300' : 'text-slate-500'
+              }`}
+            >
+              {summary.abnormalCount}
+            </div>
+            <div
+              className={`text-[10px] font-medium mt-0.5 ${
+                summary.abnormalCount > 0 ? 'text-amber-300/90' : 'text-slate-500'
+              }`}
+            >
+              异常
+            </div>
+          </button>
         </div>
+
+        {/* Next upcoming quota reset spotlight */}
+        {nextResetSpotlight && (
+          <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-white/10 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-slate-300 min-w-0">
+              <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                最近重置 · <strong className="text-slate-100">{nextResetSpotlight.title}</strong> ·{' '}
+                {nextResetSpotlight.windowLabel}
+              </span>
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 font-medium tabular-nums shrink-0">
+              {nextResetSpotlight.countdown}
+            </span>
+          </div>
+        )}
 
         {summary.uncollectedCount > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
@@ -631,7 +1038,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
       {/* 2. 搜索、状态筛选与排序栏 */}
       {showControlsBar && (
-        <div className="space-y-2.5">
+        <div className="glass-panel rounded-2xl p-3 space-y-2.5">
           {(allItems.length > 4 || search !== '') && (
             <SearchField
               value={search}
@@ -643,54 +1050,72 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             />
           )}
 
-          <div className="space-y-2">
-            <div
-              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
-              role="group"
-              aria-label="额度状态筛选"
-            >
-              {statusFilterOptions.map(([fId, fLabel]) => {
-                const active = statusFilter === fId;
-                const activeTone =
-                  fId === 'warn'
-                    ? 'bg-rose-500/20 border-rose-400/45 text-rose-100'
-                    : fId === 'abnormal'
-                    ? 'bg-amber-500/20 border-amber-400/45 text-amber-100'
-                    : 'bg-sky-500/20 border-sky-400/40 text-sky-100';
-                return (
-                  <button
-                    key={fId}
-                    type="button"
-                    data-limits-filter={fId}
-                    aria-pressed={active}
-                    onClick={() => setStatusFilter(fId)}
-                    className={`shrink-0 min-h-[38px] px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
-                      active
-                        ? activeTone
-                        : 'glass-inset text-slate-300 hover:border-white/20'
-                    }`}
-                  >
-                    {fLabel}
-                  </button>
-                );
-              })}
+          <div
+            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
+            role="group"
+            aria-label="额度状态筛选"
+          >
+            {statusFilterOptions.map(([fId, fLabel]) => {
+              const active = statusFilter === fId;
+              const activeTone =
+                fId === 'warn'
+                  ? 'bg-rose-500/20 border-rose-400/45 text-rose-100'
+                  : fId === 'abnormal'
+                  ? 'bg-amber-500/20 border-amber-400/45 text-amber-100'
+                  : 'bg-sky-500/20 border-sky-400/40 text-sky-100';
+              return (
+                <button
+                  key={fId}
+                  type="button"
+                  data-limits-filter={fId}
+                  aria-pressed={active}
+                  onClick={() => setStatusFilter(fId)}
+                  className={`shrink-0 min-h-[34px] px-3 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
+                    active
+                      ? activeTone
+                      : 'glass-inset text-slate-300 hover:border-white/20'
+                  }`}
+                >
+                  {fLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/[0.06] flex-wrap">
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 tabular-nums">
+              <span>
+                显示 <strong className="text-slate-200 font-semibold">{visibleCount}</strong> 项
+              </span>
+              {hasLimitsFilter && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setStatusFilter('all');
+                    setSortBy('default');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/12 text-[10.5px] font-medium text-sky-200 active:scale-95 transition-all"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" aria-hidden="true" />
+                  <span>重置</span>
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center justify-end">
-              <SegmentedControl<LimitSortId>
-                size="sm"
-                tone="accent"
-                fullWidth={false}
-                ariaLabel="额度排序"
-                value={sortBy}
-                onChange={setSortBy}
-                options={[
-                  { value: 'default', label: '默认', dataAttrs: { 'data-limits-sort': 'default' } },
-                  { value: 'pressure', label: '按压力', dataAttrs: { 'data-limits-sort': 'pressure' } },
-                  { value: 'updated', label: '按更新', dataAttrs: { 'data-limits-sort': 'updated' } },
-                ]}
-              />
-            </div>
+            <SegmentedControl<LimitSortId>
+              size="sm"
+              tone="accent"
+              fullWidth={false}
+              ariaLabel="额度排序"
+              value={sortBy}
+              onChange={setSortBy}
+              options={[
+                { value: 'default', label: '默认', dataAttrs: { 'data-limits-sort': 'default' } },
+                { value: 'pressure', label: '按压力', dataAttrs: { 'data-limits-sort': 'pressure' } },
+                { value: 'updated', label: '按更新', dataAttrs: { 'data-limits-sort': 'updated' } },
+              ]}
+            />
           </div>
         </div>
       )}
@@ -758,7 +1183,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             key={group.key}
             className={
               group.linked
-                ? 'rounded-[28px] border border-sky-400/22 bg-sky-500/[0.03] p-2.5 space-y-2.5'
+                ? 'rounded-[28px] border border-sky-400/24 bg-sky-500/[0.035] p-2.5 space-y-2.5'
                 : 'space-y-3.5'
             }
           >
@@ -767,7 +1192,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                 data-limit-linked-group={group.key}
                 className="px-3 py-2 rounded-2xl bg-sky-500/10 border border-sky-400/20 text-xs text-slate-200 flex items-center justify-between gap-2 flex-wrap"
               >
-                <span className="font-semibold text-sky-200">{group.label}</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold text-sky-200">
+                  <Link2 className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+                  <span>{group.label}</span>
+                </span>
                 <span className="text-[11px] text-slate-300">
                   已验证的 MiniMax 同一账户 · 各产品独立计量
                 </span>
@@ -824,7 +1252,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     data-limit-account={account.key}
                     className={`glass-panel rounded-3xl p-4 sm:p-5 transition-colors ${
                       isWarn
-                        ? 'border-rose-400/30'
+                        ? 'border-rose-400/32'
                         : !hasHistory
                         ? 'opacity-90'
                         : ''
@@ -832,35 +1260,45 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-start justify-between gap-2.5">
-                        <div className="flex items-center gap-2 min-w-0 flex-1 pt-0.5">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <span
                             aria-hidden="true"
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${tone.dot}`}
-                          />
-                          <h3 className="text-sm font-bold text-slate-50 leading-snug break-words min-w-0">
+                            className="w-7 h-7 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center shrink-0"
+                          >
+                            <span className={`w-2.5 h-2.5 rounded-full ${tone.dot}`} />
+                          </span>
+                          <h3 className="text-[15px] font-bold text-slate-50 leading-snug break-words min-w-0">
                             {displayTitle}
                           </h3>
                         </div>
 
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shrink-0 whitespace-nowrap ${
-                            isHealthy
-                              ? 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200'
-                              : 'bg-amber-500/12 border-amber-400/25 text-amber-200'
-                          }`}
-                        >
-                          <i
-                            aria-hidden="true"
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              isHealthy ? 'bg-emerald-400' : 'bg-amber-400'
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isWarn && isHealthy && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border bg-rose-500/14 border-rose-400/30 text-rose-200 whitespace-nowrap">
+                              <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                              <span>预警</span>
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${
+                              isHealthy
+                                ? 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200'
+                                : 'bg-amber-500/12 border-amber-400/25 text-amber-200'
                             }`}
-                          />
-                          <span>{statusText}</span>
-                        </span>
+                          >
+                            <i
+                              aria-hidden="true"
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                isHealthy ? 'bg-emerald-400' : 'bg-amber-400'
+                              }`}
+                            />
+                            <span>{statusText}</span>
+                          </span>
+                        </div>
                       </div>
 
                       {(account.regionLabel || !hasHistory) && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap pl-9">
                           {account.regionLabel && (
                             <span className="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[11px] font-medium text-slate-300">
                               {account.regionLabel}
@@ -875,20 +1313,21 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       )}
 
                       {subMeta.length > 0 && (
-                        <p className="text-xs text-slate-300 break-words">{subMeta.join(' · ')}</p>
+                        <p className="text-xs text-slate-300 break-words pl-9">{subMeta.join(' · ')}</p>
                       )}
 
                       {!preferEmailPrimary &&
                         (account.displayName || provider.accountName) &&
                         provider.accountEmail && (
-                          <p className="text-[11px] font-mono-tabular text-slate-400 truncate">
+                          <p className="text-[11px] font-mono-tabular text-slate-400 truncate pl-9">
                             {provider.accountEmail}
                           </p>
                         )}
 
                       {account.sourceLabel && (
-                        <p className="text-[11px] text-slate-400 break-words">
-                          来源设备：{account.sourceLabel}
+                        <p className="text-[11px] text-slate-400 break-words pl-9 inline-flex items-center gap-1">
+                          <Server className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                          <span>来源设备：{account.sourceLabel}</span>
                         </p>
                       )}
                     </div>
@@ -925,9 +1364,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                   <span className="text-xs font-medium text-slate-300 min-w-0 break-words">
                                     {q.label}
                                   </span>
+                                  {countdown && (
+                                    <span className="px-2 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-[10.5px] text-sky-300 font-medium tabular-nums shrink-0">
+                                      {countdown}
+                                    </span>
+                                  )}
                                 </div>
                                 <div
-                                  className={`text-lg font-bold font-mono-tabular leading-tight break-words ${
+                                  className={`text-xl font-bold font-mono-tabular leading-tight break-words ${
                                     q.value === '无限额'
                                       ? 'text-sky-300'
                                       : q.remaining
@@ -955,15 +1399,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
                                 {win.resetsAt && (
                                   <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 tabular-nums flex-wrap pt-0.5">
-                                    <span>
-                                      {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
-                                      <span className="font-mono-tabular">
-                                        {formatShortTime(win.resetsAt)}
+                                    <span className="inline-flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                                      <span>
+                                        {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
+                                        <span className="font-mono-tabular">
+                                          {formatShortTime(win.resetsAt)}
+                                        </span>
                                       </span>
                                     </span>
-                                    {countdown && (
-                                      <span className="text-sky-300 font-medium">{countdown}</span>
-                                    )}
                                   </div>
                                 )}
 
@@ -979,7 +1423,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           return (
                             <div
                               key={`${win.kind || 'win'}-${wIdx}`}
-                              className="rounded-2xl bg-white/[0.025] border border-white/[0.07] p-3.5 space-y-2"
+                              className={`rounded-2xl border p-3.5 space-y-2 ${
+                                winWarn
+                                  ? 'bg-rose-500/[0.05] border-rose-400/28'
+                                  : winElevated
+                                    ? 'bg-amber-500/[0.04] border-amber-400/24'
+                                    : 'bg-white/[0.025] border-white/[0.07]'
+                              }`}
                             >
                               <div className="flex items-baseline justify-between gap-2 text-xs">
                                 <span className="text-slate-200 font-medium min-w-0 break-words">
@@ -1012,10 +1462,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
                               {win.resetsAt && (
                                 <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 tabular-nums flex-wrap">
-                                  <span>
-                                    {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
-                                    <span className="font-mono-tabular">
-                                      {formatShortTime(win.resetsAt)}
+                                  <span className="inline-flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                                    <span>
+                                      {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
+                                      <span className="font-mono-tabular">
+                                        {formatShortTime(win.resetsAt)}
+                                      </span>
                                     </span>
                                   </span>
                                   {countdown && (

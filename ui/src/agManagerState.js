@@ -705,3 +705,131 @@ export function buildAgQuotaCells(account, nowMs = Date.now()) {
 
   return [];
 }
+
+/**
+ * Derive unambiguous display labels for AG Manager host devices.
+ * Disambiguates duplicate hostnames (case-insensitive) using a compact deviceId suffix.
+ *
+ * @param {ReadonlyArray<import('./types/monitor').AgManagerDeviceSnapshot> | null | undefined} devices
+ * @returns {Record<string, string>}
+ */
+export function formatAgDeviceLabels(devices) {
+  /** @type {Record<string, string>} */
+  const labels = {};
+  if (!Array.isArray(devices) || devices.length === 0) return labels;
+
+  /** @type {Array<{ deviceId: string, baseLabel: string, normKey: string }>} */
+  const entries = [];
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+
+  for (const dev of devices) {
+    const deviceId = cleanText(dev?.deviceId, 128);
+    if (!deviceId) continue;
+    const baseLabel = cleanText(dev?.hostname, 128) || deviceId;
+    const normKey = baseLabel.replace(/\s+/g, ' ').trim().toLowerCase();
+    entries.push({ deviceId, baseLabel, normKey });
+    counts.set(normKey, (counts.get(normKey) || 0) + 1);
+  }
+
+  /** @type {Map<string, number>} */
+  const shortCounts = new Map();
+  for (const entry of entries) {
+    if ((counts.get(entry.normKey) || 0) <= 1) continue;
+    const shortId = entry.deviceId.length <= 10
+      ? entry.deviceId
+      : `${entry.deviceId.slice(0, 6)}…${entry.deviceId.slice(-4)}`;
+    const collisionKey = `${entry.normKey}::${shortId.toLowerCase()}`;
+    shortCounts.set(collisionKey, (shortCounts.get(collisionKey) || 0) + 1);
+  }
+
+  for (const entry of entries) {
+    if ((counts.get(entry.normKey) || 0) <= 1) {
+      labels[entry.deviceId] = entry.baseLabel;
+    } else {
+      const shortId = entry.deviceId.length <= 10
+        ? entry.deviceId
+        : `${entry.deviceId.slice(0, 6)}…${entry.deviceId.slice(-4)}`;
+      const collisionKey = `${entry.normKey}::${shortId.toLowerCase()}`;
+      const suffix = (shortCounts.get(collisionKey) || 0) > 1 ? entry.deviceId : shortId;
+      labels[entry.deviceId] = `${entry.baseLabel} · ${suffix}`;
+    }
+  }
+
+  return labels;
+}
+
+/**
+ * Summarize an AG Manager host snapshot into account counts and resolved active client slots.
+ *
+ * @param {import('./types/monitor').AgManagerDeviceSnapshot | null | undefined} device
+ * @returns {import('./types/monitor').AgManagerDeviceSummary}
+ */
+export function summarizeAgDevice(device) {
+  const accounts = Array.isArray(device?.accounts) ? device.accounts : [];
+  let abnormal = 0;
+  let ultra = 0;
+  let pro = 0;
+  let free = 0;
+
+  for (const acc of accounts) {
+    if (isAgAccountAbnormal(acc)) abnormal += 1;
+    const tier = normalizeTier(acc?.subscriptionTier);
+    if (tier === 'ULTRA') ultra += 1;
+    else if (tier === 'PRO') pro += 1;
+    else free += 1;
+  }
+
+  /** @type {import('./types/monitor').AgManagerActiveSlotBinding[]} */
+  const activeSlots = [];
+  const rawActive = device?.activeAccounts;
+  if (rawActive) {
+    /** @type {Array<'classic' | 'ide' | 'agy' | 'acp'>} */
+    const slotOrder = ['classic', 'ide', 'agy', 'acp'];
+    for (const slot of slotOrder) {
+      const target = cleanText(rawActive[slot], 160);
+      if (!target) continue;
+      const lower = target.toLowerCase();
+      const matched = accounts.find(
+        (acc) => acc.id === target || cleanText(acc.email, 160).toLowerCase() === lower,
+      );
+      activeSlots.push({
+        slot,
+        label: formatAgSlotLabel(slot),
+        target,
+        email: matched?.email || target,
+      });
+    }
+  }
+
+  return {
+    total: accounts.length,
+    available: accounts.length - abnormal,
+    abnormal,
+    ultra,
+    pro,
+    free,
+    activeSlots,
+  };
+}
+
+/**
+ * Score an AG account for quota-first ordering.
+ * Healthy high-quota accounts sort highest; empty-snapshot healthy accounts rank below 0%; abnormal accounts rank lowest (-1).
+ *
+ * @param {import('./types/monitor').AgManagerAccountSummary | null | undefined} account
+ * @returns {number}
+ */
+export function scoreAgAccountAvailability(account) {
+  if (!account || isAgAccountAbnormal(account)) return -1;
+  const cells = buildAgQuotaCells(account);
+  if (cells.length === 0) return -0.5;
+  let sum = 0;
+  let min = 100;
+  for (const cell of cells) {
+    sum += cell.pct;
+    if (cell.pct < min) min = cell.pct;
+  }
+  const avg = sum / cells.length;
+  return avg + min * 0.001;
+}

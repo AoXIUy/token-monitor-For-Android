@@ -657,3 +657,95 @@ test('agManagerState filtering, error rejection, device fallback, and nativeStat
   assert.equal(native.agManager.devices.length, 0);
   assert.equal(native.agManager.selectedDeviceId, '');
 });
+
+test('formatAgDeviceLabels disambiguates colliding hostnames while preserving unique names', async () => {
+  const { formatAgDeviceLabels } = await stateModule;
+  const labels = formatAgDeviceLabels([
+    { deviceId: 'dev-debian-01', hostname: 'debian' },
+    { deviceId: 'dev-win-a-1234567890', hostname: 'Workstation' },
+    { deviceId: 'dev-win-b-0987654321', hostname: 'workstation' },
+    { deviceId: 'only-id', hostname: '' },
+  ]);
+  assert.equal(labels['dev-debian-01'], 'debian');
+  assert.equal(labels['dev-win-a-1234567890'], 'Workstation · dev-wi…7890');
+  assert.equal(labels['dev-win-b-0987654321'], 'workstation · dev-wi…4321');
+  assert.equal(labels['only-id'], 'only-id');
+  assert.deepEqual(formatAgDeviceLabels([]), {});
+});
+
+test('summarizeAgDevice counts tiers/status and resolves active client slots', async () => {
+  const { summarizeAgDevice } = await stateModule;
+  const summary = summarizeAgDevice({
+    deviceId: 'host-1',
+    hostname: 'Host-1',
+    updatedAt: '2026-11-24T00:00:00Z',
+    settings: { startupRefresh: false, autoRefresh: true, refreshIntervalMinutes: 10 },
+    activeAccounts: { classic: 'id-1', ide: 'bob@example.com', agy: '', acp: 'orphan-slot' },
+    accounts: [
+      { id: 'id-1', email: 'alice@example.com', subscriptionTier: 'ULTRA' },
+      { id: 'id-2', email: 'bob@example.com', subscriptionTier: 'PRO', disabled: true },
+      { id: 'id-3', email: 'carol@example.com', subscriptionTier: 'FREE' },
+    ],
+  });
+  assert.equal(summary.total, 3);
+  assert.equal(summary.available, 2);
+  assert.equal(summary.abnormal, 1);
+  assert.equal(summary.ultra, 1);
+  assert.equal(summary.pro, 1);
+  assert.equal(summary.free, 1);
+  assert.deepEqual(summary.activeSlots, [
+    { slot: 'classic', label: '经典款', target: 'id-1', email: 'alice@example.com' },
+    { slot: 'ide', label: 'IDE', target: 'bob@example.com', email: 'bob@example.com' },
+    { slot: 'acp', label: 'ACP', target: 'orphan-slot', email: 'orphan-slot' },
+  ]);
+});
+
+test('scoreAgAccountAvailability ranks high-quota healthy accounts above low, empty, and abnormal ones', async () => {
+  const { scoreAgAccountAvailability } = await stateModule;
+  const high = {
+    id: 'h',
+    email: 'h@example.com',
+    quota: {
+      groups: [
+        { displayName: 'Gemini', buckets: [{ bucketId: 'g-5h', window: '5h', remainingFraction: 0.9 }] },
+        { displayName: 'Claude', buckets: [{ bucketId: 'c-5h', window: '5h', remainingFraction: 0.8 }] },
+      ],
+      models: [],
+    },
+  };
+  const tieSameAvgLowerMin = {
+    id: 'm',
+    email: 'm@example.com',
+    quota: {
+      groups: [
+        { displayName: 'Gemini', buckets: [{ bucketId: 'g-5h', window: '5h', remainingFraction: 1.0 }] },
+        { displayName: 'Claude', buckets: [{ bucketId: 'c-5h', window: '5h', remainingFraction: 0.7 }] },
+      ],
+      models: [],
+    },
+  };
+  const lowZero = {
+    id: 'z',
+    email: 'z@example.com',
+    quota: {
+      groups: [{ displayName: 'Gemini', buckets: [{ bucketId: 'g-5h', window: '5h', remainingFraction: 0 }] }],
+      models: [],
+    },
+  };
+  const emptyHealthy = { id: 'e', email: 'e@example.com', quota: { groups: [], models: [] } };
+  const abnormalHigh = {
+    id: 'a',
+    email: 'a@example.com',
+    banned: true,
+    quota: {
+      groups: [{ displayName: 'Gemini', buckets: [{ bucketId: 'g-5h', window: '5h', remainingFraction: 1 }] }],
+      models: [],
+    },
+  };
+
+  assert.ok(scoreAgAccountAvailability(high) > scoreAgAccountAvailability(tieSameAvgLowerMin));
+  assert.ok(scoreAgAccountAvailability(tieSameAvgLowerMin) > scoreAgAccountAvailability(lowZero));
+  assert.ok(scoreAgAccountAvailability(lowZero) > scoreAgAccountAvailability(emptyHealthy));
+  assert.ok(scoreAgAccountAvailability(emptyHealthy) > scoreAgAccountAvailability(abnormalHigh));
+  assert.equal(scoreAgAccountAvailability(abnormalHigh), -1);
+});

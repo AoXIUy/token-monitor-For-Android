@@ -225,6 +225,10 @@ export function useNativeMonitor() {
         window.dispatchEvent(new CustomEvent('tm-close-device-picker'));
         return true;
       }
+      if (document.querySelector('#ag-device-picker-dialog[open]')) {
+        window.dispatchEvent(new CustomEvent('tm-close-ag-device-picker'));
+        return true;
+      }
       if (document.querySelector('#report-window-dialog[open]')) {
         window.dispatchEvent(new CustomEvent('tm-close-report-window'));
         return true;
