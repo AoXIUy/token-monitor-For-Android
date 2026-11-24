@@ -7,12 +7,13 @@
 ![Version 1.26.1](https://img.shields.io/badge/version-1.26.1-38BDF8)
 [![Release Android](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml/badge.svg)](https://github.com/AoXIUy/token-monitor-For-Android/actions/workflows/release.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![AI Assisted](https://img.shields.io/badge/AI--Assisted-AI%20%E8%BE%85%E5%8A%A9%E5%BC%80%E5%8F%91-8B5CF6)
 
 ![Token Monitor Android 展示图：用量总览、会话与额度，使用演示数据](docs/showcase.png)
 
-本项目是 [Token Monitor 主线](https://github.com/Javis603/token-monitor) 的 Android 只读客户端独立仓库。电脑上的桌面端或 Agent 负责采集，Hub 负责汇总，手机连接同一个 Hub 查看数据。Android 客户端支持 Node Hub 和 Cloudflare Worker Hub，不采集手机上其他应用的使用情况。
+本项目是 [Token Monitor 主线](https://github.com/Javis603/token-monitor) 的 Android 只读客户端独立仓库，同时配套桌面端与 Node Hub 分支 **[AoXIUy/token-monitor](https://github.com/AoXIUy/token-monitor)**。电脑上的桌面端或 Agent 负责采集，Hub 负责汇总，手机连接同一个 Hub 查看数据。Android 客户端支持 Node Hub 和 Cloudflare Worker Hub，可按需消费上述分支的只读扩展（AG 账号池快照、在线对话、审批提醒与项目分析报告），不采集手机上其他应用的使用情况。
 
-> 主线项目、桌面端、采集器及 Hub 部署说明请前往 **[Javis603/token-monitor](https://github.com/Javis603/token-monitor)**。本仓库保留原项目 MIT 许可，来源与共享代码维护方式见 [UPSTREAM.md](docs/UPSTREAM.md)。
+> **AI 辅助开发项目说明（AI-Assisted Project）：** 本项目由 AI 辅助设计与开发，核心架构、界面与每次变更均经过人工审阅及自动化回归测试（Node 单元测试、Java 规则校验、Android Lint 与 Android 15 模拟器仪器测试）验证。主线项目、桌面端、采集器及 Hub 部署说明请前往 **[Javis603/token-monitor](https://github.com/Javis603/token-monitor)** 与配套分支 **[AoXIUy/token-monitor](https://github.com/AoXIUy/token-monitor)**。本仓库保留原项目 MIT 许可，来源与共享代码维护方式见 [UPSTREAM.md](docs/UPSTREAM.md)。
 
 ## 可以做什么
 
@@ -141,8 +142,13 @@ sh ./gradlew connectedDebugAndroidTest  # 需要专用模拟器或测试设备
 - 不持久化完整统计快照或对话正文；提醒去重和微件只保存必要的有界摘要，应用禁用云备份。
 - 额度历史只在本机保存散列账户 / 工作区身份、数值、时间和日汇总，不保存账户名称、邮箱或凭据，不上传 Hub；明细保留 180 个本地日，日汇总保留 730 个本地日。
 
-## 致谢与许可
+## 致谢、参考开源项目与许可
 
-感谢 **[Javis603/token-monitor](https://github.com/Javis603/token-monitor)** 提供主线项目、Hub 协议与共享计算模块。本仓库聚焦 Android 客户端，桌面采集与服务端功能请参阅主线。
+- **[Javis603/token-monitor](https://github.com/Javis603/token-monitor)** — 官方主线项目、Hub / Worker 协议与 `src/shared/` 共享计算模块。
+- **[AoXIUy/token-monitor](https://github.com/AoXIUy/token-monitor)** — 配套桌面端与 Node Hub 分支，提供只读 AG 账号池快照、在线会话对话、审批提醒、项目分析报告、AI 总结与 OpenClaw 微信集成后端。
+- **[lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager)** — Antigravity 账号池模型配额分组、客户端激活槽位与数据结构的开源参考。
+- **[farion1231/cc-switch](https://github.com/farion1231/cc-switch)** — 桌面端 Antigravity / Codex 本地会话日志解析格式参考（Android 端仅通过受限只读接口消费，不依赖其运行时或凭据）。
+- **[openclaw/openclaw](https://github.com/openclaw/openclaw)** — OpenClaw 微信通道与 MCP 集成生态（Android 端只读展示周期报告的微信推送状态）。
+- **[junhoyeo/tokscale](https://github.com/junhoyeo/tokscale)** — 上游底层 AI 工具日志解析与 Token 统计引擎。
 
 遵循 [MIT License](LICENSE)，保留原作者版权声明。
