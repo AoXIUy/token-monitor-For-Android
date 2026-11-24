@@ -28,6 +28,8 @@ Android 源码从现有工作区的 `android/` 提取，初次提取版本为 **
 
 2026-11-23 增量同步主线 `v0.95.1` + `v0.96.0`（**`39606ac3453a88dcd6601b7f213dc15798f91548`**）的 `src/shared/limits/windowText.js`（新增 Notion AI 个人 `Standard` 与 `Select` 点数窗口的原始计数明细），随 Android **1.23.0 / versionCode 42** 发布，并完成全部相关只读适配：Notion AI `Standard` / `Select` 点数与桌面微件白名单标签、Devin 额度卡片优先展示匹配登录邮箱（缺失时回退组织名）、Qoder 跨设备站点标识与迁移临时槽位隔离（`model.js` 与 `LimitsHistoryStore`）、Z.ai Team 多项目隔离兼容、Antigravity 分组顺序（含新增服务组别与禁用的保留窗口）及旧版无读数池隐藏、以及每日趋势严格日历日期校验与宽屏等宽折线渲染（`HistoryChart.tsx` 保持“缺失日期不补零”策略与现有测试契约）；桌面端窗口休眠、内存回收、同步地图与 `deployment` 健康字段识别不改变 Android 只读 Hub 边界。
 
+2026-11-24 增量同步与适配主线 `v0.96.1` + `v0.97.0`（**`9d745c106ac5030045dade55c0d1aea279cdcfd7`**），确认 `docs/upstream-files.json` 跟踪的 12 个 `src/shared/` 共享计算模块均无上游变更并保持逐字节校验一致，同时完成全部只读客户端适配：在权威模型 `model.js` 中统一会话按 Token 用量 / 最近活动 / 费用排序（对齐上游 `tokens → recent → cost → key` 并列回退，切换周期或设备时保留当前排序选择）；支持新会话待上报状态（`tokenDataUnavailable: true`）在列表、子代理组与详情首屏先展示 `0` Token 与 `$0.00`，待真实用量到达后立即替换，同时保持非待定缺失字段仍显示为 `—`；核验 Antigravity 关闭本机检测后的纯 OAuth 额度与匿名 RPC 恢复移除兼容，以及 Tokscale 4.23.1 的 Zed 用量、Pi 会话名清除回退与 Kimi Code 响应速度展示。桌面端单项设置重置、Edge Dock 多屏/触发区调整、macOS 休眠材质修复、设置页插件图标与本机采集配置不改变 Android 只读 Hub 边界。
+
 独立仓库的 `src/shared/` 带入源工程的可移植计算模块。文件与 SHA-256 校验记录见 [upstream-files.json](upstream-files.json)，新同步文件同时注明上游提交、原路径和必要的导入路径调整。已有 v0.85 快照保持字节内容不变；`limits/historyModel.js` 从上游 renderer 的纯计算模块提取，仅重定位 CommonJS 的 `windowLabels` 导入，浏览器全局与计算语义保持一致。它们在此仓库构成独立依赖闭包，不需要克隆主线才能构建。
 
 这些模块负责工具名称、紧凑 Token 显示、额度金额及窗口文字、活动来源、会话状态、会话分组及设备类型规范化。v0.88 新增 `clientCatalog.js`；v0.90 更新 `limits/windowText.js` 与 `limits/historyModel.js`；v0.93 更新 `clientCatalog.js`（新增 `qodercn`）。前者与固定上游提交字节一致，后者仅保留上述导入路径调整；其余文件保留各自快照与来源。Gradle 把它们复制进 APK；Node 测试与浏览器开发预览直接加载同一份源码，不引入 Electron 或新的 npm 依赖。

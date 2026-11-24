@@ -164,8 +164,9 @@
       return Number(a.expired) - Number(b.expired) || a.label.localeCompare(b.label) || a.deviceId.localeCompare(b.deviceId);
     });
   }
-  function sessions(period, query = '') {
+  function sessions(period, query = '', options = {}) {
     const search = query.trim().toLocaleLowerCase();
+    const sortBy = options?.sortBy || 'recent';
     const rows = Object.entries(period?.sessions || {}).map(([key, row]) => ({ ...row, key,
       parentKey: row.parentSessionId ? `${row.parentClient || row.client}:${row.parentSessionId}` : '' }));
     const matches = row => [row.title, row.sessionId, row.client, row.projectLabel, row.latestModel, ...Object.keys(row.models || {})]
@@ -187,6 +188,8 @@
           subagentCount: new Set(children.map(sessionGroups.conversationIdentity)).size,
           lastUsedAt: [...groupRows].sort(compareSessions)[0].lastUsedAt,
         };
+        if (groupRows.every(row => row.tokenDataUnavailable === true)) group.tokenDataUnavailable = true;
+        else delete group.tokenDataUnavailable;
         for (const field of ['totalTokens', 'costUsd', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens',
           'reasoningTokens', 'unclassifiedTokens', 'messageCount', 'timedOutputTokens', 'timedDurationMs']) {
           const values = groupRows.map(row => numeric(row[field]));
@@ -202,10 +205,34 @@
         return group;
       })
       .filter(row => !search || (row.groupRows || [row]).some(matches))
-      .sort(compareSessions);
+      .sort((a, b) => compareSessionsBy(a, b, sortBy));
   }
   function compareSessions(a, b) {
     return (Date.parse(b.lastUsedAt || '') || 0) - (Date.parse(a.lastUsedAt || '') || 0) || a.key.localeCompare(b.key);
+  }
+  function compareSessionsBy(a, b, sortBy = 'recent') {
+    const recent = (Date.parse(b.lastUsedAt || '') || 0) - (Date.parse(a.lastUsedAt || '') || 0);
+    if (sortBy === 'tokens') {
+      const tokens = count(b.totalTokens) - count(a.totalTokens);
+      const cost = (numeric(b.costUsd) ?? -1) - (numeric(a.costUsd) ?? -1);
+      return tokens || recent || cost || a.key.localeCompare(b.key);
+    }
+    if (sortBy === 'cost') {
+      const cost = (numeric(b.costUsd) ?? -1) - (numeric(a.costUsd) ?? -1);
+      const tokens = count(b.totalTokens) - count(a.totalTokens);
+      return cost || tokens || recent || a.key.localeCompare(b.key);
+    }
+    return recent || a.key.localeCompare(b.key);
+  }
+  function sessionUsageDisplay(row) {
+    const pending = row?.tokenDataUnavailable === true;
+    const tokens = numeric(row?.totalTokens);
+    const cost = numeric(row?.costUsd);
+    return {
+      pending,
+      tokensText: pending ? compact(tokens ?? 0) : tokens === null ? '—' : compact(tokens),
+      costText: pending ? money(cost ?? 0) : money(cost),
+    };
   }
   function filterSessionTools(rows, selectedTool = '') {
     const clients = row => (row.groupRows || [row]).map(member => member.client).filter(Boolean);
@@ -677,5 +704,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitSelectionKey, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, sessionUsageDisplay, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitSelectionKey, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });

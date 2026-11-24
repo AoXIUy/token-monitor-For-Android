@@ -60,7 +60,12 @@ export interface MonitorModelApi {
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
   breakdown(period: PeriodData | null, kind: Exclude<BreakdownKind, 'devices'>, options?: { separateQoderClients?: boolean }): BreakdownRow[];
   deviceBreakdown(stats: MonitorStats | null, period: PeriodId, now?: number, options?: { separateQoderClients?: boolean }): DeviceBreakdownRow[];
-  sessions(period: PeriodData | null, search?: string): SessionRow[];
+  sessions(period: PeriodData | null, search?: string, options?: { sortBy?: 'recent' | 'tokens' | 'cost' }): SessionRow[];
+  sessionUsageDisplay(row: Pick<SessionRow, 'totalTokens' | 'costUsd' | 'tokenDataUnavailable'>): {
+    pending: boolean;
+    tokensText: string;
+    costText: string;
+  };
   filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
   filterSessionStatuses(statuses: SessionStatusResult[], filter?: 'all' | 'running' | 'waiting' | 'ended'): {
     counts: { running: number; waiting: number; ended: number }; indices: number[];

@@ -37,6 +37,7 @@ export interface SessionRow {
   turnEnded?: boolean;
   archived?: boolean;
   isArchived?: boolean;
+  tokenDataUnavailable?: boolean;
   totalTokens?: number | null;
   inputTokens?: number | null;
   outputTokens?: number | null;

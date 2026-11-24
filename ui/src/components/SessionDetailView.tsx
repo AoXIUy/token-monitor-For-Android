@@ -162,6 +162,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   const tokenPartsSum = tokenParts.reduce((acc, item) => acc + item.tokens, 0);
   const latestModelLabel = MonitorModel.sessionLatestModel(row) || '未知';
   const reasoningEffort = MonitorModel.sessionReasoningEffort(row);
+  const usageDisplay = MonitorModel.sessionUsageDisplay(row);
 
   return (
     <div className="space-y-3.5">
@@ -189,15 +190,18 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         <div className="glass-inset rounded-2xl p-3.5 mt-4 grid grid-cols-2 gap-3">
           <div className="min-w-0">
             <div className="text-xl sm:text-2xl font-bold text-white font-mono-tabular break-words">
-              {MonitorModel.compact(row.totalTokens)}
+              {usageDisplay.tokensText}
             </div>
             <div className="text-[11px] text-slate-400 font-mono-tabular mt-0.5 break-all">
-              {formatExact(row.totalTokens)} Tokens
+              {usageDisplay.pending && MonitorModel.numeric(row.totalTokens) === null
+                ? '0'
+                : formatExact(row.totalTokens)}{' '}
+              Tokens
             </div>
           </div>
           <div className="min-w-0">
             <div className="text-xl sm:text-2xl font-bold text-emerald-300 font-mono-tabular break-words">
-              {MonitorModel.money(row.costUsd)}
+              {usageDisplay.costText}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">已知费用 · USD</div>
           </div>
@@ -560,9 +564,13 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
                   <div className="col-span-2 min-w-0 pt-1.5 border-t border-white/[0.06] flex items-baseline justify-between gap-2 flex-wrap">
                     <dt className="text-slate-400">此设备的会话用量</dt>
                     <dd className="font-mono-tabular text-slate-100 font-medium">
-                      {formatExact(owner.session.totalTokens)} tokens ·{' '}
+                      {owner.session.tokenDataUnavailable === true &&
+                      MonitorModel.numeric(owner.session.totalTokens) === null
+                        ? '0'
+                        : formatExact(owner.session.totalTokens)}{' '}
+                      tokens ·{' '}
                       <span className="text-emerald-300">
-                        {MonitorModel.money(owner.session.costUsd)}
+                        {MonitorModel.sessionUsageDisplay(owner.session).costText}
                       </span>
                     </dd>
                   </div>

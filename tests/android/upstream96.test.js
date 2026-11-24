@@ -173,10 +173,11 @@ test('v0.96.0: Devin UI prefers login email over organization and HistoryChart u
   assert.match(chartSource, /vectorEffect="non-scaling-stroke"/);
 });
 
-test('v0.96.0: docs/upstream-files.json matches windowText.js sha256 and records upstream v0.96.0', () => {
+test('v0.96.0: docs/upstream-files.json keeps windowText.js sha256 and provenance', () => {
   const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/upstream-files.json'), 'utf8'));
-  assert.equal(meta.upstreamVersion, '0.96.0');
-  assert.equal(meta.upstreamCommit, '39606ac3453a88dcd6601b7f213dc15798f91548');
+  const windowTextEntry = meta.files.find((entry) => entry.path === 'src/shared/limits/windowText.js');
+  assert.ok(windowTextEntry, 'windowText.js entry should exist');
+  assert.equal(windowTextEntry.sourceCommit, '39606ac3453a88dcd6601b7f213dc15798f91548');
   for (const entry of meta.files) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, entry.path))).digest('hex');
     assert.equal(actual, entry.sha256, `sha256 mismatch for ${entry.path}`);

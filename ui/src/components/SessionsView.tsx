@@ -111,12 +111,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
   useEffect(() => {
     setStatusFilter('all');
-    setSortBy('recent');
   }, [period, deviceId]);
 
   const searchedRows = useMemo(
-    () => MonitorModel.sessions(selected.period, search),
-    [selected.period, search],
+    () => MonitorModel.sessions(selected.period, search, { sortBy }),
+    [selected.period, search, sortBy],
   );
   const selection = useMemo(
     () => MonitorModel.filterSessionTools(searchedRows, tool),
@@ -154,21 +153,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     [period, allStatuses, statusFilter],
   );
   const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
-
-  const sortedIndices = useMemo(() => {
-    if (period === 'allTime' || sortBy === 'recent') return filteredIndices;
-    return [...filteredIndices].sort((a, b) => {
-      const rowA = allRows[a];
-      const rowB = allRows[b];
-      if (sortBy === 'tokens') {
-        const diff = MonitorModel.count(rowB.totalTokens) - MonitorModel.count(rowA.totalTokens);
-        return diff !== 0 ? diff : a - b;
-      }
-      const costA = MonitorModel.numeric(rowA.costUsd) ?? -1;
-      const costB = MonitorModel.numeric(rowB.costUsd) ?? -1;
-      return costB !== costA ? costB - costA : a - b;
-    });
-  }, [period, filteredIndices, allRows, sortBy]);
+  const sortedIndices = filteredIndices;
 
   if (period === 'allTime') {
     return (
@@ -345,6 +330,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const cacheEff = MonitorModel.sessionCacheEfficiency(row);
               const effort = MonitorModel.sessionReasoningEffort(row);
               const sources = MonitorModel.sessionDevices(row, stats, period, deviceId);
+              const usageDisplay = MonitorModel.sessionUsageDisplay(row);
 
               return (
                 <section
@@ -373,12 +359,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
                       <div className="flex items-baseline gap-1.5 shrink-0 font-mono-tabular pt-0.5">
                         <span className="text-xs font-bold text-slate-50">
-                          {MonitorModel.numeric(row.totalTokens) === null
-                            ? '—'
-                            : MonitorModel.compact(row.totalTokens)}
+                          {usageDisplay.tokensText}
                         </span>
                         <span className="text-[11px] text-emerald-300/90">
-                          {MonitorModel.money(row.costUsd)}
+                          {usageDisplay.costText}
                         </span>
                       </div>
                     </div>
@@ -594,7 +578,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                             主会话与子代理 · {row.groupRows.length} 条记录
                           </p>
                           <ul className="space-y-2">
-                            {row.groupRows.map((member) => (
+                            {row.groupRows.map((member) => {
+                              const memberUsage = MonitorModel.sessionUsageDisplay(member);
+                              return (
                               <li key={member.key}>
                                 <button
                                   type="button"
@@ -622,11 +608,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                                       {member.sessionId || member.key}
                                     </span>
                                     <span className="shrink-0">
-                                      {MonitorModel.numeric(member.totalTokens) === null
-                                        ? '—'
-                                        : MonitorModel.compact(member.totalTokens)}
+                                      {memberUsage.tokensText}
                                       {' · '}
-                                      {MonitorModel.money(member.costUsd)}
+                                      {memberUsage.costText}
                                     </span>
                                     <ChevronRight
                                       className="w-4 h-4 shrink-0 text-sky-300"
@@ -635,7 +619,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                                   </div>
                                 </button>
                               </li>
-                            ))}
+                              );
+                            })}
                           </ul>
                         </div>
                       )}
