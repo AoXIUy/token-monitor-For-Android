@@ -96,3 +96,18 @@ test('malformed and ambiguous source rows never create an attributed session rat
   const row = { client: 'codex', nativeSessionId: 'native', outputTokens: 20 };
   assert.deepEqual(R.sessionSources({ devices: [{ deviceId: 'pc', periods: { today: { sessions: { a: row, b: row } } } }] }, { client: 'codex', sessionId: 'native' }, at), []);
 });
+
+test('SessionRealtime component guards empty source selector, impure render Date.now and theme chart tokens', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(
+    path.resolve(__dirname, '../../ui/src/components/SessionRealtime.tsx'),
+    'utf8',
+  );
+  assert.ok(src.includes('sources.length > 1 || (Boolean(selected) && !owner)'));
+  assert.ok(src.includes('var(--tm-chart-grid)'));
+  assert.ok(src.includes('var(--tm-chart-primary)'));
+  assert.equal(src.includes('stroke="white"'), false);
+  const jsxSection = src.slice(src.indexOf('return (\n    <div'));
+  assert.equal(jsxSection.includes('Date.now()'), false);
+});

@@ -53,12 +53,13 @@ interface LimitsViewProps {
   historyError: string;
   fetchedAt: number;
   foreground: boolean;
+  now?: number;
   prefs: LimitsPrefs;
   limitAccountPresentation?: LimitAccountPresentationMap;
   onChangePrefs: (next: LimitsPrefs) => void;
 }
 
-type StatusFilterId = 'all' | 'collected' | 'warn' | 'abnormal';
+type StatusFilterId = 'all' | 'collected' | 'healthy' | 'warn' | 'abnormal';
 type LimitSortId = 'default' | 'pressure' | 'updated';
 type SubKindFilterId = 'all' | 'subscription' | 'topup';
 
@@ -73,6 +74,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   historyError,
   fetchedAt,
   foreground,
+  now,
   prefs,
   limitAccountPresentation,
   onChangePrefs,
@@ -86,6 +88,16 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   const [lastHidden, setLastHidden] = useState<{ hash: string; title: string } | null>(null);
   const [subKindFilter, setSubKindFilter] = useState<SubKindFilterId>('all');
   const [subSearch, setSubSearch] = useState('');
+  const [clock, setClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!foreground || now !== undefined) return;
+    setClock(Date.now());
+    const timer = window.setInterval(() => setClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [foreground, now]);
+
+  const effectiveNow = now ?? clock;
 
   const hideUncollected = prefs.hideUncollected;
   const showRemaining = prefs.showRemaining;
@@ -133,7 +145,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       countdown: string;
       targetDate: string;
     } | null = null;
-    const nowMs = Date.now();
+    const nowMs = effectiveNow;
 
     for (const row of rows) {
       const amt = MonitorModel.subscriptionAmount(row);
@@ -182,7 +194,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       otherRecurringCount,
       nearestRenewal,
     };
-  }, [subscriptions]);
+  }, [subscriptions, effectiveNow]);
 
   const groups = useMemo(
     () => MonitorModel.limitGroups(providers, stats, deviceId, limitAccountPresentation),
@@ -191,7 +203,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
   const enrichedGroups = useMemo(() => {
     return groups.map((group) => {
-      const items = group.providers.map((provider) => {
+      const items = group.providers.map((provider, itemIdx) => {
         const account = MonitorModel.limitAccount(
           provider,
           stats,
@@ -240,6 +252,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           .toLocaleLowerCase();
 
         return {
+          itemKey: `${group.key}:${itemIdx}`,
           provider,
           account,
           accountHash: sha256Hex(account.key),
@@ -284,10 +297,18 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       (item) => !item.isAbnormal && !item.isWarn && item.hasHistory && item.isHealthy,
     ).length;
     const uncollectedSeg = Math.max(0, allItems.length - abnormalSeg - warnSeg - healthySeg);
+    const autoHideableCount = allItems.filter((item) => {
+      const isManualHidden = hiddenSet.has(item.accountHash);
+      const needsAccountLogin = Boolean(
+        item.provider.accountKey && item.provider.status === 'unauthorized',
+      );
+      return !isManualHidden && !item.hasHistory && !needsAccountLogin;
+    }).length;
     return {
       total: allItems.length,
       collectedCount: collected.length,
       uncollectedCount: uncollected.length,
+      autoHideableCount,
       warnCount: warn.length,
       healthyCount: healthy.length,
       abnormalCount: abnormal.length,
@@ -296,10 +317,27 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       abnormalSeg,
       uncollectedSeg,
     };
-  }, [allItems]);
+  }, [allItems, hiddenSet]);
+
+  useEffect(() => {
+    if (
+      (statusFilter === 'warn' && summary.warnCount === 0) ||
+      (statusFilter === 'abnormal' && summary.abnormalCount === 0) ||
+      (statusFilter === 'healthy' && summary.healthyCount === 0) ||
+      (statusFilter === 'collected' && summary.collectedCount === 0)
+    ) {
+      setStatusFilter('all');
+    }
+  }, [
+    statusFilter,
+    summary.warnCount,
+    summary.abnormalCount,
+    summary.healthyCount,
+    summary.collectedCount,
+  ]);
 
   const nextResetSpotlight = useMemo(() => {
-    const nowMs = Date.now();
+    const nowMs = effectiveNow;
     let bestMs = Infinity;
     let best: { title: string; windowLabel: string; countdown: string } | null = null;
     for (const item of allItems) {
@@ -321,7 +359,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       }
     }
     return best;
-  }, [allItems]);
+  }, [allItems, effectiveNow]);
 
   const keyword = search.trim().toLocaleLowerCase();
 
@@ -338,6 +376,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
     const matchStatus = (item: (typeof allItems)[number]) => {
       if (statusFilter === 'collected') return item.hasHistory;
+      if (statusFilter === 'healthy') return item.hasHistory && item.isHealthy;
       if (statusFilter === 'warn') return item.isWarn;
       if (statusFilter === 'abnormal') return item.isAbnormal;
       return true;
@@ -409,7 +448,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
     const subCount = rows?.filter((r) => r.kind === 'subscription').length || 0;
     const topupCount = rows?.filter((r) => r.kind === 'topup').length || 0;
     const subKeyword = subSearch.trim().toLocaleLowerCase();
-    const filteredRows = (rows || []).filter((row) => {
+    const keyedRows = (rows || []).map((row, origIdx) => ({
+      row,
+      stableKey:
+        row.id || `${row.provider}-${row.planName || ''}-${row.startDate || ''}-${origIdx}`,
+    }));
+    const filteredRows = keyedRows.filter(({ row }) => {
       if (subKindFilter !== 'all' && row.kind !== subKindFilter) return false;
       if (!subKeyword) return true;
       const hay = [
@@ -425,7 +469,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         .toLocaleLowerCase();
       return hay.includes(subKeyword);
     });
-    const nowMs = Date.now();
+    const nowMs = effectiveNow;
 
     return (
       <div className="space-y-3.5">
@@ -455,20 +499,22 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             <section className="glass-hero rounded-3xl p-4 sm:p-5 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium text-sky-300">Hub 共享订阅账本</p>
-                  <p className="text-xl font-bold text-white tabular-nums mt-0.5">
+                  <p className="text-[11px] font-medium text-[var(--tm-accent-text)]">
+                    Hub 共享订阅账本
+                  </p>
+                  <p className="text-xl font-bold text-[var(--tm-text-primary)] tabular-nums mt-0.5">
                     <span className="font-mono-tabular">{totalCount}</span> 项记录
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-[var(--tm-text-muted)] mt-0.5">
                     不随设备或统计周期筛选 · 保持原币种
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 text-[11px] tabular-nums shrink-0">
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-emerald-200">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[var(--tm-success-soft-bg)] border border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)] font-medium">
                     周期订阅 <span className="font-mono-tabular">{subCount}</span>
                   </span>
                   {topupCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-sky-200">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)] font-medium">
                       预存充值 <span className="font-mono-tabular">{topupCount}</span>
                     </span>
                   )}
@@ -484,14 +530,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
-                        <div className="text-[11px] font-medium text-slate-300">
+                        <div className="text-[11px] font-medium text-[var(--tm-text-secondary)]">
                           月度订阅 ({entry.currency})
                         </div>
-                        <div className="text-[10.5px] text-slate-400 tabular-nums">
+                        <div className="text-[11px] text-[var(--tm-text-muted)] tabular-nums">
                           {entry.count} 项按月计费
                         </div>
                       </div>
-                      <div className="text-sm font-bold text-emerald-300 font-mono-tabular shrink-0">
+                      <div className="text-sm font-bold text-[var(--tm-success-text)] font-mono-tabular shrink-0">
                         {MonitorModel.money(entry.sum, entry.currency)}/月
                       </div>
                     </div>
@@ -502,14 +548,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
-                        <div className="text-[11px] font-medium text-slate-300">
+                        <div className="text-[11px] font-medium text-[var(--tm-text-secondary)]">
                           累计预存 ({entry.currency})
                         </div>
-                        <div className="text-[10.5px] text-slate-400 tabular-nums">
+                        <div className="text-[11px] text-[var(--tm-text-muted)] tabular-nums">
                           {entry.count} 项预存账户
                         </div>
                       </div>
-                      <div className="text-sm font-bold text-sky-300 font-mono-tabular shrink-0">
+                      <div className="text-sm font-bold text-[var(--tm-accent-text)] font-mono-tabular shrink-0">
                         {MonitorModel.money(entry.sum, entry.currency)}
                       </div>
                     </div>
@@ -518,21 +564,24 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               )}
 
               {(subscriptionSummary.nearestRenewal || subscriptionSummary.otherRecurringCount > 0) && (
-                <div className="flex items-center justify-between gap-2 text-[11px] pt-2 border-t border-white/10 flex-wrap">
+                <div className="flex items-center justify-between gap-2 text-[11px] pt-2 border-t border-[var(--tm-border-subtle)] flex-wrap">
                   {subscriptionSummary.nearestRenewal ? (
-                    <span className="inline-flex items-center gap-1.5 text-slate-300 min-w-0">
-                      <Calendar className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                    <span className="inline-flex items-center gap-1.5 text-[var(--tm-text-secondary)] min-w-0">
+                      <Calendar className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
                       <span className="truncate">
-                        最近续费 · <strong className="text-slate-100">{subscriptionSummary.nearestRenewal.title}</strong>
+                        最近续费 ·{' '}
+                        <strong className="text-[var(--tm-text-primary)]">
+                          {subscriptionSummary.nearestRenewal.title}
+                        </strong>
                       </span>
                     </span>
                   ) : (
-                    <span className="text-slate-400">
+                    <span className="text-[var(--tm-text-muted)]">
                       含 {subscriptionSummary.otherRecurringCount} 项非按月周期订阅
                     </span>
                   )}
                   {subscriptionSummary.nearestRenewal?.countdown && (
-                    <span className="px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 font-medium tabular-nums shrink-0">
+                    <span className="px-2 py-0.5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)] font-medium tabular-nums shrink-0">
                       {subscriptionSummary.nearestRenewal.countdown}
                     </span>
                   )}
@@ -571,10 +620,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           type="button"
                           aria-pressed={active}
                           onClick={() => setSubKindFilter(kindId)}
-                          className={`shrink-0 min-h-[36px] px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
+                          className={`shrink-0 min-h-[40px] px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
                             active
-                              ? 'bg-sky-500/20 border-sky-400/40 text-sky-100'
-                              : 'glass-inset text-slate-300 hover:border-white/20'
+                              ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                              : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
                           }`}
                         >
                           {label}
@@ -599,7 +648,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       setSubKindFilter('all');
                       setSubSearch('');
                     }}
-                    className="min-h-[40px] px-4 rounded-xl bg-sky-500/18 border border-sky-400/35 text-xs font-semibold text-sky-100 inline-flex items-center gap-1.5 active:scale-[0.98] transition-all"
+                    className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] inline-flex items-center gap-1.5 active:scale-[0.98] transition-all"
                   >
                     <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>重置筛选</span>
@@ -607,8 +656,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                 }
               />
             ) : (
-              filteredRows.map((row, index) => {
-                const key = row.id || `${row.provider}-${index}`;
+              filteredRows.map(({ row, stableKey: key }) => {
                 const intervalLabel =
                   ({ month: '月', year: '年', week: '周', day: '天' } as Record<string, string>)[
                     row.interval || ''
@@ -629,10 +677,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   : Infinity;
                 const renewalBadgeTone =
                   renewalDiffMs <= 0
-                    ? 'bg-rose-500/14 border-rose-400/30 text-rose-200'
+                    ? 'bg-[var(--tm-danger-soft-bg)] border-[var(--tm-danger-soft-border)] text-[var(--tm-danger-text)]'
                     : renewalDiffMs <= 7 * 86400_000
-                      ? 'bg-amber-500/14 border-amber-400/30 text-amber-200'
-                      : 'bg-sky-500/12 border-sky-400/25 text-sky-200';
+                      ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                      : 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]';
                 const pTone = clientTone(row.provider);
 
                 return (
@@ -644,26 +692,26 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${pTone.dot}`}
                         />
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-semibold text-slate-100 break-words">
+                          <h3 className="text-sm font-semibold text-[var(--tm-text-primary)] break-words">
                             {row.planName || providerName(row.provider)}
                           </h3>
-                          <p className="text-xs text-slate-400 mt-0.5 truncate">
+                          <p className="text-xs text-[var(--tm-text-muted)] mt-0.5 truncate">
                             {providerName(row.provider)} ·{' '}
                             {row.binding?.accountEmail || row.binding?.profileName || '未绑定账户'}
                           </p>
                         </div>
                       </div>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-[11px] font-medium text-emerald-200 shrink-0 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--tm-success-soft-bg)] border border-[var(--tm-success-soft-border)] text-[11px] font-medium text-[var(--tm-success-text)] shrink-0 whitespace-nowrap">
                         {row.kind === 'subscription' ? '周期订阅' : '预存充值'}
                       </span>
                     </div>
 
                     <div className="my-3.5 flex items-baseline justify-between gap-2 flex-wrap">
                       <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                        <div className="text-2xl font-bold text-emerald-300 font-mono-tabular">
+                        <div className="text-2xl font-bold text-[var(--tm-success-text)] font-mono-tabular">
                           {MonitorModel.money(amount, row.currency)}
                         </div>
-                        <span className="text-xs text-slate-400 tabular-nums">
+                        <span className="text-xs text-[var(--tm-text-muted)] tabular-nums">
                           {row.kind === 'subscription'
                             ? `每 ${MonitorModel.count(row.intervalCount) || 1} ${intervalLabel} · ${
                                 row.autoRenew ? '自动续费' : '不自动续费'
@@ -683,21 +731,21 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
                     <dl className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl glass-inset text-xs">
                       <div className="min-w-0">
-                        <dt className="text-[11px] text-slate-400">开始日期</dt>
-                        <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                        <dt className="text-[11px] text-[var(--tm-text-muted)]">开始日期</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-text-primary)] mt-0.5">
                           {row.startDate || '—'}
                         </dd>
                       </div>
                       <div className="min-w-0">
-                        <dt className="text-[11px] text-slate-400">结束日期</dt>
-                        <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                        <dt className="text-[11px] text-[var(--tm-text-muted)]">结束日期</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-text-primary)] mt-0.5">
                           {row.endDate || '—'}
                         </dd>
                       </div>
                       {row.nextRenewalOverride && (
-                        <div className="col-span-2 min-w-0 pt-1.5 border-t border-white/[0.06]">
-                          <dt className="text-[11px] text-slate-400">下次续费</dt>
-                          <dd className="font-mono-tabular text-sky-300 mt-0.5">
+                        <div className="col-span-2 min-w-0 pt-1.5 border-t border-[var(--tm-border-subtle)]">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">下次续费</dt>
+                          <dd className="font-mono-tabular text-[var(--tm-accent-text)] mt-0.5">
                             {row.nextRenewalOverride}
                           </dd>
                         </div>
@@ -705,26 +753,26 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     </dl>
 
                     {row.note && (
-                      <p className="text-xs text-slate-300 mt-3 pt-2.5 border-t border-white/[0.06] leading-relaxed break-words">
+                      <p className="text-xs text-[var(--tm-text-secondary)] mt-3 pt-2.5 border-t border-[var(--tm-border-subtle)] leading-relaxed break-words">
                         {row.note}
                       </p>
                     )}
 
                     {row.topUps && row.topUps.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-white/[0.06]">
+                      <div className="mt-3 pt-2.5 border-t border-[var(--tm-border-subtle)]">
                         <button
                           type="button"
                           onClick={() =>
                             setOpenTopUps((prev) => ({ ...prev, [key]: !prev[key] }))
                           }
                           aria-expanded={isExpanded}
-                          className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-sky-300 hover:text-sky-200 transition-colors"
+                          className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-[var(--tm-accent-text)] hover:opacity-90 transition-opacity"
                         >
                           <span className="tabular-nums">充值记录（{row.topUps.length} 笔）</span>
                           <ChevronDown
                             aria-hidden="true"
                             className={`w-4 h-4 transition-transform duration-150 ${
-                              isExpanded ? 'rotate-180 text-sky-400' : ''
+                              isExpanded ? 'rotate-180 text-[var(--tm-accent)]' : ''
                             }`}
                           />
                         </button>
@@ -736,8 +784,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                 key={`${topup.date}-${tIdx}`}
                                 className="flex items-center justify-between text-xs py-2.5 px-3 rounded-xl glass-inset font-mono-tabular"
                               >
-                                <span className="text-slate-300">{topup.date}</span>
-                                <span className="text-emerald-300 font-semibold">
+                                <span className="text-[var(--tm-text-secondary)]">{topup.date}</span>
+                                <span className="text-[var(--tm-success-text)] font-semibold">
                                   {MonitorModel.money(
                                     MonitorModel.numeric(topup.amountMinor) === null
                                       ? null
@@ -756,8 +804,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               })
             )}
 
-            <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-2 pb-2 tabular-nums">
-              共享列表更新 <span className="font-mono-tabular">{formatShortTime(subscriptions.updatedAt)}</span>
+            <p className="text-[11px] text-[var(--tm-text-muted)] text-center leading-relaxed pt-2 pb-2 tabular-nums">
+              共享列表更新{' '}
+              <span className="font-mono-tabular">{formatShortTime(subscriptions.updatedAt)}</span>
               <br />
               订阅金额保持原币种
             </p>
@@ -802,7 +851,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
   const statusFilterOptions: Array<[StatusFilterId, string]> = [
     ['all', `全部 ${summary.total}`],
     ['collected', `有采集 ${summary.collectedCount}`],
-    ...(summary.warnCount > 0 ? ([['warn', `预警 ${summary.warnCount}`]] as Array<[StatusFilterId, string]>) : []),
+    ...(summary.healthyCount > 0
+      ? ([['healthy', `正常 ${summary.healthyCount}`]] as Array<[StatusFilterId, string]>)
+      : []),
+    ...(summary.warnCount > 0
+      ? ([['warn', `预警 ${summary.warnCount}`]] as Array<[StatusFilterId, string]>)
+      : []),
     ...(summary.abnormalCount > 0
       ? ([['abnormal', `异常 ${summary.abnormalCount}`]] as Array<[StatusFilterId, string]>)
       : []),
@@ -827,7 +881,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             <button
               type="button"
               onClick={() => toggleManualHide(lastHidden.hash)}
-              className="min-h-[36px] px-3 rounded-xl bg-sky-400/20 hover:bg-sky-400/30 active:scale-[0.98] border border-sky-400/35 text-xs font-semibold text-sky-100 inline-flex items-center gap-1 transition-all"
+              className="min-h-[40px] px-3 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] inline-flex items-center gap-1 transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
               <span>撤销</span>
@@ -842,15 +896,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
       <section data-limits-summary="true" className="glass-hero rounded-3xl p-4 sm:p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-sky-300">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--tm-accent-text)]">
               <Gauge className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>实时额度监控</span>
             </div>
             <div className="mt-1 flex items-baseline gap-2 flex-wrap tabular-nums">
-              <span className="text-2xl font-extrabold text-white font-mono-tabular">
+              <span className="text-2xl font-extrabold text-[var(--tm-text-primary)] font-mono-tabular">
                 {summary.collectedCount}
               </span>
-              <span className="text-xs text-slate-300">
+              <span className="text-xs text-[var(--tm-text-secondary)]">
                 / <span className="font-mono-tabular">{summary.total}</span> 个账户有采集数据
               </span>
             </div>
@@ -861,9 +915,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             data-limits-mode-toggle="true"
             aria-pressed={showRemaining}
             onClick={() => setShowRemaining((prev) => !prev)}
-            className="min-h-[40px] px-3.5 py-1.5 rounded-full bg-black/30 hover:bg-black/45 active:scale-[0.98] border border-white/14 text-xs font-semibold text-sky-100 transition-all shrink-0 inline-flex items-center gap-1.5"
+            className="min-h-[44px] px-3.5 py-1.5 rounded-full bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-accent-text)] transition-all shrink-0 inline-flex items-center gap-1.5"
           >
-            <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+            <Sparkles className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
             <span>{showRemaining ? '剩余优先' : '已用优先'}</span>
           </button>
         </div>
@@ -872,91 +926,116 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         {summary.total > 0 && (
           <div
             aria-label={`健康分布：正常 ${summary.healthySeg}，预警 ${summary.warnSeg}，异常 ${summary.abnormalSeg}，无历史 ${summary.uncollectedSeg}`}
-            className="h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden flex gap-0.5"
+            className="h-1.5 w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden flex gap-0.5"
           >
             {summary.healthySeg > 0 && (
               <div
                 style={{ width: `${(summary.healthySeg / summary.total) * 100}%` }}
-                className="h-full bg-emerald-400/90 rounded-full"
+                className="h-full bg-[var(--tm-success)] rounded-full"
               />
             )}
             {summary.warnSeg > 0 && (
               <div
                 style={{ width: `${(summary.warnSeg / summary.total) * 100}%` }}
-                className="h-full bg-rose-400/90 rounded-full"
+                className="h-full bg-[var(--tm-danger)] rounded-full"
               />
             )}
             {summary.abnormalSeg > 0 && (
               <div
                 style={{ width: `${(summary.abnormalSeg / summary.total) * 100}%` }}
-                className="h-full bg-amber-400/90 rounded-full"
+                className="h-full bg-[var(--tm-warning)] rounded-full"
               />
             )}
             {summary.uncollectedSeg > 0 && (
               <div
                 style={{ width: `${(summary.uncollectedSeg / summary.total) * 100}%` }}
-                className="h-full bg-slate-500/70 rounded-full"
+                className="h-full bg-[var(--tm-text-subtle)] opacity-60 rounded-full"
               />
             )}
           </div>
         )}
 
-        {/* 4-column interactive KPI telemetry strip */}
+        {/* Equalized 4-column interactive KPI telemetry strip */}
         <div className="grid grid-cols-4 gap-1 p-1.5 rounded-2xl glass-inset tabular-nums">
           <button
             type="button"
+            disabled={summary.collectedCount === 0}
+            aria-pressed={statusFilter === 'collected'}
             onClick={() =>
               setStatusFilter((prev) => (prev === 'collected' ? 'all' : 'collected'))
             }
-            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 ${
+            className={`min-h-[44px] rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center ${
               statusFilter === 'collected'
-                ? 'bg-sky-500/22 ring-1 ring-sky-400/45 text-sky-100'
-                : 'hover:bg-white/[0.05]'
+                ? 'bg-[var(--tm-accent-soft-bg)] ring-1 ring-[var(--tm-accent-soft-border)]'
+                : 'hover:bg-[var(--tm-bg-row-hover)]'
             }`}
           >
-            <div className="text-sm font-bold font-mono-tabular text-sky-200 leading-tight">
+            <div className="text-sm font-bold font-mono-tabular text-[var(--tm-accent-text)] leading-tight">
               {summary.collectedCount}
             </div>
-            <div className="text-[10px] text-slate-300 font-medium mt-0.5">有采集</div>
+            <div className="text-[11px] text-[var(--tm-text-secondary)] font-medium mt-0.5">
+              有采集
+            </div>
           </button>
 
           <button
             type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 ${
-              statusFilter === 'all'
-                ? 'bg-white/[0.08] text-white'
-                : 'hover:bg-white/[0.05]'
+            disabled={summary.healthyCount === 0}
+            aria-pressed={statusFilter === 'healthy'}
+            onClick={() =>
+              setStatusFilter((prev) => (prev === 'healthy' ? 'all' : 'healthy'))
+            }
+            className={`min-h-[44px] rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center ${
+              statusFilter === 'healthy'
+                ? 'bg-[var(--tm-success-soft-bg)] ring-1 ring-[var(--tm-success-soft-border)]'
+                : 'hover:bg-[var(--tm-bg-row-hover)]'
             }`}
           >
-            <div className="text-sm font-bold font-mono-tabular text-emerald-300 leading-tight">
+            <div
+              className={`text-sm font-bold font-mono-tabular leading-tight ${
+                summary.healthyCount > 0
+                  ? 'text-[var(--tm-success-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
+              }`}
+            >
               {summary.healthyCount}
             </div>
-            <div className="text-[10px] text-emerald-300/90 font-medium mt-0.5">正常</div>
+            <div
+              className={`text-[11px] font-medium mt-0.5 ${
+                summary.healthyCount > 0
+                  ? 'text-[var(--tm-success-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
+              }`}
+            >
+              正常
+            </div>
           </button>
 
           <button
             type="button"
             disabled={summary.warnCount === 0}
-            onClick={() =>
-              setStatusFilter((prev) => (prev === 'warn' ? 'all' : 'warn'))
-            }
-            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 ${
+            aria-pressed={statusFilter === 'warn'}
+            onClick={() => setStatusFilter((prev) => (prev === 'warn' ? 'all' : 'warn'))}
+            className={`min-h-[44px] rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center ${
               statusFilter === 'warn'
-                ? 'bg-rose-500/22 ring-1 ring-rose-400/45 text-rose-100'
-                : 'hover:bg-white/[0.05]'
+                ? 'bg-[var(--tm-danger-soft-bg)] ring-1 ring-[var(--tm-danger-soft-border)]'
+                : 'hover:bg-[var(--tm-bg-row-hover)]'
             }`}
           >
             <div
               className={`text-sm font-bold font-mono-tabular leading-tight ${
-                summary.warnCount > 0 ? 'text-rose-300' : 'text-slate-500'
+                summary.warnCount > 0
+                  ? 'text-[var(--tm-danger-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
               }`}
             >
               {summary.warnCount}
             </div>
             <div
-              className={`text-[10px] font-medium mt-0.5 ${
-                summary.warnCount > 0 ? 'text-rose-300/90' : 'text-slate-500'
+              className={`text-[11px] font-medium mt-0.5 ${
+                summary.warnCount > 0
+                  ? 'text-[var(--tm-danger-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
               }`}
             >
               预警
@@ -966,25 +1045,30 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           <button
             type="button"
             disabled={summary.abnormalCount === 0}
+            aria-pressed={statusFilter === 'abnormal'}
             onClick={() =>
               setStatusFilter((prev) => (prev === 'abnormal' ? 'all' : 'abnormal'))
             }
-            className={`rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 ${
+            className={`min-h-[44px] rounded-xl py-1.5 px-1 text-center transition-all active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center ${
               statusFilter === 'abnormal'
-                ? 'bg-amber-500/22 ring-1 ring-amber-400/45 text-amber-100'
-                : 'hover:bg-white/[0.05]'
+                ? 'bg-[var(--tm-warning-soft-bg)] ring-1 ring-[var(--tm-warning-soft-border)]'
+                : 'hover:bg-[var(--tm-bg-row-hover)]'
             }`}
           >
             <div
               className={`text-sm font-bold font-mono-tabular leading-tight ${
-                summary.abnormalCount > 0 ? 'text-amber-300' : 'text-slate-500'
+                summary.abnormalCount > 0
+                  ? 'text-[var(--tm-warning-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
               }`}
             >
               {summary.abnormalCount}
             </div>
             <div
-              className={`text-[10px] font-medium mt-0.5 ${
-                summary.abnormalCount > 0 ? 'text-amber-300/90' : 'text-slate-500'
+              className={`text-[11px] font-medium mt-0.5 ${
+                summary.abnormalCount > 0
+                  ? 'text-[var(--tm-warning-text)]'
+                  : 'text-[var(--tm-text-subtle)]'
               }`}
             >
               异常
@@ -994,42 +1078,43 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
         {/* Next upcoming quota reset spotlight */}
         {nextResetSpotlight && (
-          <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-white/10 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-slate-300 min-w-0">
-              <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+          <div className="flex items-center justify-between gap-2 text-[11px] pt-2 border-t border-[var(--tm-border-subtle)] flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[var(--tm-text-secondary)] min-w-0">
+              <Clock className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
               <span className="truncate">
-                最近重置 · <strong className="text-slate-100">{nextResetSpotlight.title}</strong> ·{' '}
-                {nextResetSpotlight.windowLabel}
+                最近重置 ·{' '}
+                <strong className="text-[var(--tm-text-primary)]">{nextResetSpotlight.title}</strong>{' '}
+                · {nextResetSpotlight.windowLabel}
               </span>
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/25 text-sky-200 font-medium tabular-nums shrink-0">
+            <span className="px-2 py-0.5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)] font-medium tabular-nums shrink-0">
               {nextResetSpotlight.countdown}
             </span>
           </div>
         )}
 
-        {summary.uncollectedCount > 0 && (
+        {summary.autoHideableCount > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               data-limits-hide-uncollected="true"
               aria-pressed={hideUncollected}
               onClick={() => setHideUncollected((prev) => !prev)}
-              className={`min-h-[40px] px-3.5 rounded-xl border text-xs font-medium inline-flex items-center gap-1.5 transition-all active:scale-[0.98] tabular-nums ${
+              className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-medium inline-flex items-center gap-1.5 transition-all active:scale-[0.98] tabular-nums ${
                 hideUncollected
-                  ? 'bg-sky-500/18 border-sky-400/35 text-sky-100'
-                  : 'bg-white/[0.05] border-white/12 text-slate-200 hover:border-white/25'
+                  ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                  : 'bg-[var(--tm-bg-control)] border-[var(--tm-border-default)] text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
               }`}
             >
               {hideUncollected ? (
-                <EyeOff className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+                <EyeOff className="w-3.5 h-3.5 text-[var(--tm-accent-text)] shrink-0" aria-hidden="true" />
               ) : (
-                <Eye className="w-3.5 h-3.5 text-slate-300 shrink-0" aria-hidden="true" />
+                <Eye className="w-3.5 h-3.5 text-[var(--tm-text-muted)] shrink-0" aria-hidden="true" />
               )}
               <span>
                 {hideUncollected
-                  ? `已隐藏无历史 (${summary.uncollectedCount})`
-                  : `隐藏无历史 (${summary.uncollectedCount})`}
+                  ? `已隐藏无历史 (${autoHiddenItems.length})`
+                  : `隐藏无历史 (${summary.autoHideableCount})`}
               </span>
             </button>
           </div>
@@ -1059,10 +1144,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
               const active = statusFilter === fId;
               const activeTone =
                 fId === 'warn'
-                  ? 'bg-rose-500/20 border-rose-400/45 text-rose-100'
+                  ? 'bg-[var(--tm-danger-soft-bg)] border-[var(--tm-danger-soft-border)] text-[var(--tm-danger-text)]'
                   : fId === 'abnormal'
-                  ? 'bg-amber-500/20 border-amber-400/45 text-amber-100'
-                  : 'bg-sky-500/20 border-sky-400/40 text-sky-100';
+                    ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                    : fId === 'healthy'
+                      ? 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
+                      : 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]';
               return (
                 <button
                   key={fId}
@@ -1070,10 +1157,10 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   data-limits-filter={fId}
                   aria-pressed={active}
                   onClick={() => setStatusFilter(fId)}
-                  className={`shrink-0 min-h-[34px] px-3 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
+                  className={`shrink-0 min-h-[40px] px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap tabular-nums ${
                     active
                       ? activeTone
-                      : 'glass-inset text-slate-300 hover:border-white/20'
+                      : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
                   }`}
                 >
                   {fLabel}
@@ -1082,10 +1169,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/[0.06] flex-wrap">
-            <div className="flex items-center gap-2 text-[11px] text-slate-400 tabular-nums">
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[var(--tm-border-subtle)] flex-wrap">
+            <div className="flex items-center gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums">
               <span>
-                显示 <strong className="text-slate-200 font-semibold">{visibleCount}</strong> 项
+                显示{' '}
+                <strong className="text-[var(--tm-text-primary)] font-semibold">
+                  {visibleCount}
+                </strong>{' '}
+                项
               </span>
               {hasLimitsFilter && (
                 <button
@@ -1095,9 +1186,9 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     setStatusFilter('all');
                     setSortBy('default');
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/12 text-[10.5px] font-medium text-sky-200 active:scale-95 transition-all"
+                  className="inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-full bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-medium text-[var(--tm-accent-text)] active:scale-95 transition-all"
                 >
-                  <RotateCcw className="w-2.5 h-2.5" aria-hidden="true" />
+                  <RotateCcw className="w-3 h-3" aria-hidden="true" />
                   <span>重置</span>
                 </button>
               )}
@@ -1128,15 +1219,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             keyword
               ? '没有匹配的可见工具'
               : autoHiddenItems.length > 0 || manualHiddenItems.length > 0
-              ? '当前没有可展示的已采集工具'
-              : '没有符合筛选条件的工具'
+                ? '当前没有可展示的已采集工具'
+                : '没有符合筛选条件的工具'
           }
           description={
             hiddenSearchMatches > 0
               ? `已隐藏的工具中有 ${hiddenSearchMatches} 项匹配当前搜索。`
               : autoHiddenItems.length > 0
-              ? `有 ${autoHiddenItems.length} 个未采集/未配置工具已被自动隐藏。`
-              : '可以清除筛选条件或恢复全部显示。'
+                ? `有 ${autoHiddenItems.length} 个未采集/未配置工具已被自动隐藏。`
+                : '可以清除筛选条件或恢复全部显示。'
           }
           action={
             <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -1147,7 +1238,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     setSearch('');
                     setStatusFilter('all');
                   }}
-                  className="min-h-[44px] px-4 rounded-xl glass-inset text-xs font-semibold text-sky-200 hover:border-sky-400/35 active:scale-[0.98] transition-all"
+                  className="min-h-[44px] px-4 rounded-xl glass-inset text-xs font-semibold text-[var(--tm-accent-text)] hover:border-[var(--tm-accent-soft-border)] active:scale-[0.98] transition-all"
                 >
                   清除筛选
                 </button>
@@ -1157,7 +1248,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   type="button"
                   data-limits-show-hidden="true"
                   onClick={() => setHideUncollected(false)}
-                  className="min-h-[44px] px-4 rounded-xl bg-sky-500/18 border border-sky-400/35 text-xs font-semibold text-sky-100 active:scale-[0.98] transition-all tabular-nums"
+                  className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] active:scale-[0.98] transition-all tabular-nums"
                 >
                   显示无采集历史 ({autoHiddenItems.length})
                 </button>
@@ -1169,7 +1260,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     onChangePrefs({ ...prefs, hiddenAccountHashes: [] });
                     setLastHidden(null);
                   }}
-                  className="min-h-[44px] px-4 rounded-xl bg-white/[0.06] border border-white/12 text-xs font-semibold text-slate-100 active:scale-[0.98] transition-all tabular-nums"
+                  className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-text-primary)] active:scale-[0.98] transition-all tabular-nums"
                 >
                   恢复手动隐藏 ({manualHiddenItems.length})
                 </button>
@@ -1183,20 +1274,20 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
             key={group.key}
             className={
               group.linked
-                ? 'rounded-[28px] border border-sky-400/24 bg-sky-500/[0.035] p-2.5 space-y-2.5'
+                ? 'rounded-[28px] border border-[var(--tm-accent-soft-border)] bg-[var(--tm-accent-soft-bg)] p-2.5 space-y-2.5'
                 : 'space-y-3.5'
             }
           >
             {group.linked && (
               <div
                 data-limit-linked-group={group.key}
-                className="px-3 py-2 rounded-2xl bg-sky-500/10 border border-sky-400/20 text-xs text-slate-200 flex items-center justify-between gap-2 flex-wrap"
+                className="px-3 py-2 rounded-2xl bg-[var(--tm-bg-surface)] border border-[var(--tm-accent-soft-border)] text-xs text-[var(--tm-text-secondary)] flex items-center justify-between gap-2 flex-wrap"
               >
-                <span className="inline-flex items-center gap-1.5 font-semibold text-sky-200">
-                  <Link2 className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--tm-accent-text)]">
+                  <Link2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>{group.label}</span>
                 </span>
-                <span className="text-[11px] text-slate-300">
+                <span className="text-[11px] text-[var(--tm-text-muted)]">
                   已验证的 MiniMax 同一账户 · 各产品独立计量
                 </span>
               </div>
@@ -1204,6 +1295,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
 
             {group.items.map(
               ({
+                itemKey,
                 provider,
                 account,
                 accountHash,
@@ -1236,26 +1328,25 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     ? provider.accountName
                     : ''
                   : account.displayName &&
-                    provider.accountName &&
-                    provider.accountName !== account.displayName
-                  ? provider.accountName
-                  : '';
-                const subMeta = [
-                  accountTitle,
-                  secondaryAccountName,
-                  planOrAccountLabel,
-                ].filter(Boolean);
+                      provider.accountName &&
+                      provider.accountName !== account.displayName
+                    ? provider.accountName
+                    : '';
+                const subMeta = [accountTitle, secondaryAccountName, planOrAccountLabel].filter(
+                  Boolean,
+                );
+                const isHistoryOpen = openHistory === itemKey;
 
                 return (
                   <section
-                    key={account.key}
+                    key={itemKey}
                     data-limit-account={account.key}
                     className={`glass-panel rounded-3xl p-4 sm:p-5 transition-colors ${
                       isWarn
-                        ? 'border-rose-400/32'
+                        ? 'border-[var(--tm-danger-soft-border)]'
                         : !hasHistory
-                        ? 'opacity-90'
-                        : ''
+                          ? 'opacity-90'
+                          : ''
                     }`}
                   >
                     <div className="space-y-1.5">
@@ -1263,18 +1354,18 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <span
                             aria-hidden="true"
-                            className="w-7 h-7 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center shrink-0"
+                            className="w-7 h-7 rounded-xl bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] flex items-center justify-center shrink-0"
                           >
                             <span className={`w-2.5 h-2.5 rounded-full ${tone.dot}`} />
                           </span>
-                          <h3 className="text-[15px] font-bold text-slate-50 leading-snug break-words min-w-0">
+                          <h3 className="text-[15px] font-bold text-[var(--tm-text-primary)] leading-snug break-words min-w-0">
                             {displayTitle}
                           </h3>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {isWarn && isHealthy && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border bg-rose-500/14 border-rose-400/30 text-rose-200 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-[var(--tm-danger-soft-bg)] border-[var(--tm-danger-soft-border)] text-[var(--tm-danger-text)] whitespace-nowrap">
                               <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
                               <span>预警</span>
                             </span>
@@ -1282,14 +1373,14 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${
                               isHealthy
-                                ? 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200'
-                                : 'bg-amber-500/12 border-amber-400/25 text-amber-200'
+                                ? 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
+                                : 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
                             }`}
                           >
                             <i
                               aria-hidden="true"
                               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                isHealthy ? 'bg-emerald-400' : 'bg-amber-400'
+                                isHealthy ? 'bg-[var(--tm-success)]' : 'bg-[var(--tm-warning)]'
                               }`}
                             />
                             <span>{statusText}</span>
@@ -1300,12 +1391,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       {(account.regionLabel || !hasHistory) && (
                         <div className="flex items-center gap-1.5 flex-wrap pl-9">
                           {account.regionLabel && (
-                            <span className="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[11px] font-medium text-slate-300">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] font-medium text-[var(--tm-text-secondary)]">
                               {account.regionLabel}
                             </span>
                           )}
                           {!hasHistory && (
-                            <span className="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[11px] text-slate-300">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] text-[var(--tm-text-muted)]">
                               无采集历史
                             </span>
                           )}
@@ -1313,27 +1404,32 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       )}
 
                       {subMeta.length > 0 && (
-                        <p className="text-xs text-slate-300 break-words pl-9">{subMeta.join(' · ')}</p>
+                        <p className="text-xs text-[var(--tm-text-secondary)] break-words pl-9">
+                          {subMeta.join(' · ')}
+                        </p>
                       )}
 
                       {!preferEmailPrimary &&
                         (account.displayName || provider.accountName) &&
                         provider.accountEmail && (
-                          <p className="text-[11px] font-mono-tabular text-slate-400 truncate pl-9">
+                          <p className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] truncate pl-9">
                             {provider.accountEmail}
                           </p>
                         )}
 
                       {account.sourceLabel && (
-                        <p className="text-[11px] text-slate-400 break-words pl-9 inline-flex items-center gap-1">
-                          <Server className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                        <p className="text-[11px] text-[var(--tm-text-muted)] break-words pl-9 inline-flex items-center gap-1">
+                          <Server
+                            className="w-3 h-3 text-[var(--tm-text-subtle)] shrink-0"
+                            aria-hidden="true"
+                          />
                           <span>来源设备：{account.sourceLabel}</span>
                         </p>
                       )}
                     </div>
 
                     {quotas.length > 0 ? (
-                      <div className="mt-3.5 space-y-2.5 pt-3 border-t border-white/8">
+                      <div className="mt-3.5 space-y-2.5 pt-3 border-t border-[var(--tm-border-subtle)]">
                         {quotas.map(({ win, q }, wIdx) => {
                           const winWarn =
                             q.percent !== null &&
@@ -1345,7 +1441,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           const countdown = win.resetsAt
                             ? formatRelativeCountdown(
                                 win.resetsAt,
-                                Date.now(),
+                                effectiveNow,
                                 win.boundaryKind === 'expiry' ? '已到期' : '即将重置',
                               )
                             : '';
@@ -1361,11 +1457,11 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                 className="rounded-2xl glass-inset p-3.5 space-y-1.5"
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-medium text-slate-300 min-w-0 break-words">
+                                  <span className="text-xs font-medium text-[var(--tm-text-secondary)] min-w-0 break-words">
                                     {q.label}
                                   </span>
                                   {countdown && (
-                                    <span className="px-2 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-[10.5px] text-sky-300 font-medium tabular-nums shrink-0">
+                                    <span className="px-2 py-0.5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[11px] text-[var(--tm-accent-text)] font-medium tabular-nums shrink-0">
                                       {countdown}
                                     </span>
                                   )}
@@ -1373,15 +1469,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                 <div
                                   className={`text-xl font-bold font-mono-tabular leading-tight break-words ${
                                     q.value === '无限额'
-                                      ? 'text-sky-300'
+                                      ? 'text-[var(--tm-accent-text)]'
                                       : q.remaining
-                                      ? 'text-emerald-300'
-                                      : 'text-slate-100'
+                                        ? 'text-[var(--tm-success-text)]'
+                                        : 'text-[var(--tm-text-primary)]'
                                   }`}
                                 >
                                   {needsRemainingPrefix ? (
                                     <>
-                                      <span className="text-xs font-medium font-sans text-slate-400">
+                                      <span className="text-xs font-medium font-sans text-[var(--tm-text-muted)]">
                                         剩余
                                       </span>{' '}
                                       <span>{q.value}</span>
@@ -1392,15 +1488,18 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                 </div>
 
                                 {q.detail && (
-                                  <p className="text-[11px] text-slate-300 font-mono-tabular">
+                                  <p className="text-[11px] text-[var(--tm-text-secondary)] font-mono-tabular">
                                     {q.detail}
                                   </p>
                                 )}
 
                                 {win.resetsAt && (
-                                  <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 tabular-nums flex-wrap pt-0.5">
+                                  <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums flex-wrap pt-0.5">
                                     <span className="inline-flex items-center gap-1">
-                                      <Clock className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                                      <Clock
+                                        className="w-3 h-3 text-[var(--tm-text-subtle)] shrink-0"
+                                        aria-hidden="true"
+                                      />
                                       <span>
                                         {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
                                         <span className="font-mono-tabular">
@@ -1412,7 +1511,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                 )}
 
                                 {(q.description ?? win.resetDescription) && (
-                                  <p className="text-[11px] text-slate-400 break-words leading-relaxed">
+                                  <p className="text-[11px] text-[var(--tm-text-muted)] break-words leading-relaxed">
                                     {q.description ?? win.resetDescription}
                                   </p>
                                 )}
@@ -1425,23 +1524,23 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                               key={`${win.kind || 'win'}-${wIdx}`}
                               className={`rounded-2xl border p-3.5 space-y-2 ${
                                 winWarn
-                                  ? 'bg-rose-500/[0.05] border-rose-400/28'
+                                  ? 'bg-[var(--tm-danger-soft-bg)] border-[var(--tm-danger-soft-border)]'
                                   : winElevated
-                                    ? 'bg-amber-500/[0.04] border-amber-400/24'
-                                    : 'bg-white/[0.025] border-white/[0.07]'
+                                    ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)]'
+                                    : 'bg-[var(--tm-bg-row)] border-[var(--tm-border-subtle)]'
                               }`}
                             >
                               <div className="flex items-baseline justify-between gap-2 text-xs">
-                                <span className="text-slate-200 font-medium min-w-0 break-words">
+                                <span className="text-[var(--tm-text-primary)] font-medium min-w-0 break-words">
                                   {q.label}
                                 </span>
                                 <span
                                   className={`font-semibold font-mono-tabular shrink-0 ${
                                     winWarn
-                                      ? 'text-rose-300'
+                                      ? 'text-[var(--tm-danger-text)]'
                                       : winElevated
-                                      ? 'text-amber-300'
-                                      : 'text-sky-300'
+                                        ? 'text-[var(--tm-warning-text)]'
+                                        : 'text-[var(--tm-accent-text)]'
                                   }`}
                                 >
                                   {needsRemainingPrefix ? `剩余 ${q.value}` : q.value}
@@ -1455,15 +1554,18 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                               />
 
                               {q.detail && (
-                                <p className="text-[11px] text-slate-300 font-mono-tabular">
+                                <p className="text-[11px] text-[var(--tm-text-secondary)] font-mono-tabular">
                                   {q.detail}
                                 </p>
                               )}
 
                               {win.resetsAt && (
-                                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 tabular-nums flex-wrap">
+                                <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums flex-wrap">
                                   <span className="inline-flex items-center gap-1">
-                                    <Clock className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
+                                    <Clock
+                                      className="w-3 h-3 text-[var(--tm-text-subtle)] shrink-0"
+                                      aria-hidden="true"
+                                    />
                                     <span>
                                       {win.boundaryKind === 'expiry' ? '到期时间' : '重置时间'}{' '}
                                       <span className="font-mono-tabular">
@@ -1472,13 +1574,15 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                                     </span>
                                   </span>
                                   {countdown && (
-                                    <span className="text-sky-300 font-medium">{countdown}</span>
+                                    <span className="text-[var(--tm-accent-text)] font-medium">
+                                      {countdown}
+                                    </span>
                                   )}
                                 </div>
                               )}
 
                               {(q.description ?? win.resetDescription) && (
-                                <p className="text-[11px] text-slate-400 break-words leading-relaxed">
+                                <p className="text-[11px] text-[var(--tm-text-muted)] break-words leading-relaxed">
                                   {q.description ?? win.resetDescription}
                                 </p>
                               )}
@@ -1487,7 +1591,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         })}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-white/8">
+                      <p className="text-xs text-[var(--tm-text-muted)] mt-3 pt-3 border-t border-[var(--tm-border-subtle)]">
                         暂无额度窗口读数
                       </p>
                     )}
@@ -1496,15 +1600,17 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                       <DetailsDisclosure
                         data-balance-details=""
                         summary="余额组成"
-                        className="mt-3 pt-1 border-t border-white/8"
-                        summaryClassName="text-sky-300 hover:text-sky-200"
+                        className="mt-3 pt-1 border-t border-[var(--tm-border-subtle)]"
+                        summaryClassName="text-[var(--tm-accent-text)]"
                         bodyClassName="mt-1"
                       >
                         <dl className="space-y-2 text-xs p-3 rounded-2xl glass-inset">
                           {balanceDetails.map((row) => (
                             <div key={row.key} className="flex justify-between gap-2">
-                              <dt className="text-slate-400">{row.label}</dt>
-                              <dd className="font-mono-tabular text-slate-100">{row.value}</dd>
+                              <dt className="text-[var(--tm-text-muted)]">{row.label}</dt>
+                              <dd className="font-mono-tabular text-[var(--tm-text-primary)]">
+                                {row.value}
+                              </dd>
                             </div>
                           ))}
                         </dl>
@@ -1512,13 +1618,20 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                     )}
 
                     {spend.length > 0 && (
-                      <div data-limit-spend="" className="mt-3 pt-3 border-t border-white/8">
-                        <p className="text-xs font-semibold text-slate-200 mb-2">API 现金消费</p>
+                      <div
+                        data-limit-spend=""
+                        className="mt-3 pt-3 border-t border-[var(--tm-border-subtle)]"
+                      >
+                        <p className="text-xs font-semibold text-[var(--tm-text-primary)] mb-2">
+                          API 现金消费
+                        </p>
                         <dl className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl glass-inset text-xs">
                           {spend.map((row) => (
                             <div key={row.key} className="min-w-0">
-                              <dt className="text-slate-400 text-[11px]">{row.label}</dt>
-                              <dd className="font-mono-tabular text-slate-100 font-semibold mt-0.5 break-words">
+                              <dt className="text-[var(--tm-text-muted)] text-[11px]">
+                                {row.label}
+                              </dt>
+                              <dd className="font-mono-tabular text-[var(--tm-text-primary)] font-semibold mt-0.5 break-words">
                                 {row.value}
                               </dd>
                             </div>
@@ -1535,13 +1648,13 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         {code
                           ? '请在来源设备检查 MiniMax Code 登录状态。'
                           : provider.provider === 'minimax'
-                          ? '请在来源设备检查此 API 账户的凭据与计费类型。'
-                          : '请在来源设备处理账户状态。'}
+                            ? '请在来源设备检查此 API 账户的凭据与计费类型。'
+                            : '请在来源设备处理账户状态。'}
                       </InlineAlert>
                     )}
 
-                    <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-400 tabular-nums min-w-0 truncate">
+                    <div className="mt-3 pt-2.5 border-t border-[var(--tm-border-subtle)] flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-[var(--tm-text-muted)] tabular-nums min-w-0 truncate">
                         读数更新{' '}
                         <span className="font-mono-tabular">
                           {formatShortTime(provider.updatedAt)}
@@ -1555,7 +1668,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           onClick={() => toggleManualHide(accountHash, displayTitle)}
                           aria-label={`隐藏 ${displayTitle}`}
                           title="隐藏此工具"
-                          className="min-w-[44px] min-h-[44px] rounded-xl glass-inset hover:border-white/20 active:scale-[0.97] flex items-center justify-center text-slate-400 hover:text-slate-200 transition-all"
+                          className="min-w-[44px] min-h-[44px] rounded-xl glass-inset hover:border-[var(--tm-border-strong)] active:scale-[0.97] flex items-center justify-center text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)] transition-all"
                         >
                           <EyeOff className="w-4 h-4" aria-hidden="true" />
                         </button>
@@ -1563,14 +1676,12 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                         <button
                           type="button"
                           data-quota-history-toggle={account.key}
-                          aria-expanded={openHistory === account.key}
-                          onClick={() =>
-                            setOpenHistory(openHistory === account.key ? '' : account.key)
-                          }
+                          aria-expanded={isHistoryOpen}
+                          onClick={() => setOpenHistory(isHistoryOpen ? '' : itemKey)}
                           className={`min-h-[44px] px-3 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                            openHistory === account.key
-                              ? 'bg-sky-500/18 border-sky-400/35 text-sky-100'
-                              : 'glass-inset hover:border-sky-400/35 text-sky-300'
+                            isHistoryOpen
+                              ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                              : 'glass-inset hover:border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
                           }`}
                         >
                           <History className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -1578,16 +1689,16 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                           <ChevronDown
                             aria-hidden="true"
                             className={`w-3.5 h-3.5 transition-transform duration-150 ${
-                              openHistory === account.key ? 'rotate-180' : ''
+                              isHistoryOpen ? 'rotate-180' : ''
                             }`}
                           />
                         </button>
                       </div>
                     </div>
 
-                    {openHistory === account.key && (
+                    {isHistoryOpen && (
                       <QuotaHistoryPreview
-                        key={`${deviceId}:${account.key}`}
+                        key={`${deviceId}:${itemKey}`}
                         provider={provider}
                         history={history}
                         fetchedAt={fetchedAt}
@@ -1609,8 +1720,8 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           className="glass-panel rounded-3xl p-4 space-y-3"
         >
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2 text-xs text-slate-300 min-w-0 tabular-nums">
-              <EyeOff className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 text-xs text-[var(--tm-text-secondary)] min-w-0 tabular-nums">
+              <EyeOff className="w-4 h-4 text-[var(--tm-text-muted)] shrink-0" aria-hidden="true" />
               <span className="truncate">
                 {autoHiddenItems.length > 0 && `已隐藏 ${autoHiddenItems.length} 个无采集历史`}
                 {autoHiddenItems.length > 0 && manualHiddenItems.length > 0 && ' · '}
@@ -1624,7 +1735,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   type="button"
                   data-limits-show-hidden="true"
                   onClick={() => setHideUncollected(false)}
-                  className="min-h-[40px] px-3.5 rounded-xl bg-sky-500/18 border border-sky-400/35 text-xs font-semibold text-sky-100 hover:bg-sky-500/25 active:scale-[0.98] transition-all"
+                  className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] transition-all"
                 >
                   显示无历史
                 </button>
@@ -1635,7 +1746,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   data-limits-manage-hidden="true"
                   onClick={() => setShowHiddenDrawer((prev) => !prev)}
                   aria-expanded={showHiddenDrawer}
-                  className="min-h-[40px] px-3.5 rounded-xl glass-inset text-xs font-medium text-slate-200 hover:border-white/20 active:scale-[0.98] transition-all"
+                  className="min-h-[44px] px-3.5 rounded-xl glass-inset text-xs font-medium text-[var(--tm-text-primary)] hover:border-[var(--tm-border-strong)] active:scale-[0.98] transition-all"
                 >
                   {showHiddenDrawer ? '收起管理' : '管理隐藏'}
                 </button>
@@ -1644,20 +1755,20 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
           </div>
 
           {showHiddenDrawer && manualHiddenItems.length > 0 && (
-            <div className="pt-2.5 border-t border-white/8 space-y-2">
+            <div className="pt-2.5 border-t border-[var(--tm-border-subtle)] space-y-2">
               {manualHiddenItems.map((item) => (
                 <div
-                  key={item.account.key}
+                  key={item.itemKey}
                   className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-2xl glass-inset text-xs"
                 >
                   <div className="min-w-0 flex-1">
-                    <span className="font-medium text-slate-100 truncate block">
+                    <span className="font-medium text-[var(--tm-text-primary)] truncate block">
                       {item.displayTitle}
                     </span>
                     {(item.provider.accountName ||
                       item.provider.accountEmail ||
                       item.account.sourceLabel) && (
-                      <span className="text-[11px] text-slate-400 truncate block mt-0.5">
+                      <span className="text-[11px] text-[var(--tm-text-muted)] truncate block mt-0.5">
                         {[
                           item.provider.accountName || item.provider.accountEmail,
                           item.account.sourceLabel,
@@ -1670,7 +1781,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => toggleManualHide(item.accountHash)}
-                    className="min-h-[40px] px-3.5 rounded-xl bg-sky-500/18 border border-sky-400/35 text-xs font-semibold text-sky-100 active:scale-[0.98] transition-all shrink-0"
+                    className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] active:scale-[0.98] transition-all shrink-0"
                   >
                     恢复
                   </button>
@@ -1683,7 +1794,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
                   setShowHiddenDrawer(false);
                   setLastHidden(null);
                 }}
-                className="w-full min-h-[44px] rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] active:scale-[0.99] border border-white/10 text-xs font-semibold text-slate-200 transition-all"
+                className="w-full min-h-[44px] rounded-2xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.99] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-text-primary)] transition-all"
               >
                 全部恢复显示
               </button>
@@ -1692,7 +1803,7 @@ export const LimitsView: React.FC<LimitsViewProps> = ({
         </section>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-2 pb-2">
+      <p className="text-[11px] text-[var(--tm-text-muted)] text-center leading-relaxed pt-2 pb-2">
         账户与来源设备按 Hub 读数展示 · 刷新只读取已有额度
       </p>
     </div>

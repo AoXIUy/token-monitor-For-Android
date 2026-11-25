@@ -188,19 +188,47 @@ test('approval alerts sanitize items, open overview on tap and reset on reconnec
   assert.equal(state.approvals.items.length, 0);
 });
 
-test('display preferences sanitize separateQoderClients and exactTrendTokens and survive Hub connection changes', async () => {
+test('display preferences sanitize separateQoderClients, exactTrendTokens, theme, systemDark and survive Hub connection changes', async () => {
   const { createInitialState, receiveNativeMessage } = await stateModule;
   let state = createInitialState();
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: false, exactTrendTokens: false });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian' });
+  assert.equal(state.systemDark, true);
+  assert.equal(state.imeVisible, false);
 
-  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: true, exactTrendTokens: true });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
+  state = receiveNativeMessage(state, {
+    type: 'displayPrefs',
+    separateQoderClients: true,
+    exactTrendTokens: true,
+    theme: 'daylight',
+    systemDark: false,
+  });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'daylight' });
+  assert.equal(state.systemDark, false);
 
-  state = receiveNativeMessage(state, { type: 'displayPrefs', separateQoderClients: 'truthy-string', exactTrendTokens: 1 });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
+  state = receiveNativeMessage(state, {
+    type: 'displayPrefs',
+    separateQoderClients: 'truthy-string',
+    exactTrendTokens: 1,
+    theme: 'not-a-real-theme',
+    systemDark: 'yes',
+  });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'daylight' });
+  assert.equal(state.systemDark, false);
+
+  state = receiveNativeMessage(state, { type: 'displayPrefs', theme: '  AUTO  ', systemDark: true });
+  assert.equal(state.displayPrefs.theme, 'auto');
+  assert.equal(state.systemDark, true);
+
+  state = receiveNativeMessage(state, { type: 'imeVisibility', visible: true });
+  assert.equal(state.imeVisible, true);
 
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.example.com' });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true });
+  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'auto' });
+  assert.equal(state.systemDark, true);
+  assert.equal(state.imeVisible, true);
+
+  state = receiveNativeMessage(state, { type: 'imeVisibility', visible: false });
+  assert.equal(state.imeVisible, false);
 });
 
 test('limitAccountPresentation sanitizes custom labels/order and resets on reconnect', async () => {

@@ -217,6 +217,27 @@ export function sanitizeUsageReport(raw) {
   /** @param {unknown} list @param {number} max */
   const boundedArray = (list, max = 100) => (Array.isArray(list) ? list.slice(0, max) : []);
 
+  /**
+   * Deduplicate sanitized entries by their primary string key while preserving order.
+   * @template T
+   * @param {T[]} list
+   * @param {(entry: T) => string} getKey
+   * @returns {T[]}
+   */
+  const dedupeByKey = (list, getKey) => {
+    /** @type {Set<string>} */
+    const seen = new Set();
+    /** @type {T[]} */
+    const out = [];
+    for (const entry of list) {
+      const k = getKey(entry);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(entry);
+    }
+    return out;
+  };
+
   return {
     schemaVersion: Math.max(1, Math.floor(finiteNum(src.schemaVersion, 1))),
     schema: cleanText(src.schema, 64) || 'token-monitor-report/v1',
@@ -280,74 +301,95 @@ export function sanitizeUsageReport(raw) {
         costDeltaPct: nullableNum(comparisonObj.costDeltaPct),
       } : null,
     },
-    projects: boundedArray(src.projects, 100).map((entry) => ({
-      key: cleanText(entry?.key, 120),
-      label: cleanText(entry?.label, 120) || cleanText(entry?.key, 120),
-      tokens: Math.max(0, finiteNum(entry?.tokens)),
-      costUsd: Math.max(0, finiteNum(entry?.costUsd)),
-      unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
-      tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
-      costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
-      sessionCount: Math.max(0, Math.floor(finiteNum(entry?.sessionCount))),
-      clients: boundedArray(entry?.clients, 20).map((c) => ({
-        client: cleanText(c?.client, 48),
-        tokens: Math.max(0, finiteNum(c?.tokens)),
-        sharePct: Math.max(0, finiteNum(c?.sharePct)),
+    projects: dedupeByKey(
+      boundedArray(src.projects, 100).map((entry) => ({
+        key: cleanText(entry?.key, 120),
+        label: cleanText(entry?.label, 120) || cleanText(entry?.key, 120),
+        tokens: Math.max(0, finiteNum(entry?.tokens)),
+        costUsd: Math.max(0, finiteNum(entry?.costUsd)),
+        unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
+        tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
+        costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
+        sessionCount: Math.max(0, Math.floor(finiteNum(entry?.sessionCount))),
+        clients: dedupeByKey(
+          boundedArray(entry?.clients, 20).map((c) => ({
+            client: cleanText(c?.client, 48),
+            tokens: Math.max(0, finiteNum(c?.tokens)),
+            sharePct: Math.max(0, finiteNum(c?.sharePct)),
+          })),
+          (c) => c.client,
+        ),
+        models: dedupeByKey(
+          boundedArray(entry?.models, 20).map((m) => ({
+            model: cleanText(m?.model, 120),
+            tokens: Math.max(0, finiteNum(m?.tokens)),
+            sharePct: Math.max(0, finiteNum(m?.sharePct)),
+          })),
+          (m) => m.model,
+        ),
       })),
-      models: boundedArray(entry?.models, 20).map((m) => ({
-        model: cleanText(m?.model, 120),
-        tokens: Math.max(0, finiteNum(m?.tokens)),
-        sharePct: Math.max(0, finiteNum(m?.sharePct)),
+      (p) => p.key || p.label,
+    ),
+    clients: dedupeByKey(
+      boundedArray(src.clients, 50).map((entry) => ({
+        client: cleanText(entry?.client, 48),
+        tokens: Math.max(0, finiteNum(entry?.tokens)),
+        costUsd: Math.max(0, finiteNum(entry?.costUsd)),
+        unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
+        tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
+        costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
+        cacheReadTokens: Math.max(0, finiteNum(entry?.cacheReadTokens)),
+        cacheWriteTokens: Math.max(0, finiteNum(entry?.cacheWriteTokens)),
+        outputTokens: Math.max(0, finiteNum(entry?.outputTokens)),
+        inputTokens: Math.max(0, finiteNum(entry?.inputTokens)),
+        unclassifiedTokens: Math.max(0, finiteNum(entry?.unclassifiedTokens)),
+        cacheHitRatePct: nullableNum(entry?.cacheHitRatePct),
+        messageCount: Math.max(0, Math.floor(finiteNum(entry?.messageCount))),
       })),
-    })),
-    clients: boundedArray(src.clients, 50).map((entry) => ({
-      client: cleanText(entry?.client, 48),
-      tokens: Math.max(0, finiteNum(entry?.tokens)),
-      costUsd: Math.max(0, finiteNum(entry?.costUsd)),
-      unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
-      tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
-      costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
-      cacheReadTokens: Math.max(0, finiteNum(entry?.cacheReadTokens)),
-      cacheWriteTokens: Math.max(0, finiteNum(entry?.cacheWriteTokens)),
-      outputTokens: Math.max(0, finiteNum(entry?.outputTokens)),
-      inputTokens: Math.max(0, finiteNum(entry?.inputTokens)),
-      unclassifiedTokens: Math.max(0, finiteNum(entry?.unclassifiedTokens)),
-      cacheHitRatePct: nullableNum(entry?.cacheHitRatePct),
-      messageCount: Math.max(0, Math.floor(finiteNum(entry?.messageCount))),
-    })),
-    models: boundedArray(src.models, 100).map((entry) => ({
-      model: cleanText(entry?.model, 120),
-      tokens: Math.max(0, finiteNum(entry?.tokens)),
-      costUsd: Math.max(0, finiteNum(entry?.costUsd)),
-      unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
-      tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
-      costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
-      cacheReadTokens: Math.max(0, finiteNum(entry?.cacheReadTokens)),
-      cacheWriteTokens: Math.max(0, finiteNum(entry?.cacheWriteTokens)),
-      outputTokens: Math.max(0, finiteNum(entry?.outputTokens)),
-      inputTokens: Math.max(0, finiteNum(entry?.inputTokens)),
-      unclassifiedTokens: Math.max(0, finiteNum(entry?.unclassifiedTokens)),
-      cacheHitRatePct: nullableNum(entry?.cacheHitRatePct),
-      avgOutputTokensPerSec: nullableNum(entry?.avgOutputTokensPerSec),
-    })),
-    devices: boundedArray(src.devices, 50).map((entry) => ({
-      deviceId: cleanText(entry?.deviceId, 128),
-      hostname: cleanText(entry?.hostname, 128),
-      platform: cleanText(entry?.platform, 64),
-      stale: entry?.stale === true,
-      tokens: Math.max(0, finiteNum(entry?.tokens)),
-      costUsd: Math.max(0, finiteNum(entry?.costUsd)),
-      tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
-      projectCount: Math.max(0, Math.floor(finiteNum(entry?.projectCount))),
-    })),
-    timeline: boundedArray(src.timeline, 40).map((entry) => ({
-      date: cleanText(entry?.date, 16),
-      tokens: Math.max(0, finiteNum(entry?.tokens)),
-      costUsd: Math.max(0, finiteNum(entry?.costUsd)),
-      activeTimeMs: Math.max(0, finiteNum(entry?.activeTimeMs)),
-      topClient: cleanText(entry?.topClient, 48),
-      topModel: cleanText(entry?.topModel, 120),
-    })),
+      (c) => c.client,
+    ),
+    models: dedupeByKey(
+      boundedArray(src.models, 100).map((entry) => ({
+        model: cleanText(entry?.model, 120),
+        tokens: Math.max(0, finiteNum(entry?.tokens)),
+        costUsd: Math.max(0, finiteNum(entry?.costUsd)),
+        unpricedTokens: Math.max(0, finiteNum(entry?.unpricedTokens)),
+        tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
+        costSharePct: Math.max(0, finiteNum(entry?.costSharePct)),
+        cacheReadTokens: Math.max(0, finiteNum(entry?.cacheReadTokens)),
+        cacheWriteTokens: Math.max(0, finiteNum(entry?.cacheWriteTokens)),
+        outputTokens: Math.max(0, finiteNum(entry?.outputTokens)),
+        inputTokens: Math.max(0, finiteNum(entry?.inputTokens)),
+        unclassifiedTokens: Math.max(0, finiteNum(entry?.unclassifiedTokens)),
+        cacheHitRatePct: nullableNum(entry?.cacheHitRatePct),
+        avgOutputTokensPerSec: nullableNum(entry?.avgOutputTokensPerSec),
+      })),
+      (m) => m.model,
+    ),
+    devices: dedupeByKey(
+      boundedArray(src.devices, 50).map((entry) => ({
+        deviceId: cleanText(entry?.deviceId, 128),
+        hostname: cleanText(entry?.hostname, 128),
+        platform: cleanText(entry?.platform, 64),
+        stale: entry?.stale === true,
+        tokens: Math.max(0, finiteNum(entry?.tokens)),
+        costUsd: Math.max(0, finiteNum(entry?.costUsd)),
+        tokenSharePct: Math.max(0, finiteNum(entry?.tokenSharePct)),
+        projectCount: Math.max(0, Math.floor(finiteNum(entry?.projectCount))),
+      })),
+      (d) => d.deviceId,
+    ),
+    timeline: dedupeByKey(
+      boundedArray(src.timeline, 40).map((entry) => ({
+        date: cleanText(entry?.date, 16),
+        tokens: Math.max(0, finiteNum(entry?.tokens)),
+        costUsd: Math.max(0, finiteNum(entry?.costUsd)),
+        activeTimeMs: Math.max(0, finiteNum(entry?.activeTimeMs)),
+        topClient: cleanText(entry?.topClient, 48),
+        topModel: cleanText(entry?.topModel, 120),
+      })),
+      (t) => t.date,
+    ),
     signals: boundedArray(src.signals, 30).map((entry) => ({
       code: cleanText(entry?.code, 64),
       severity: cleanText(entry?.severity, 16) || 'info',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   ChevronDown,
@@ -56,7 +56,7 @@ export default function App() {
       <Dashboard key={state.connectionEpoch} {...monitor} />
       <AppUpdateDialog state={state.appUpdate} open={showUpdate}
         onDismiss={() => {
-          update(previous => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
+          update((previous) => ({ ...previous, dismissedUpdatePrompt: previous.appUpdate.promptToken }));
           window.HubNative?.dismissAppUpdatePrompt?.();
         }} />
     </ErrorBoundary>
@@ -117,6 +117,7 @@ function Dashboard({
     approvalsPending,
     connectPending,
     formError,
+    imeVisible,
   } = state;
   const [breakdownKind, setBreakdownKind] = useState<BreakdownKind>('clients');
   const [quotaTab, setQuotaTab] = useState<QuotaTabId>('limits');
@@ -130,6 +131,18 @@ function Dashboard({
   const [reportWindowOpen, setReportWindowOpen] = useState(false);
   const [reportWindowTab, setReportWindowTab] = useState<ReportWindowTab>('ai');
   const [inputFocused, setInputFocused] = useState(false);
+  const [previewViewportKeyboard, setPreviewViewportKeyboard] = useState(false);
+
+  const previewRefreshTimerRef = useRef<number | null>(null);
+  const previewUpdateTimerRef = useRef<number | null>(null);
+  const prevImeVisibleRef = useRef(imeVisible);
+
+  useEffect(() => {
+    return () => {
+      if (previewRefreshTimerRef.current !== null) window.clearTimeout(previewRefreshTimerRef.current);
+      if (previewUpdateTimerRef.current !== null) window.clearTimeout(previewUpdateTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (device && breakdownKind === 'devices') {
@@ -151,6 +164,7 @@ function Dashboard({
     }
   }, [page, quotaTab, connection, foreground, queryAntigravityManager, cancelAntigravityManager]);
 
+  // Track text-entry focus & reconcile unmounted focused inputs so bottom nav never gets stuck hidden.
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
       if (isTextEntryElement(event.target)) setInputFocused(true);
@@ -167,6 +181,42 @@ function Dashboard({
       document.removeEventListener('focusout', onFocusOut);
     };
   }, []);
+
+  // Reconcile focus whenever route/dialog changes (unmounted inputs do not fire focusout in Chromium).
+  useEffect(() => {
+    setInputFocused(isTextEntryElement(document.activeElement));
+  }, [page, quotaTab, devicePickerOpen, reportWindowOpen]);
+
+  // While an input is focused, observe DOM removals so unmounting a focused field resets inputFocused.
+  useEffect(() => {
+    if (!inputFocused || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(() => {
+      if (!isTextEntryElement(document.activeElement)) {
+        setInputFocused(false);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [inputFocused]);
+
+  // When Android Back dismisses the IME without blurring the active input, restore bottom nav cleanly.
+  useEffect(() => {
+    if (prevImeVisibleRef.current && !imeVisible) {
+      setInputFocused(false);
+    }
+    prevImeVisibleRef.current = imeVisible;
+  }, [imeVisible]);
+
+  // Browser preview fallback: detect mobile virtual keyboard shrink via visualViewport.
+  useEffect(() => {
+    if (!isBrowserPreview || typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const checkViewport = () => {
+      setPreviewViewportKeyboard(vv.height < window.innerHeight * 0.82);
+    };
+    vv.addEventListener('resize', checkViewport);
+    return () => vv.removeEventListener('resize', checkViewport);
+  }, [isBrowserPreview]);
 
   useEffect(() => {
     if (!revealAppUpdate || page !== 'settings') return;
@@ -275,7 +325,7 @@ function Dashboard({
     if (!Number.isFinite(nearest)) return;
     const timer = setTimeout(
       () => setDeadlineTick((previous) => previous + 1),
-      Math.max(1, nearest - now)
+      Math.max(1, nearest - now),
     );
     return () => clearTimeout(timer);
   }, [
@@ -304,8 +354,10 @@ function Dashboard({
       return;
     }
     if (isBrowserPreview) {
+      if (previewRefreshTimerRef.current !== null) window.clearTimeout(previewRefreshTimerRef.current);
       update((previous) => receiveNativeMessage(previous, { type: 'status', state: 'loading' }));
-      window.setTimeout(() => {
+      previewRefreshTimerRef.current = window.setTimeout(() => {
+        previewRefreshTimerRef.current = null;
         const now = Date.now();
         update((previous) => {
           let next = receiveNativeMessage(previous, { type: 'status', state: 'online' });
@@ -344,7 +396,7 @@ function Dashboard({
       return;
     }
     const target = hubProfiles.find((profile) => profile.id === id);
-    if (target) loadBrowserDemo(target.url, target.allowHttp);
+    if (target) loadBrowserDemo(target.url, target.allowHttp, target.id);
   };
 
   const handleAddHubProfile = (name: string, url: string, secret: string, allowHttpChecked: boolean, caDraftToken = '') => {
@@ -358,11 +410,13 @@ function Dashboard({
       window.HubNative.addHubProfile(name, url, secret, allowHttpChecked);
       return;
     }
+    const cleanUrl = url.trim();
+    if (!cleanUrl) return;
     const nextId = `demo-${Date.now().toString(36)}`;
     const nextProfile = {
       id: nextId,
-      name: name.trim() || url,
-      url,
+      name: name.trim() || cleanUrl,
+      url: cleanUrl,
       allowHttp: allowHttpChecked,
       ...(caDraftToken && caDraft?.cert
         ? {
@@ -379,7 +433,7 @@ function Dashboard({
       activeHubProfileId: nextId,
       caDraft: null,
     }));
-    loadBrowserDemo(url, allowHttpChecked);
+    loadBrowserDemo(cleanUrl, allowHttpChecked, nextId);
   };
 
   const handleSaveHubProfile = (
@@ -401,11 +455,13 @@ function Dashboard({
       window.HubNative.saveHubProfile(id, name, url, secret, allowHttpChecked);
       return;
     }
+    const cleanUrl = url.trim();
+    if (!cleanUrl) return;
     update((previous) => ({
       ...previous,
       hubProfiles: previous.hubProfiles.map((profile) => {
         if (profile.id !== id) return profile;
-        const base = { id: profile.id, name: name.trim() || url, url, allowHttp: allowHttpChecked };
+        const base = { id: profile.id, name: name.trim() || cleanUrl, url: cleanUrl, allowHttp: allowHttpChecked };
         if (caMode === 'clear') return base;
         if (caMode === 'replace' && caDraft?.cert) {
           return {
@@ -429,7 +485,7 @@ function Dashboard({
       activeHubProfileId: id,
       caDraft: null,
     }));
-    loadBrowserDemo(url, allowHttpChecked);
+    loadBrowserDemo(cleanUrl, allowHttpChecked, id);
   };
 
   const handleDeleteHubProfile = (id: string) => {
@@ -461,12 +517,14 @@ function Dashboard({
       window.HubNative.disconnect();
       return;
     }
-    update((previous) => receiveNativeMessage(previous, {
-      type: 'connection',
-      url: '',
-      activeHubProfileId: '',
-      hubProfiles: previous.hubProfiles,
-    }));
+    update((previous) =>
+      receiveNativeMessage(previous, {
+        type: 'connection',
+        url: '',
+        activeHubProfileId: '',
+        hubProfiles: previous.hubProfiles,
+      }),
+    );
   };
 
   const handleToggleMonitor = (enabled: boolean) => {
@@ -483,7 +541,7 @@ function Dashboard({
           permission: true,
           message: enabled ? '后台完成提醒运行中 · 实时监听 3 台设备' : '完成提醒未开启',
           lastReadAt: Date.now(),
-        })
+        }),
       );
     }
   };
@@ -503,7 +561,7 @@ function Dashboard({
           status: enabled ? 'ok' : 'off',
           message: enabled ? '审批提醒在线 · 等待电脑端确认提醒' : '审批提醒未开启',
           items: enabled ? previous.approvals.items : [],
-        })
+        }),
       );
     }
   };
@@ -521,7 +579,7 @@ function Dashboard({
           permission: true,
           message: '测试通知已发送 · 会话提醒通道正常',
           lastReadAt: Date.now(),
-        })
+        }),
       );
     }
   };
@@ -539,30 +597,32 @@ function Dashboard({
           permission: true,
           message: '系统通知权限已就绪 (Web 预览模式)',
           lastReadAt: Date.now(),
-        })
+        }),
       );
     }
   };
 
   const handleSimulateUpdateCheck = () => {
+    if (previewUpdateTimerRef.current !== null) window.clearTimeout(previewUpdateTimerRef.current);
     update((previous) =>
       receiveNativeMessage(previous, {
         type: 'appUpdate',
         ...previous.appUpdate,
         checking: true,
-      })
+      }),
     );
-    window.setTimeout(() => {
+    previewUpdateTimerRef.current = window.setTimeout(() => {
+      previewUpdateTimerRef.current = null;
       update((previous) =>
         receiveNativeMessage(previous, {
           type: 'appUpdate',
           ...previous.appUpdate,
           checking: false,
           checkedAt: Date.now(),
-          currentVersion: previous.appUpdate.currentVersion || '1.0.8',
-          latestVersion: '1.0.8',
+          currentVersion: previous.appUpdate.currentVersion || '1.26.1',
+          latestVersion: previous.appUpdate.currentVersion || '1.26.1',
           available: false,
-        })
+        }),
       );
     }, 300);
   };
@@ -573,7 +633,7 @@ function Dashboard({
         type: 'appUpdate',
         ...previous.appUpdate,
         automatic: enabled,
-      })
+      }),
     );
   };
 
@@ -586,6 +646,7 @@ function Dashboard({
     });
 
   const isAgManagerView = page === 'limits' && quotaTab === 'antigravityManager';
+  const containerWidth = isAgManagerView ? 'max-w-[460px] sm:max-w-2xl lg:max-w-5xl' : 'max-w-[460px]';
   const isRefreshing = isAgManagerView ? state.agManager.loading : status === 'loading';
   const showFilters =
     page !== 'settings' &&
@@ -597,6 +658,11 @@ function Dashboard({
   useEffect(() => {
     if (!showFilters && devicePickerOpen) setDevicePickerOpen(false);
   }, [showFilters, devicePickerOpen]);
+
+  // Gate bottom-nav hiding on BOTH focused input AND real IME visibility
+  // so synthetic IME insets without a focused input keep `.bottom-nav` aligned
+  // and dismissing the keyboard via Android Back restores navigation immediately.
+  const hideBottomNav = inputFocused && (isBrowserPreview ? previewViewportKeyboard : imeVisible);
 
   const showPeriods = page !== 'limits';
   const showRefresh = Boolean(connection) && page !== 'settings' && page !== 'reports';
@@ -615,36 +681,60 @@ function Dashboard({
 
   const statusDotColor =
     status === 'online'
-      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+      ? 'bg-[var(--tm-success)]'
       : status === 'loading'
-      ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse'
-      : status === 'offline'
-      ? 'bg-rose-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]'
-      : 'bg-slate-400';
+        ? 'bg-[var(--tm-warning)] animate-pulse'
+        : status === 'offline'
+          ? 'bg-[var(--tm-danger)]'
+          : 'bg-[var(--tm-text-subtle)]';
 
   const devicesList = stats?.devices || [];
   const activeDevicesCount = devicesList.filter((d) => !d.stale).length;
   const selectedDeviceObj = device ? devicesList.find((d) => d.deviceId === device) || null : null;
   const isSelectedDeviceRemoved = Boolean(device) && !selectedDeviceObj;
 
+  const updatedTimeShort = fetchedAt
+    ? new Date(fetchedAt).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : '';
+
+  const eyebrowText =
+    page === 'settings'
+      ? '连接、外观主题与系统偏好'
+      : page === 'reports'
+        ? '智能分析 · 周期报告专区'
+        : page === 'devices'
+          ? devicesList.length > 0
+            ? `共 ${devicesList.length} 台主机 · ${activeDevicesCount} 台在线`
+            : '采集主机与上报状态'
+          : page === 'sessionDetail'
+            ? '会话用量、模型与活动明细'
+            : devicesList.length > 0
+              ? `${activeDevicesCount}/${devicesList.length} 台设备在线${updatedTimeShort ? ` · ${updatedTimeShort} 更新` : ''}`
+              : 'AI 遥测与额度监控';
+
   return (
-    <div className="min-h-screen bg-[#090C10] text-slate-100 relative overflow-x-clip flex flex-col">
+    <div className="min-h-screen bg-[var(--tm-bg-canvas)] text-[var(--tm-text-primary)] relative overflow-x-clip flex flex-col">
       <div
         aria-hidden="true"
-        className="fixed inset-x-0 top-0 h-72 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-15%,rgba(56,189,248,0.15),transparent)] z-0"
+        style={{ backgroundImage: 'var(--tm-ambient-glow)' }}
+        className="fixed inset-x-0 top-0 h-64 pointer-events-none z-0"
       />
 
-      <header className="sticky top-0 z-30 w-full tm-chrome-bar border-b border-white/[0.08]">
-        <div className="max-w-[460px] mx-auto min-h-14 py-1 px-3.5 sm:px-4 flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-30 w-full tm-chrome-bar border-b border-[var(--tm-border-subtle)]">
+        <div className={`${containerWidth} mx-auto h-14 px-3.5 sm:px-4 flex items-center justify-between gap-2`}>
           <button
             type="button"
             onClick={() => setPage('overview')}
-            className="min-w-0 flex items-center gap-2 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-[44px] active:scale-[0.98] transition-transform group"
+            className="min-w-0 flex items-center gap-2 text-left rounded-xl px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-focus-ring)] min-h-[44px] active:scale-[0.98] transition-transform group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400/25 to-emerald-400/15 border border-sky-400/35 flex items-center justify-center text-sky-300 shadow-[0_0_16px_rgba(56,189,248,0.20)] group-hover:border-sky-400/50 transition-colors shrink-0">
-              <Activity className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] flex items-center justify-center text-[var(--tm-accent-text)] group-hover:border-[var(--tm-border-accent)] transition-colors shrink-0">
+              <Activity className="w-3.5 h-3.5" aria-hidden="true" />
             </div>
-            <span className="text-sm font-bold tracking-tight text-white truncate">
+            <span className="text-sm font-bold tracking-tight text-[var(--tm-text-primary)] truncate">
               Token Monitor
             </span>
           </button>
@@ -656,10 +746,12 @@ function Dashboard({
                 type="button"
                 aria-label="打开报告专区"
                 onClick={() => openReportsZone('daily', false)}
-                className="min-h-[44px] px-2.5 py-1.5 rounded-full glass-pill-bar hover:border-sky-400/40 active:scale-[0.97] inline-flex items-center gap-1 text-xs font-semibold text-sky-200 transition-all whitespace-nowrap shrink-0"
+                className="min-h-[44px] py-1 inline-flex items-center shrink-0 active:scale-[0.97] transition-transform"
               >
-                <FileText className="w-3.5 h-3.5 text-sky-300 shrink-0" />
-                <span>报告</span>
+                <span className="h-9 px-2.5 rounded-full glass-pill-bar hover:border-[var(--tm-border-accent)] inline-flex items-center gap-1 text-xs font-semibold text-[var(--tm-accent-text)] transition-colors whitespace-nowrap">
+                  <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span>报告</span>
+                </span>
               </button>
             )}
 
@@ -668,34 +760,31 @@ function Dashboard({
               type="button"
               onClick={() => setPage('settings')}
               aria-label="连接设置"
-              className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.97] flex items-center gap-1.5 text-xs font-medium text-slate-200 transition-all whitespace-nowrap shrink-0"
+              className="min-h-[44px] py-1 inline-flex items-center shrink-0 active:scale-[0.97] transition-transform"
             >
-              <i id="status-dot" className={`w-2 h-2 rounded-full shrink-0 ${statusDotColor}`} />
-              <span id="status-label">{statusLabel}</span>
+              <span className="h-9 px-2.5 sm:px-3 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] inline-flex items-center gap-1.5 text-xs font-medium text-[var(--tm-text-secondary)] transition-colors whitespace-nowrap">
+                <i id="status-dot" className={`w-2 h-2 rounded-full shrink-0 ${statusDotColor}`} />
+                <span id="status-label">{statusLabel}</span>
+              </span>
             </button>
           </div>
         </div>
       </header>
 
-      <div
-        className={`w-full mx-auto flex-1 flex flex-col relative z-10 ${
-          isAgManagerView ? 'max-w-[460px] sm:max-w-2xl lg:max-w-5xl' : 'max-w-[460px]'
-        }`}
-      >
-        <main className="flex-1 px-4 pt-3 pb-24">
-          <div className="flex items-center justify-between gap-3 mb-3">
+      <div className={`w-full mx-auto flex-1 flex flex-col relative z-10 ${containerWidth}`}>
+        <main className="flex-1 px-4 pt-2.5 pb-24">
+          <div className="flex items-center justify-between gap-3 mb-2.5">
             <div className="min-w-0">
               <p
                 id="eyebrow"
-                className="text-[11px] font-medium tracking-wide text-sky-400 mb-0.5 truncate"
+                className="text-[11.5px] font-medium tracking-wide text-[var(--tm-accent-text)] mb-0.5 truncate tabular-nums"
               >
-                {page === 'settings'
-                  ? '多设备同步与安全凭据'
-                  : page === 'reports'
-                    ? '智能分析 · 周期报告专区'
-                    : 'AI 遥测与额度监控'}
+                {eyebrowText}
               </p>
-              <h1 id="page-title" className="text-[22px] sm:text-2xl leading-tight font-bold tracking-tight text-white">
+              <h1
+                id="page-title"
+                className="text-[21px] sm:text-[23px] leading-tight font-bold tracking-tight text-[var(--tm-text-primary)]"
+              >
                 {PAGE_LABELS[page]}
               </h1>
             </div>
@@ -707,11 +796,11 @@ function Dashboard({
                 disabled={isRefreshing}
                 onClick={handleRefresh}
                 aria-label="刷新数据"
-                className="w-11 h-11 rounded-full glass-pill-bar hover:border-white/25 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all disabled:opacity-45 shrink-0"
+                className="w-11 h-11 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-95 flex items-center justify-center text-[var(--tm-text-secondary)] hover:text-[var(--tm-text-primary)] transition-all disabled:opacity-45 shrink-0"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${
-                    isRefreshing ? 'animate-spin text-sky-400' : ''
+                    isRefreshing ? 'animate-spin text-[var(--tm-accent)]' : ''
                   }`}
                 />
               </button>
@@ -729,7 +818,7 @@ function Dashboard({
                   <button
                     type="button"
                     onClick={handleRefresh}
-                    className="min-h-[36px] px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white active:scale-[0.97] transition-all whitespace-nowrap"
+                    className="min-h-[40px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-text-primary)] active:scale-[0.97] transition-all whitespace-nowrap"
                   >
                     重试
                   </button>
@@ -755,14 +844,14 @@ function Dashboard({
                         setPage('settings');
                         setRevealAppUpdate(true);
                       }}
-                      className="min-h-[44px] px-3 rounded-xl bg-sky-400/20 hover:bg-sky-400/28 border border-sky-400/35 text-xs font-semibold text-sky-100 active:scale-[0.97] transition-all whitespace-nowrap"
+                      className="min-h-[44px] px-3 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:brightness-105 border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all whitespace-nowrap"
                     >
                       查看更新
                     </button>
                     <button
                       type="button"
                       aria-label="稍后更新"
-                      className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-sky-200 hover:text-white hover:bg-white/[0.06] active:scale-95 transition-all"
+                      className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-[var(--tm-info-text)] hover:bg-[var(--tm-bg-control-hover)] active:scale-95 transition-all"
                       onClick={() =>
                         update((previous) => ({
                           ...previous,
@@ -829,22 +918,22 @@ function Dashboard({
                     aria-haspopup="dialog"
                     aria-expanded={devicePickerOpen}
                     onClick={() => setDevicePickerOpen(true)}
-                    className={`min-h-[44px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.98] inline-flex items-center gap-2 text-xs font-medium max-w-full min-w-0 transition-all ${
+                    className={`min-h-[44px] px-3 py-1.5 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-[0.98] inline-flex items-center gap-2 text-xs font-medium max-w-full min-w-0 transition-all ${
                       isSelectedDeviceRemoved
-                        ? 'border-amber-400/45 text-amber-200'
-                        : 'text-slate-200'
+                        ? 'border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                        : 'text-[var(--tm-text-primary)]'
                     }`}
                   >
                     {selectedDeviceObj ? (
                       <>
                         <DeviceIcon
                           kind={selectedDeviceObj.deviceKind}
-                          className="w-3.5 h-3.5 text-sky-400 shrink-0"
+                          className="w-3.5 h-3.5 text-[var(--tm-accent-text)] shrink-0"
                         />
                         <i
                           aria-hidden="true"
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            selectedDeviceObj.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                            selectedDeviceObj.stale ? 'bg-[var(--tm-warning)]' : 'bg-[var(--tm-success)]'
                           }`}
                         />
                         <span className="truncate">
@@ -853,21 +942,21 @@ function Dashboard({
                       </>
                     ) : isSelectedDeviceRemoved ? (
                       <>
-                        <Laptop className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <Laptop className="w-3.5 h-3.5 text-[var(--tm-warning)] shrink-0" aria-hidden="true" />
                         <span className="truncate">所选设备已移除</span>
                       </>
                     ) : (
                       <>
-                        <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                        <Server className="w-3.5 h-3.5 text-[var(--tm-accent-text)] shrink-0" aria-hidden="true" />
                         <span className="truncate">全部设备</span>
                         {devicesList.length > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-white/[0.07] text-[11px] tabular-nums text-slate-300 shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-full bg-[var(--tm-bg-control)] text-[11px] tabular-nums text-[var(--tm-text-secondary)] shrink-0">
                             {activeDevicesCount}/{devicesList.length}
                           </span>
                         )}
                       </>
                     )}
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-[var(--tm-text-muted)] shrink-0" aria-hidden="true" />
                   </button>
 
                   {/* Retained hidden select for programmatic test/automation compatibility */}
@@ -897,17 +986,11 @@ function Dashboard({
                 <span
                   id="freshness"
                   title={fetchedAt ? formatShortTime(fetchedAt) : undefined}
-                  className={`text-[11px] tabular-nums shrink-0 ${
-                    status === 'offline' ? 'text-amber-300' : 'text-slate-400'
+                  className={`text-[11.5px] tabular-nums shrink-0 ${
+                    status === 'offline' ? 'text-[var(--tm-warning-text)]' : 'text-[var(--tm-text-muted)]'
                   }`}
                 >
-                  {fetchedAt
-                    ? `${new Date(fetchedAt).toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                      })} 更新`
-                    : '等待数据'}
+                  {updatedTimeShort ? `${updatedTimeShort} 更新` : '等待数据'}
                 </span>
               </div>
             </div>
@@ -944,6 +1027,7 @@ function Dashboard({
               connectPending={connectPending}
               formError={formError}
               displayPrefs={state.displayPrefs}
+              systemDark={state.systemDark}
               onChangeDisplayPrefs={saveDisplayPrefs}
               notifications={notifications}
               monitorPending={monitorPending}
@@ -1000,6 +1084,7 @@ function Dashboard({
               <AntigravityManagerView
                 state={state.agManager}
                 connected={Boolean(connection)}
+                now={nowTick}
                 onRefreshSnapshot={queryAntigravityManager}
                 onFilterChange={updateAgManagerFilter}
               />
@@ -1016,7 +1101,7 @@ function Dashboard({
                 description={
                   connection
                     ? '连接成功后，用量、设备和额度将在这里显示。'
-                    : '打开下方「连接」，输入电脑端的 Hub 地址和 secret。'
+                    : '打开下方「设置」，输入电脑端的 Hub 地址和 secret。'
                 }
                 action={
                   !connection ? (
@@ -1024,7 +1109,7 @@ function Dashboard({
                       <button
                         type="button"
                         onClick={() => setPage('settings')}
-                        className="w-full min-h-[44px] rounded-2xl bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 font-bold text-xs active:scale-[0.985] transition-transform"
+                        className="w-full min-h-[44px] rounded-2xl [background-image:var(--tm-accent-gradient)] text-[var(--tm-text-inverse)] font-bold text-xs active:scale-[0.985] transition-transform"
                       >
                         前往配置 Hub 连接
                       </button>
@@ -1032,7 +1117,7 @@ function Dashboard({
                         <button
                           type="button"
                           onClick={() => loadBrowserDemo()}
-                          className="w-full min-h-[44px] rounded-2xl glass-inset hover:border-sky-400/35 text-sky-300 font-semibold text-xs active:scale-[0.985] transition-all"
+                          className="w-full min-h-[44px] rounded-2xl glass-inset hover:border-[var(--tm-border-accent)] text-[var(--tm-accent-text)] font-semibold text-xs active:scale-[0.985] transition-all"
                         >
                           加载演示数据 (Web 预览)
                         </button>
@@ -1048,44 +1133,45 @@ function Dashboard({
                 <>
                   <ApprovalsPanel approvals={approvals} />
                   <OverviewView
-                  stats={stats}
-                  selected={selected}
-                  period={period}
-                  deviceId={device}
-                  breakdownKind={breakdownKind}
-                  onBreakdownChange={setBreakdownKind}
-                  statusHealthy={statusHealthy}
-                  foreground={foreground}
-                  fetchedAt={fetchedAt}
-                  now={nowTick}
-                  onSelectDevice={(devId) => {
-                    setDevice(devId);
-                    setOpenSessions(new Set());
-                    window.scrollTo(0, 0);
-                  }}
-                  onNavigate={(targetPage) => {
-                    if (targetPage === 'sessions') {
+                    stats={stats}
+                    selected={selected}
+                    period={period}
+                    deviceId={device}
+                    breakdownKind={breakdownKind}
+                    onBreakdownChange={setBreakdownKind}
+                    statusHealthy={statusHealthy}
+                    foreground={foreground}
+                    fetchedAt={fetchedAt}
+                    now={nowTick}
+                    onSelectDevice={(devId) => {
+                      setDevice(devId);
+                      setOpenSessions(new Set());
+                      window.scrollTo(0, 0);
+                    }}
+                    onNavigate={(targetPage) => {
+                      if (targetPage === 'sessions') {
+                        setSearch('');
+                        setSessionTool('');
+                      }
+                      setPage(targetPage);
+                    }}
+                    onOpenSessionDetail={openSession}
+                    separateQoderClients={state.displayPrefs.separateQoderClients}
+                    exactTrendTokens={state.displayPrefs.exactTrendTokens}
+                    limitsPrefs={state.limitsPrefs}
+                    limitAccountPresentation={state.limitAccountPresentation}
+                    onSelectToolSessions={(toolId) => {
                       setSearch('');
-                      setSessionTool('');
-                    }
-                    setPage(targetPage);
-                  }}
-                  onOpenSessionDetail={openSession}
-                  separateQoderClients={state.displayPrefs.separateQoderClients}
-                  exactTrendTokens={state.displayPrefs.exactTrendTokens}
-                  limitAccountPresentation={state.limitAccountPresentation}
-                  onSelectToolSessions={(toolId) => {
-                    setSearch('');
-                    setPage('sessions');
-                    setSessionTool(toolId);
-                  }}
-                  onOpenReports={(granularity: ReportGranularity) => {
-                    openReportsZone(granularity, false);
-                  }}
-                  onOpenReportWindow={(granularity: ReportGranularity = 'daily') => {
-                    openReportsZone(granularity, true, 'ai');
-                  }}
-                />
+                      setPage('sessions');
+                      setSessionTool(toolId);
+                    }}
+                    onOpenReports={(granularity: ReportGranularity) => {
+                      openReportsZone(granularity, false);
+                    }}
+                    onOpenReportWindow={(granularity: ReportGranularity = 'daily') => {
+                      openReportsZone(granularity, true, 'ai');
+                    }}
+                  />
                 </>
               )}
 
@@ -1111,6 +1197,7 @@ function Dashboard({
                   historyError={state.historyError}
                   fetchedAt={fetchedAt}
                   foreground={foreground}
+                  now={nowTick}
                   prefs={state.limitsPrefs}
                   limitAccountPresentation={state.limitAccountPresentation}
                   onChangePrefs={saveLimitsPrefs}
@@ -1196,19 +1283,19 @@ function Dashboard({
 
       <nav
         aria-label="主导航"
-        aria-hidden={inputFocused || undefined}
-        className={`bottom-nav fixed bottom-0 inset-x-0 z-40 tm-chrome-bar border-t border-white/[0.08] transition-all duration-150 ${
-          inputFocused ? 'opacity-0 pointer-events-none translate-y-full' : ''
+        aria-hidden={hideBottomNav || undefined}
+        className={`bottom-nav fixed bottom-0 inset-x-0 z-40 tm-chrome-bar border-t border-[var(--tm-border-subtle)] transition-all duration-150 ${
+          hideBottomNav ? 'opacity-0 pointer-events-none translate-y-full' : ''
         }`}
       >
-        <div className="max-w-[460px] mx-auto px-2 py-1 grid grid-cols-5 gap-1">
+        <div className={`${containerWidth} mx-auto px-2 py-1 grid grid-cols-5 gap-1`}>
           {(
             [
               ['overview', '总览', LayoutGrid],
               ['devices', '设备', Server],
               ['limits', '额度', Clock],
               ['sessions', '会话', MessageSquare],
-              ['settings', '连接', Settings],
+              ['settings', '设置', Settings],
             ] as const
           ).map(([tabId, label, Icon]) => {
             const isActive =
@@ -1221,26 +1308,27 @@ function Dashboard({
                 type="button"
                 data-page={tabId}
                 aria-current={isActive ? 'page' : undefined}
-                tabIndex={inputFocused ? -1 : undefined}
+                tabIndex={hideBottomNav ? -1 : undefined}
                 onClick={() => setPage(tabId)}
-                className={`relative min-h-[50px] rounded-2xl flex flex-col items-center justify-center gap-1 border transition-all duration-150 active:scale-[0.96] ${
-                  isActive
-                    ? 'text-sky-300 bg-sky-400/12 border-sky-400/20'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
-                }`}
+                className="group min-h-[52px] rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-transform duration-150 active:scale-[0.96]"
               >
-                {isActive && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.85)]"
-                  />
-                )}
-                <Icon
-                  className={`w-[19px] h-[19px] transition-transform duration-150 ${
-                    isActive ? 'text-sky-300' : ''
+                <span
+                  aria-hidden="true"
+                  className={`w-14 h-7 rounded-full flex items-center justify-center transition-colors duration-150 ${
+                    isActive
+                      ? 'bg-[var(--tm-nav-active-bg)] text-[var(--tm-nav-active-text)]'
+                      : 'text-[var(--tm-text-muted)] group-hover:text-[var(--tm-text-primary)]'
                   }`}
-                />
-                <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                >
+                  <Icon className="w-[19px] h-[19px]" />
+                </span>
+                <span
+                  className={`text-[11px] font-semibold tracking-tight whitespace-nowrap transition-colors duration-150 ${
+                    isActive
+                      ? 'text-[var(--tm-nav-active-text)]'
+                      : 'text-[var(--tm-text-muted)] group-hover:text-[var(--tm-text-primary)]'
+                  }`}
+                >
                   {label}
                 </span>
               </button>

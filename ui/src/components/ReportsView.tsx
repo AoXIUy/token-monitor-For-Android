@@ -35,6 +35,7 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import type { ReportWindowTab } from './ReportWindowDialog';
 import {
   CopyButton,
+  EmptyState,
   InlineAlert,
   ProgressMeter,
   SectionHeader,
@@ -79,6 +80,7 @@ function formatDeltaPct(pct: number | null | undefined): string {
 function formatDurationMs(ms: number): string {
   if (!ms || ms <= 0) return '—';
   const mins = Math.round(ms / 60000);
+  if (mins < 1) return '< 1 分钟';
   if (mins < 60) return `${mins} 分钟`;
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
@@ -102,7 +104,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [showAllTimeline, setShowAllTimeline] = useState(false);
 
   useEffect(() => {
-    if (!foreground) return;
+    if (!foreground || !connected) return;
     onRefresh(reports.granularity, reports.periodKey || 'current');
     return () => {
       onCancel();
@@ -190,9 +192,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           id="reports-back"
           type="button"
           onClick={onBack}
-          className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 transition-all whitespace-nowrap shrink-0"
+          className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--tm-text-primary)] transition-all whitespace-nowrap shrink-0"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="w-3.5 h-3.5 text-[var(--tm-accent-text)]" aria-hidden="true" />
           <span>返回总览</span>
         </button>
 
@@ -200,22 +202,26 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           <button
             id="reports-open-window"
             type="button"
+            disabled={!connected && !report}
             onClick={() => onOpenWindow(preferredWindowTab)}
-            className="min-h-[44px] px-3.5 py-2 rounded-full bg-sky-500/15 hover:bg-sky-500/24 active:scale-[0.98] border border-sky-400/35 inline-flex items-center gap-1.5 text-xs font-semibold text-sky-100 transition-all whitespace-nowrap shrink-0"
+            className="min-h-[44px] px-3.5 py-2 rounded-full bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-accent-soft-border)] inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--tm-accent-text)] disabled:opacity-45 transition-all whitespace-nowrap shrink-0"
           >
-            <BookOpen className="w-3.5 h-3.5 text-sky-300" />
+            <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
             <span>报告窗口</span>
           </button>
 
           <button
             id="reports-refresh"
             type="button"
-            disabled={isLoading}
+            disabled={isLoading || !connected}
             onClick={() => onRefresh(reports.granularity, reports.periodKey || 'current')}
             aria-label="刷新分析报告"
-            className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 disabled:opacity-45 transition-all whitespace-nowrap shrink-0"
+            className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--tm-text-primary)] disabled:opacity-45 transition-all whitespace-nowrap shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-sky-400' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[var(--tm-accent)]' : ''}`}
+              aria-hidden="true"
+            />
             <span>刷新</span>
           </button>
         </div>
@@ -238,10 +244,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               data-report-granularity={tab.id}
               aria-selected={active}
               onClick={() => onSelectGranularity(tab.id)}
-              className={`flex-1 min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap active:scale-[0.98] ${
+              className={`flex-1 min-h-[44px] rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap active:scale-[0.98] ${
                 active
-                  ? 'bg-slate-800/95 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] border border-white/12'
-                  : 'border border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--tm-selection-bg)] text-[var(--tm-selection-text)] shadow-sm border border-[var(--tm-selection-border)]'
+                  : 'border border-transparent text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
               }`}
             >
               {tab.label}
@@ -255,7 +261,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <div className="relative">
           <div
             id="reports-period-chips"
-            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pr-5"
+            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pr-6"
           >
             {periodChoices.map((choice) => {
               const active = (reports.periodKey || 'current') === choice.key;
@@ -266,17 +272,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   data-report-period={choice.key}
                   aria-pressed={active}
                   onClick={() => onSelectPeriodKey(reports.granularity, choice.key)}
-                  className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all active:scale-[0.98] border inline-flex items-center gap-1.5 tabular-nums ${
+                  className={`min-h-[40px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all active:scale-[0.98] border inline-flex items-center gap-1.5 tabular-nums ${
                     active
-                      ? 'bg-sky-400/20 text-sky-100 border-sky-400/40'
-                      : 'bg-white/[0.04] text-slate-300 border-white/[0.08] hover:text-white'
+                      ? 'bg-[var(--tm-accent-soft-bg)] text-[var(--tm-accent-text)] border-[var(--tm-accent-soft-border)]'
+                      : 'bg-[var(--tm-bg-control)] text-[var(--tm-text-secondary)] border-[var(--tm-border-default)] hover:text-[var(--tm-text-primary)] hover:bg-[var(--tm-bg-control-hover)]'
                   }`}
                 >
                   {choice.hasAiAnalysis && (
                     <i
                       aria-hidden="true"
                       title="包含 AI 智能分析"
-                      className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(167,139,250,0.8)] shrink-0"
+                      className="w-1.5 h-1.5 rounded-full bg-[var(--tm-violet)] shrink-0"
                     />
                   )}
                   <span>{choice.label}</span>
@@ -286,29 +292,32 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </div>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#090C10] to-transparent"
+            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[var(--tm-bg-canvas)] to-transparent"
           />
         </div>
 
         {/* 归档覆盖率摘要与图表/排版切换 */}
         <div
           id="reports-archive-summary"
-          className="rounded-2xl bg-white/[0.03] border border-white/[0.08] px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+          className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-default)] px-3 py-2 flex flex-wrap items-center justify-between gap-2"
         >
-          <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap text-[11px] text-slate-300 tabular-nums">
+          <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap text-[11px] text-[var(--tm-text-secondary)] tabular-nums">
             <span className="inline-flex items-center gap-1.5 min-w-0">
-              <Archive className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+              <Archive className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
               <span className="truncate">
                 {activeGranularityLabel}归档{' '}
-                <strong className="text-slate-100 font-semibold">
+                <strong className="text-[var(--tm-text-primary)] font-semibold">
                   {matchingArchiveItems.length}
                 </strong>{' '}
                 期 · AI{' '}
-                <strong className="text-violet-300 font-semibold">{aiReadyArchiveCount}</strong> 期
+                <strong className="text-[var(--tm-violet-text)] font-semibold">
+                  {aiReadyArchiveCount}
+                </strong>{' '}
+                期
               </span>
             </span>
-            <span className="text-[11px] text-slate-400 shrink-0 inline-flex items-center gap-1">
-              <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+            <span className="text-[11px] text-[var(--tm-text-muted)] shrink-0 inline-flex items-center gap-1">
+              <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[var(--tm-violet)]" />
               <span>含 AI 总结</span>
             </span>
           </div>
@@ -356,10 +365,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           action={
             reports.integrations.lastPush ? (
               <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold shrink-0 border ${
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold shrink-0 border bg-[var(--tm-bg-surface)] ${
                   reports.integrations.lastPush.ok
-                    ? 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30'
-                    : 'bg-rose-500/15 text-rose-200 border-rose-400/30'
+                    ? 'text-[var(--tm-success-text)] border-[var(--tm-success-soft-border)]'
+                    : 'text-[var(--tm-danger-text)] border-[var(--tm-danger-soft-border)]'
                 }`}
               >
                 {reports.integrations.lastPush.ok ? '已触达' : '待排查'}
@@ -367,12 +376,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             ) : undefined
           }
         >
-          <p className="font-semibold text-emerald-100 break-words">
+          <p className="font-semibold text-[var(--tm-success-text)] break-words">
             OpenClaw 微信通道已接入 · {reports.integrations.openclaw.channel || 'openclaw-weixin'}
             {reports.integrations.openclaw.pushOnRollover ? '（周期自动推送）' : ''}
           </p>
           {reports.integrations.lastPush && (
-            <p className="text-[11px] text-emerald-200/85 tabular-nums mt-0.5 break-words">
+            <p className="text-[11px] text-[var(--tm-text-secondary)] tabular-nums mt-0.5 break-words">
               {reports.integrations.lastPush.ok
                 ? `最近推送成功 · ${formatShortTime(reports.integrations.lastPush.at)}`
                 : `最近推送失败：${reports.integrations.lastPush.message || reports.integrations.lastPush.error || 'error'}`}
@@ -395,12 +404,42 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </InlineAlert>
       )}
 
+      {/* 未连接状态 */}
+      {!connected && !report && !isLoading && (
+        <EmptyState
+          compact
+          icon={<FileText className="w-6 h-6" />}
+          title="未连接 Hub"
+          description="连接电脑端 Node Hub 后，可在此只读查看日报 / 周报 / 月报汇总与 AI 分析总结。"
+        />
+      )}
+
       {/* 加载骨架 */}
       {!report && isLoading && (
         <div className="glass-panel rounded-3xl p-8 text-center space-y-2.5">
-          <RefreshCw className="w-6 h-6 text-sky-400 animate-spin mx-auto" />
-          <p className="text-xs text-slate-300">正在向主 Hub 读取标准分析报告…</p>
+          <RefreshCw className="w-6 h-6 text-[var(--tm-accent)] animate-spin mx-auto" />
+          <p className="text-xs text-[var(--tm-text-secondary)]">正在向主 Hub 读取标准分析报告…</p>
         </div>
+      )}
+
+      {/* 空状态（已连接但无数据且无报错/加载） */}
+      {connected && !report && !isLoading && !activeError && (
+        <EmptyState
+          compact
+          icon={<FileText className="w-6 h-6" />}
+          title="暂无可展示的分析报告"
+          description="可点击刷新向主 Hub 读取当前周期汇总报告。"
+          action={
+            <button
+              type="button"
+              onClick={() => onRefresh(reports.granularity, reports.periodKey || 'current')}
+              className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] inline-flex items-center gap-1.5 active:scale-[0.98] transition-all"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>重新读取</span>
+            </button>
+          }
+        />
       )}
 
       {/* 排版报告 / Markdown 模式 */}
@@ -416,9 +455,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 id="reports-open-doc-window"
                 type="button"
                 onClick={() => onOpenWindow('rendered')}
-                className="min-h-[38px] px-3 py-1.5 rounded-xl bg-sky-400/15 hover:bg-sky-400/25 active:scale-[0.98] border border-sky-400/30 text-xs font-semibold text-sky-200 shrink-0 inline-flex items-center gap-1.5 transition-all"
+                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] shrink-0 inline-flex items-center gap-1.5 transition-all"
               >
-                <BookOpen className="w-3.5 h-3.5" />
+                <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>精读</span>
               </button>
             }
@@ -431,13 +470,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 type="button"
                 aria-pressed={markdownSubMode === 'rendered'}
                 onClick={() => setMarkdownSubMode('rendered')}
-                className={`min-h-[38px] px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
+                className={`min-h-[40px] px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
                   markdownSubMode === 'rendered'
-                    ? 'bg-sky-400/20 text-sky-100 border border-sky-400/35'
-                    : 'border border-transparent text-slate-400 hover:text-slate-200'
+                    ? 'bg-[var(--tm-accent-soft-bg)] text-[var(--tm-accent-text)] border border-[var(--tm-accent-soft-border)]'
+                    : 'border border-transparent text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
                 }`}
               >
-                <BookOpen className="w-3.5 h-3.5" />
+                <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>排版阅读</span>
               </button>
               <button
@@ -445,13 +484,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 type="button"
                 aria-pressed={markdownSubMode === 'source'}
                 onClick={() => setMarkdownSubMode('source')}
-                className={`min-h-[38px] px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
+                className={`min-h-[40px] px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
                   markdownSubMode === 'source'
-                    ? 'bg-sky-400/20 text-sky-100 border border-sky-400/35'
-                    : 'border border-transparent text-slate-400 hover:text-slate-200'
+                    ? 'bg-[var(--tm-accent-soft-bg)] text-[var(--tm-accent-text)] border border-[var(--tm-accent-soft-border)]'
+                    : 'border border-transparent text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
                 }`}
               >
-                <Code2 className="w-3.5 h-3.5" />
+                <Code2 className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>原始 MD</span>
               </button>
             </div>
@@ -462,7 +501,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               ariaLabel="复制报告 Markdown 全文"
               label="复制全文"
               copiedLabel="已复制"
-              className="min-h-[38px] px-3 text-xs"
+              className="min-h-[40px] px-3 text-xs"
             />
           </div>
 
@@ -480,7 +519,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ) : (
             <pre
               id="reports-markdown-pre"
-              className="glass-inset rounded-2xl p-3.5 text-[11.5px] leading-relaxed font-mono-tabular text-slate-200 overflow-x-auto whitespace-pre-wrap break-words max-h-[65vh] select-text"
+              className="glass-inset rounded-2xl p-3.5 text-[11.5px] leading-relaxed font-mono-tabular text-[var(--tm-text-primary)] overflow-x-auto whitespace-pre-wrap break-words max-h-[65vh] select-text"
             >
               {reports.markdown || '当前响应未包含 Markdown 文本。'}
             </pre>
@@ -498,23 +537,23 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           >
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-400/15 text-sky-200 border border-sky-400/25">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--tm-accent-soft-bg)] text-[var(--tm-accent-text)] border border-[var(--tm-accent-soft-border)]">
                   {activeGranularityLabel}
                 </span>
                 {report.period.isCurrent && (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-400/15 text-emerald-200 border border-emerald-400/25">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--tm-success-soft-bg)] text-[var(--tm-success-text)] border border-[var(--tm-success-soft-border)]">
                     进行中
                   </span>
                 )}
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.06] text-slate-300">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--tm-bg-control)] border border-[var(--tm-border-subtle)] text-[var(--tm-text-secondary)]">
                   {ATTRIBUTION_SOURCE_LABELS[report.coverage.projectAttributionSource] ||
                     report.coverage.projectAttributionSource}
                 </span>
               </div>
-              <h2 className="text-base font-bold text-white tracking-tight break-words">
+              <h2 className="text-base font-bold text-[var(--tm-text-primary)] tracking-tight break-words">
                 {report.period.label || report.period.key}
               </h2>
-              <p className="text-[11px] text-slate-400 tabular-nums break-words">
+              <p className="text-[11px] text-[var(--tm-text-muted)] tabular-nums break-words">
                 {report.period.startDate} ~ {report.period.endDate} · 生成于{' '}
                 {formatShortTime(report.period.generatedAt)}
               </p>
@@ -522,21 +561,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
             <div className="grid grid-cols-2 gap-2.5">
               <div className="glass-inset rounded-2xl p-3 space-y-1 min-w-0">
-                <p className="text-[11px] text-slate-400">总 Token 消耗</p>
-                <p className="text-lg font-bold font-mono-tabular text-white truncate">
+                <p className="text-[11px] text-[var(--tm-text-muted)]">总 Token 消耗</p>
+                <p className="text-lg font-bold font-mono-tabular text-[var(--tm-text-primary)] truncate">
                   {MonitorModel.compact(report.summary.totalTokens)}
                 </p>
-                <p className="text-[11px] tabular-nums text-slate-400 truncate">
+                <p className="text-[11px] tabular-nums text-[var(--tm-text-muted)] truncate">
                   {formatExact(report.summary.totalTokens)} tokens
                 </p>
               </div>
 
               <div className="glass-inset rounded-2xl p-3 space-y-1 min-w-0">
-                <p className="text-[11px] text-slate-400">已知费用</p>
-                <p className="text-lg font-bold font-mono-tabular text-emerald-300 truncate">
+                <p className="text-[11px] text-[var(--tm-text-muted)]">已知费用</p>
+                <p className="text-lg font-bold font-mono-tabular text-[var(--tm-success-text)] truncate">
                   {MonitorModel.money(report.summary.knownCostUsd)}
                 </p>
-                <p className="text-[11px] tabular-nums text-slate-400 truncate">
+                <p className="text-[11px] tabular-nums text-[var(--tm-text-muted)] truncate">
                   {report.summary.unpricedTokens > 0
                     ? `含未定价 ${MonitorModel.compact(report.summary.unpricedTokens)}`
                     : '全部已定价'}
@@ -544,69 +583,78 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               </div>
             </div>
 
-            {report.summary.comparison && (
-              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.07] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs">
-                <span className="text-slate-400 min-w-0 break-words">
-                  较上期（{report.summary.comparison.previousPeriodKey}）
-                </span>
-                <div className="flex items-center gap-3 tabular-nums flex-wrap shrink-0">
-                  <span
-                    className={`inline-flex items-center gap-1 font-semibold ${
-                      (report.summary.comparison.tokenDelta || 0) >= 0
-                        ? 'text-sky-300'
-                        : 'text-emerald-300'
-                    }`}
-                  >
-                    {(report.summary.comparison.tokenDelta || 0) >= 0 ? (
-                      <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    ) : (
-                      <TrendingDown className="w-3.5 h-3.5 shrink-0" />
-                    )}
-                    Token {formatDeltaPct(report.summary.comparison.tokenDeltaPct)}
+            {report.summary.comparison && (() => {
+              const tokenDelta = report.summary.comparison.tokenDelta || 0;
+              return (
+                <div className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs">
+                  <span className="text-[var(--tm-text-muted)] min-w-0 break-words">
+                    较上期（{report.summary.comparison.previousPeriodKey}）
                   </span>
-                  <span className="text-slate-200">
-                    费用 {formatDeltaPct(report.summary.comparison.costDeltaPct)}
-                  </span>
+                  <div className="flex items-center gap-3 tabular-nums flex-wrap shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 font-semibold ${
+                        tokenDelta > 0
+                          ? 'text-[var(--tm-accent-text)]'
+                          : tokenDelta < 0
+                            ? 'text-[var(--tm-success-text)]'
+                            : 'text-[var(--tm-text-muted)]'
+                      }`}
+                    >
+                      {tokenDelta > 0 ? (
+                        <TrendingUp className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                      ) : tokenDelta < 0 ? (
+                        <TrendingDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                      ) : null}
+                      Token {formatDeltaPct(report.summary.comparison.tokenDeltaPct)}
+                    </span>
+                    <span className="text-[var(--tm-text-secondary)]">
+                      费用 {formatDeltaPct(report.summary.comparison.costDeltaPct)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 px-2 min-w-0">
-                <p className="text-[11px] text-slate-400 truncate">缓存命中率</p>
-                <p className="text-xs font-bold font-mono-tabular text-sky-300 mt-0.5 truncate">
+              <div className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] py-2.5 px-2 min-w-0">
+                <p className="text-[11px] text-[var(--tm-text-muted)] truncate">缓存命中率</p>
+                <p className="text-xs font-bold font-mono-tabular text-[var(--tm-accent-text)] mt-0.5 truncate">
                   {report.summary.cacheHitRatePct !== null
                     ? `${report.summary.cacheHitRatePct.toFixed(1)}%`
                     : '—'}
                 </p>
               </div>
-              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 px-2 min-w-0">
-                <p className="text-[11px] text-slate-400 truncate">平均速率</p>
-                <p className="text-xs font-bold tabular-nums text-slate-100 mt-0.5 truncate">
+              <div className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] py-2.5 px-2 min-w-0">
+                <p className="text-[11px] text-[var(--tm-text-muted)] truncate">平均速率</p>
+                <p className="text-xs font-bold tabular-nums text-[var(--tm-text-primary)] mt-0.5 truncate">
                   {report.summary.throughput.avgOutputTokensPerSec !== null
                     ? `${report.summary.throughput.avgOutputTokensPerSec.toFixed(1)} tok/s`
                     : '—'}
                 </p>
               </div>
-              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 px-2 min-w-0">
-                <p className="text-[11px] text-slate-400 truncate">活跃 / 项目</p>
-                <p className="text-xs font-bold tabular-nums text-slate-100 mt-0.5 truncate">
+              <div className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] py-2.5 px-2 min-w-0">
+                <p className="text-[11px] text-[var(--tm-text-muted)] truncate">活跃 / 项目</p>
+                <p className="text-xs font-bold tabular-nums text-[var(--tm-text-primary)] mt-0.5 truncate">
                   {report.summary.activeDays} 天 · {report.summary.projectCount} 项
                 </p>
               </div>
             </div>
 
-            {report.summary.peakDay && (
-              <div className="text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-0.5 tabular-nums">
-                <span className="min-w-0 break-words">
-                  峰值日：
-                  <span className="font-mono-tabular text-slate-200">
-                    {report.summary.peakDay.date}
+            {(report.summary.peakDay || report.summary.activeTimeMs > 0) && (
+              <div className="text-[11px] text-[var(--tm-text-muted)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-0.5 tabular-nums">
+                {report.summary.peakDay ? (
+                  <span className="min-w-0 break-words">
+                    峰值日：
+                    <span className="font-mono-tabular text-[var(--tm-text-primary)]">
+                      {report.summary.peakDay.date}
+                    </span>
+                    （{MonitorModel.compact(report.summary.peakDay.tokens)} ·{' '}
+                    {MonitorModel.money(report.summary.peakDay.costUsd)}）
                   </span>
-                  （{MonitorModel.compact(report.summary.peakDay.tokens)} ·{' '}
-                  {MonitorModel.money(report.summary.peakDay.costUsd)}）
-                </span>
-                <span className="shrink-0 text-slate-300">
+                ) : (
+                  <span>活跃时长</span>
+                )}
+                <span className="shrink-0 text-[var(--tm-text-secondary)]">
                   {formatDurationMs(report.summary.activeTimeMs)}
                 </span>
               </div>
@@ -617,10 +665,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           {(reports.aiAnalysis || reports.integrations?.ai?.enabled) && (
             <section
               id="reports-ai-analysis"
-              className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3 border-violet-400/20"
+              className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3 border-[var(--tm-violet-soft-border)]"
             >
               <SectionHeader
-                icon={<Bot className="w-4 h-4 text-violet-300" />}
+                icon={<Bot className="w-4 h-4 text-[var(--tm-violet-text)]" />}
                 title="第三方 AI 智能分析"
                 subtitle={
                   reports.aiAnalysis
@@ -630,14 +678,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 badge={
                   <>
                     {reports.aiAnalysis?.stale && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/25">
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--tm-warning-soft-bg)] text-[var(--tm-warning-text)] border border-[var(--tm-warning-soft-border)]">
                         数据已更新
                       </span>
                     )}
                     {reports.aiAnalysis?.tokenUsage && (
                       <span
                         title={`输入 ${formatExact(reports.aiAnalysis.tokenUsage.inputTokens)} · 输出 ${formatExact(reports.aiAnalysis.tokenUsage.outputTokens)}`}
-                        className="px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-violet-400/15 text-violet-200 border border-violet-400/25"
+                        className="px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-[var(--tm-violet-soft-bg)] text-[var(--tm-violet-text)] border border-[var(--tm-violet-soft-border)]"
                       >
                         {MonitorModel.compact(reports.aiAnalysis.tokenUsage.totalTokens)} tok
                       </span>
@@ -651,9 +699,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   id="reports-open-ai-window"
                   type="button"
                   onClick={() => onOpenWindow('ai')}
-                  className="min-h-[38px] px-3 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 active:scale-[0.98] border border-violet-400/35 text-xs font-semibold text-violet-100 inline-flex items-center gap-1.5 transition-all"
+                  className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[var(--tm-violet-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-violet-soft-border)] text-xs font-semibold text-[var(--tm-violet-text)] inline-flex items-center gap-1.5 transition-all"
                 >
-                  <BookOpen className="w-3.5 h-3.5" />
+                  <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>精读</span>
                 </button>
                 {reports.aiAnalysis?.summaryMarkdown && (
@@ -663,14 +711,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     ariaLabel="复制 AI 智能分析"
                     label="复制分析"
                     copiedLabel="已复制"
-                    className="min-h-[38px] px-3 text-xs"
+                    className="min-h-[44px] px-3 text-xs"
                   />
                 )}
               </div>
 
               {reports.aiAnalysis?.question && (
-                <div className="rounded-2xl bg-violet-500/10 border border-violet-400/25 px-3 py-2 text-xs text-violet-100 leading-relaxed">
-                  <span className="font-semibold text-violet-300">分析提问：</span>
+                <div className="rounded-2xl bg-[var(--tm-violet-soft-bg)] border border-[var(--tm-violet-soft-border)] px-3 py-2 text-xs text-[var(--tm-text-primary)] leading-relaxed">
+                  <span className="font-semibold text-[var(--tm-violet-text)]">分析提问：</span>
                   <span>{reports.aiAnalysis.question}</span>
                 </div>
               )}
@@ -686,7 +734,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   />
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed">
                   当前周期暂无缓存的 AI 分析结果；可在桌面端设置或 OpenClaw / MCP 对话中触发「AI 智能分析」。
                 </p>
               )}
@@ -700,10 +748,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3"
             >
               <SectionHeader
-                icon={<Wallet className="w-4 h-4 text-emerald-400" />}
+                icon={<Wallet className="w-4 h-4 text-[var(--tm-success)]" />}
                 title="第三方 AI API 与余额快照"
                 action={
-                  <span className="text-[11px] text-slate-400 tabular-nums">
+                  <span className="text-[11px] text-[var(--tm-text-muted)] tabular-nums">
                     {thirdPartyProviders.length} 个账户
                   </span>
                 }
@@ -717,9 +765,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     providerName(prov.provider);
                   const currency = prov.balance?.currency || 'USD';
                   const balAmt = prov.balance?.amount;
+                  const hasBalance = balAmt !== null && balAmt !== undefined;
                   const monthSpend = prov.balance?.monthSpend;
                   const todaySpend = prov.balance?.todaySpend;
                   const statusText = limitStatusLabel(prov);
+                  const provHealthy = prov.status === 'ok' && !prov.stale;
                   const spendParts: string[] = [];
                   if (todaySpend !== null && todaySpend !== undefined) {
                     spendParts.push(`今日 ${MonitorModel.money(todaySpend, currency)}`);
@@ -736,27 +786,39 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       className="glass-inset rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2.5 text-xs"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-100 truncate">
+                        <p className="font-medium text-[var(--tm-text-primary)] truncate">
                           {title}
                           {prov.adapterId ? (
-                            <span className="ml-1.5 text-[11px] font-mono-tabular text-sky-300/90">
+                            <span className="ml-1.5 text-[11px] font-mono-tabular text-[var(--tm-accent-text)]">
                               [{prov.adapterId}]
                             </span>
                           ) : null}
                         </p>
                         {spendParts.length > 0 && (
-                          <p className="text-[11px] text-slate-400 tabular-nums mt-0.5 truncate">
+                          <p className="text-[11px] text-[var(--tm-text-muted)] tabular-nums mt-0.5 truncate">
                             {spendParts.join(' · ')}
                           </p>
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-semibold font-mono-tabular text-emerald-300">
-                          {balAmt !== null && balAmt !== undefined
-                            ? MonitorModel.money(balAmt, currency)
-                            : statusText}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{statusText}</p>
+                        {hasBalance ? (
+                          <>
+                            <p className="font-semibold font-mono-tabular text-[var(--tm-success-text)]">
+                              {MonitorModel.money(balAmt, currency)}
+                            </p>
+                            <p className="text-[11px] text-[var(--tm-text-muted)]">{statusText}</p>
+                          </>
+                        ) : (
+                          <p
+                            className={`font-semibold text-xs ${
+                              provHealthy
+                                ? 'text-[var(--tm-success-text)]'
+                                : 'text-[var(--tm-warning-text)]'
+                            }`}
+                          >
+                            {statusText}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -769,7 +831,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           {report.signals.length > 0 && (
             <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
               <SectionHeader
-                icon={<Sparkles className="w-4 h-4 text-amber-300" />}
+                icon={<Sparkles className="w-4 h-4 text-[var(--tm-warning)]" />}
                 title="关键特征信号"
               />
               <div className="space-y-2">
@@ -784,34 +846,40 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       key={`${signal.code}-${idx}`}
                       className={`rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed border flex items-start gap-2.5 ${
                         isWarn
-                          ? 'bg-amber-500/10 border-amber-400/25 text-amber-100'
-                          : 'bg-sky-500/10 border-sky-400/20 text-sky-100'
+                          ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-text-primary)]'
+                          : 'bg-[var(--tm-info-soft-bg)] border-[var(--tm-info-soft-border)] text-[var(--tm-text-primary)]'
                       }`}
                     >
                       {isWarn ? (
-                        <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                        <AlertTriangle
+                          className="w-4 h-4 text-[var(--tm-warning-text)] shrink-0 mt-0.5"
+                          aria-hidden="true"
+                        />
                       ) : (
-                        <Info className="w-4 h-4 text-sky-300 shrink-0 mt-0.5" />
+                        <Info
+                          className="w-4 h-4 text-[var(--tm-info-text)] shrink-0 mt-0.5"
+                          aria-hidden="true"
+                        />
                       )}
                       <div className="min-w-0 flex-1 space-y-1">
                         {(signal.project || signal.model || hasValuePct) && (
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {signal.project && (
-                              <span className="px-2 py-0.5 rounded-md text-[11px] font-mono-tabular font-semibold bg-white/[0.08] text-white/95 max-w-[190px] truncate">
+                              <span className="px-2 py-0.5 rounded-md text-[11px] font-mono-tabular font-semibold bg-[var(--tm-bg-control-hover)] text-[var(--tm-text-primary)] max-w-[190px] truncate">
                                 {signal.project}
                               </span>
                             )}
                             {signal.model && (
-                              <span className="px-2 py-0.5 rounded-md text-[11px] font-mono-tabular bg-white/[0.07] text-slate-200 max-w-[170px] truncate">
+                              <span className="px-2 py-0.5 rounded-md text-[11px] font-mono-tabular bg-[var(--tm-bg-control)] text-[var(--tm-text-secondary)] max-w-[170px] truncate">
                                 {signal.model}
                               </span>
                             )}
                             {hasValuePct && (
                               <span
-                                className={`px-2 py-0.5 rounded-md text-[11px] font-mono-tabular font-semibold ${
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-mono-tabular font-semibold border bg-[var(--tm-bg-surface)] ${
                                   isWarn
-                                    ? 'bg-amber-400/20 text-amber-100'
-                                    : 'bg-sky-400/20 text-sky-100'
+                                    ? 'border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                                    : 'border-[var(--tm-info-soft-border)] text-[var(--tm-info-text)]'
                                 }`}
                               >
                                 {signal.valuePct! > 0 && signal.code.includes('delta')
@@ -821,7 +889,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                             )}
                           </div>
                         )}
-                        <p className="break-words">{signal.summary}</p>
+                        <p className="break-words text-[var(--tm-text-secondary)]">{signal.summary}</p>
                       </div>
                     </div>
                   );
@@ -840,7 +908,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               title={`项目使用分析 (${report.projects.length})`}
               action={
                 !report.coverage.projectsComplete ? (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-400/25">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--tm-warning-soft-bg)] text-[var(--tm-warning-text)] border border-[var(--tm-warning-soft-border)]">
                     部分归因
                   </span>
                 ) : undefined
@@ -853,23 +921,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   <div
                     key={proj.key || proj.label}
                     data-report-project={proj.key || proj.label}
-                    className="rounded-2xl bg-white/[0.025] border border-white/[0.06] p-3 space-y-2"
+                    className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] p-3 space-y-2"
                   >
                     <div className="flex items-baseline justify-between gap-2 text-xs">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className="text-[11px] font-mono-tabular text-slate-400 w-5 shrink-0">
+                        <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] w-5 shrink-0">
                           {String(idx + 1).padStart(2, '0')}
                         </span>
-                        <span className="font-semibold text-slate-100 truncate">{proj.label}</span>
-                        <span className="text-[11px] font-mono-tabular text-sky-300 shrink-0">
+                        <span className="font-semibold text-[var(--tm-text-primary)] truncate">
+                          {proj.label}
+                        </span>
+                        <span className="text-[11px] font-mono-tabular text-[var(--tm-accent-text)] shrink-0">
                           {proj.tokenSharePct.toFixed(1)}%
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2 font-mono-tabular shrink-0">
-                        <span className="font-semibold text-slate-100">
+                        <span className="font-semibold text-[var(--tm-text-primary)]">
                           {MonitorModel.compact(proj.tokens)}
                         </span>
-                        <span className="text-[11px] text-emerald-300">
+                        <span className="text-[11px] text-[var(--tm-success-text)]">
                           {MonitorModel.money(proj.costUsd)}
                         </span>
                       </div>
@@ -878,7 +948,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     <ProgressMeter
                       percent={proj.tokenSharePct}
                       tone="custom"
-                      barClassName="bg-gradient-to-r from-sky-400 to-emerald-400"
+                      barClassName="[background:var(--tm-accent-gradient)]"
                     />
 
                     {(proj.clients.length > 0 || proj.models.length > 0) && (
@@ -886,7 +956,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         {proj.clients.slice(0, 3).map((c) => (
                           <span
                             key={c.client}
-                            className="px-2 py-0.5 rounded-md bg-white/[0.05] text-[11px] text-slate-300 tabular-nums"
+                            className="px-2 py-0.5 rounded-md bg-[var(--tm-bg-control)] border border-[var(--tm-border-subtle)] text-[11px] text-[var(--tm-text-secondary)] tabular-nums"
                           >
                             {clientName(c.client)} {c.sharePct.toFixed(0)}%
                           </span>
@@ -894,7 +964,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         {proj.models.slice(0, 2).map((m) => (
                           <span
                             key={m.model}
-                            className="px-2 py-0.5 rounded-md bg-sky-400/10 text-[11px] text-sky-200 font-mono-tabular truncate max-w-[180px]"
+                            className="px-2 py-0.5 rounded-md bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[11px] text-[var(--tm-accent-text)] font-mono-tabular truncate max-w-[180px]"
                           >
                             {m.model}
                           </span>
@@ -905,7 +975,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 ))}
               </div>
             ) : (
-              <p className="text-center text-xs text-slate-400 py-4">
+              <p className="text-center text-xs text-[var(--tm-text-muted)] py-4">
                 本周期暂无已归因的项目用量明细
               </p>
             )}
@@ -917,42 +987,50 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
             {report.clients.length > 0 && (
               <div className="space-y-2.5">
-                <p className="text-[11px] font-medium text-slate-400">AI 编程工具</p>
+                <p className="text-[11px] font-medium text-[var(--tm-text-muted)]">AI 编程工具</p>
                 {report.clients.map((item) => {
                   const tone = clientTone(item.client);
                   return (
-                    <div key={item.client} className="space-y-1.5">
+                    <div
+                      key={item.client}
+                      className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] px-3 py-2.5 space-y-1.5"
+                    >
                       <div className="flex items-baseline justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           <i
                             className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`}
                             aria-hidden="true"
                           />
-                          <span className="font-medium text-slate-100 truncate min-w-0">
+                          <span className="font-semibold text-[var(--tm-text-primary)] truncate min-w-0">
                             {clientName(item.client)}
                           </span>
-                          <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0 whitespace-nowrap">
-                            {item.tokenSharePct.toFixed(1)}%
-                          </span>
-                          {item.cacheHitRatePct !== null && (
-                            <span className="text-[11px] tabular-nums text-sky-300 shrink-0 whitespace-nowrap">
-                              缓存 {item.cacheHitRatePct.toFixed(0)}%
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-baseline gap-2 font-mono-tabular shrink-0">
-                          <span className="font-semibold text-slate-100">
+                          <span className="font-semibold text-[var(--tm-text-primary)]">
                             {MonitorModel.compact(item.tokens)}
                           </span>
-                          <span className="text-[11px] text-emerald-300">
+                          <span className="text-[11px] text-[var(--tm-success-text)]">
                             {MonitorModel.money(item.costUsd)}
                           </span>
                         </div>
                       </div>
+                      <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
+                        <span className="text-[var(--tm-text-muted)]">
+                          占比{' '}
+                          <span className="font-mono-tabular text-[var(--tm-text-secondary)]">
+                            {item.tokenSharePct.toFixed(1)}%
+                          </span>
+                        </span>
+                        {item.cacheHitRatePct !== null && (
+                          <span className="font-mono-tabular text-[var(--tm-accent-text)]">
+                            缓存 {item.cacheHitRatePct.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
                       <ProgressMeter
                         percent={item.tokenSharePct}
                         tone="custom"
-                        heightClass="h-1"
+                        heightClass="h-1.5"
                         barClassName={`bg-gradient-to-r ${tone.bar}`}
                       />
                     </div>
@@ -962,19 +1040,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             )}
 
             {report.models.length > 0 && (
-              <div className="space-y-2 pt-2.5 border-t border-white/[0.06]">
-                <p className="text-[11px] font-medium text-slate-400">主力模型</p>
+              <div className="space-y-2 pt-2.5 border-t border-[var(--tm-border-subtle)]">
+                <p className="text-[11px] font-medium text-[var(--tm-text-muted)]">主力模型</p>
                 <div className="space-y-2">
                   {report.models.slice(0, 8).map((item) => (
                     <div
                       key={item.model}
-                      className="flex items-center justify-between gap-2.5 text-xs rounded-xl bg-white/[0.025] px-3 py-2 border border-white/[0.05]"
+                      className="flex items-center justify-between gap-2.5 text-xs rounded-xl bg-[var(--tm-bg-row)] px-3 py-2 border border-[var(--tm-border-subtle)]"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-100 truncate font-mono-tabular">
+                        <p className="font-medium text-[var(--tm-text-primary)] truncate font-mono-tabular">
                           {item.model}
                         </p>
-                        <p className="text-[11px] text-slate-400 tabular-nums truncate mt-0.5">
+                        <p className="text-[11px] text-[var(--tm-text-muted)] tabular-nums truncate mt-0.5">
                           占比 {item.tokenSharePct.toFixed(1)}%
                           {item.cacheHitRatePct !== null
                             ? ` · 缓存 ${item.cacheHitRatePct.toFixed(0)}%`
@@ -985,10 +1063,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         </p>
                       </div>
                       <div className="text-right font-mono-tabular shrink-0">
-                        <p className="font-semibold text-slate-100">
+                        <p className="font-semibold text-[var(--tm-text-primary)]">
                           {MonitorModel.compact(item.tokens)}
                         </p>
-                        <p className="text-[11px] text-emerald-300">
+                        <p className="text-[11px] text-[var(--tm-success-text)]">
                           {MonitorModel.money(item.costUsd)}
                         </p>
                       </div>
@@ -1008,7 +1086,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     title="逐日用量趋势"
                     action={
                       report.timeline.length > TIMELINE_COLLAPSED_LIMIT ? (
-                        <span className="text-[11px] text-slate-400 tabular-nums">
+                        <span className="text-[11px] text-[var(--tm-text-muted)] tabular-nums">
                           {showAllTimeline
                             ? `全部 ${report.timeline.length} 天`
                             : `近 ${TIMELINE_COLLAPSED_LIMIT} / ${report.timeline.length} 天`}
@@ -1024,7 +1102,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           key={row.date}
                           className="flex items-center gap-2 text-[11px] font-mono-tabular"
                         >
-                          <span className="text-slate-400 w-11 shrink-0">{row.date.slice(5)}</span>
+                          <span className="text-[var(--tm-text-muted)] w-11 shrink-0">
+                            {row.date.slice(5)}
+                          </span>
                           <div className="flex-1 min-w-[36px]">
                             <ProgressMeter
                               percent={row.tokens > 0 ? pct : 0}
@@ -1032,10 +1112,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               heightClass="h-2"
                             />
                           </div>
-                          <span className="text-slate-200 min-w-[52px] text-right shrink-0 whitespace-nowrap">
+                          <span className="text-[var(--tm-text-primary)] min-w-[52px] text-right shrink-0 whitespace-nowrap">
                             {MonitorModel.compact(row.tokens)}
                           </span>
-                          <span className="text-emerald-300 min-w-[56px] text-right shrink-0 whitespace-nowrap">
+                          <span className="text-[var(--tm-success-text)] min-w-[56px] text-right shrink-0 whitespace-nowrap">
                             {MonitorModel.money(row.costUsd)}
                           </span>
                         </div>
@@ -1047,7 +1127,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       type="button"
                       aria-expanded={showAllTimeline}
                       onClick={() => setShowAllTimeline((prev) => !prev)}
-                      className="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-[0.99] border border-white/[0.08] text-xs font-medium text-slate-200 inline-flex items-center justify-center gap-1.5 transition-all"
+                      className="w-full min-h-[44px] px-3 py-1.5 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.99] border border-[var(--tm-border-default)] text-xs font-medium text-[var(--tm-text-primary)] inline-flex items-center justify-center gap-1.5 transition-all"
                     >
                       <span>
                         {showAllTimeline
@@ -1055,9 +1135,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           : `展开全部 ${report.timeline.length} 天`}
                       </span>
                       <ChevronDown
-                        className={`w-4 h-4 text-slate-400 transition-transform duration-150 ${
-                          showAllTimeline ? 'rotate-180 text-sky-300' : ''
+                        className={`w-4 h-4 text-[var(--tm-text-muted)] transition-transform duration-150 ${
+                          showAllTimeline ? 'rotate-180 text-[var(--tm-accent-text)]' : ''
                         }`}
+                        aria-hidden="true"
                       />
                     </button>
                   )}
@@ -1067,7 +1148,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               {report.devices.length > 0 && (
                 <div
                   className={`space-y-2.5 ${
-                    report.timeline.length > 1 ? 'pt-3 border-t border-white/[0.06]' : ''
+                    report.timeline.length > 1 ? 'pt-3 border-t border-[var(--tm-border-subtle)]' : ''
                   }`}
                 >
                   <SectionHeader
@@ -1078,22 +1159,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     {report.devices.map((dev) => (
                       <div
                         key={dev.deviceId}
-                        className="flex items-center justify-between gap-2.5 text-xs rounded-xl bg-white/[0.025] px-3 py-2 border border-white/[0.05]"
+                        className="flex items-center justify-between gap-2.5 text-xs rounded-xl bg-[var(--tm-bg-row)] px-3 py-2 border border-[var(--tm-border-subtle)]"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-slate-100 truncate">
+                          <p className="font-medium text-[var(--tm-text-primary)] truncate">
                             {dev.hostname || dev.deviceId}
                           </p>
-                          <p className="text-[11px] text-slate-400 tabular-nums truncate mt-0.5">
+                          <p className="text-[11px] text-[var(--tm-text-muted)] tabular-nums truncate mt-0.5">
                             {dev.platform || 'unknown'} · 占比 {dev.tokenSharePct.toFixed(1)}%
                             {dev.stale ? ' · 状态过期' : ''}
                           </p>
                         </div>
                         <div className="text-right font-mono-tabular shrink-0">
-                          <p className="font-semibold text-slate-100">
+                          <p className="font-semibold text-[var(--tm-text-primary)]">
                             {MonitorModel.compact(dev.tokens)}
                           </p>
-                          <p className="text-[11px] text-emerald-300">
+                          <p className="text-[11px] text-[var(--tm-success-text)]">
                             {MonitorModel.money(dev.costUsd)}
                           </p>
                         </div>

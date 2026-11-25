@@ -4,6 +4,8 @@ export type ReportGranularity = 'daily' | 'weekly' | 'monthly';
 export type BreakdownKind = 'clients' | 'devices' | 'models' | 'projects';
 export type QuotaTabId = 'limits' | 'subscriptions' | 'antigravityManager';
 export type ConnectionStatus = 'online' | 'offline' | 'loading' | 'disconnected';
+export type ThemeId = 'obsidian' | 'daylight' | 'amber' | 'emerald' | 'nebula' | 'frost';
+export type ThemePreference = ThemeId | 'auto';
 
 export interface ProjectUsage {
   label?: string;
@@ -336,6 +338,7 @@ export interface HubNativeBridge {
   dismissAppUpdatePrompt?: () => void;
   saveLimitsPrefs?: (serialized: string) => void;
   saveDisplayPrefs?: (serialized: string) => void;
+  initialDisplayPrefs?: () => string;
   listReports?: (granularity: string, limit: number, requestId: string) => void;
   getReport?: (granularity: string, periodKey: string, requestId: string) => void;
   cancelReports?: () => void;
@@ -347,6 +350,7 @@ export interface HubNativeBridge {
 export interface DisplayPrefs {
   separateQoderClients: boolean;
   exactTrendTokens: boolean;
+  theme: ThemePreference;
 }
 
 export interface LimitsPrefs {
@@ -424,6 +428,8 @@ export interface MonitorState {
   connectionEpoch: number;
   limitsPrefs: LimitsPrefs;
   displayPrefs: DisplayPrefs;
+  systemDark: boolean;
+  imeVisible: boolean;
   limitAccountPresentation: LimitAccountPresentationMap;
   reports: ReportsState;
   agManager: AgManagerState;

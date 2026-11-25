@@ -433,6 +433,47 @@ test('parseMarkdown keeps raw HTML literal and rejects unsafe link protocols', a
   assert.equal(sanitizeHref('  '), null);
 });
 
+test('parseMarkdown terminates tables before list items, parses indented tables inside lists, and handles unclosed brackets/backticks linearly', async () => {
+  const { parseMarkdown, inlinePlainText } = await markdownModule;
+
+  // List item containing `|` right after a table (no blank line) must terminate the table
+  const listAfterTable = parseMarkdown([
+    '| Key | Value |',
+    '| --- | --- |',
+    '| foo | 10 |',
+    '- Summary: A | B',
+    '- Next item',
+  ].join('\n'));
+  assert.equal(listAfterTable.blocks.length, 2);
+  assert.equal(listAfterTable.blocks[0].type, 'table');
+  assert.equal(listAfterTable.blocks[0].rows.length, 1);
+  assert.equal(listAfterTable.blocks[1].type, 'list');
+  assert.equal(listAfterTable.blocks[1].items.length, 2);
+  assert.equal(inlinePlainText(listAfterTable.blocks[1].items[0].inlines), 'Summary: A | B');
+
+  // Indented table inside a list item parses as a nested table child block
+  const nestedTable = parseMarkdown([
+    '- Item with breakdown:',
+    '  | Tool | Share |',
+    '  | --- | ---: |',
+    '  | Codex | 60% |',
+    '  | Claude | 40% |',
+  ].join('\n'));
+  assert.equal(nestedTable.blocks.length, 1);
+  assert.equal(nestedTable.blocks[0].type, 'list');
+  assert.equal(nestedTable.blocks[0].items[0].children.length, 1);
+  assert.equal(nestedTable.blocks[0].items[0].children[0].type, 'table');
+  assert.equal(nestedTable.blocks[0].items[0].children[0].rows.length, 2);
+
+  // Pathological unclosed `[` and backticks complete swiftly without O(N^2) blowup
+  const start = Date.now();
+  const pathological = `${'[unclosed '.repeat(3000)} ${'`tick '.repeat(3000)}`;
+  const parsed = parseMarkdown(pathological);
+  const elapsedMs = Date.now() - start;
+  assert.equal(parsed.blocks.length, 1);
+  assert.ok(elapsedMs < 1500, `Expected linear-time parse (<1500ms), got ${elapsedMs}ms`);
+});
+
 test('MarkdownRenderer preserves WebView CSP/XSS invariants without raw HTML injection or navigation', () => {
   const rendererPath = path.resolve(__dirname, '../../ui/src/components/MarkdownRenderer.tsx');
   const source = fs.readFileSync(rendererPath, 'utf8');
@@ -440,7 +481,9 @@ test('MarkdownRenderer preserves WebView CSP/XSS invariants without raw HTML inj
   assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
   assert.doesNotMatch(source, /<img[\s>]/);
   assert.doesNotMatch(source, /<a[\s>]/);
+  assert.doesNotMatch(source, /#080C12/);
   assert.match(source, /select-text/);
-  assert.match(source, /overflow-x-auto rounded-2xl border border-white\/\[0\.09\] bg-\[#080C12\]\/80/);
+  assert.match(source, /overflow-x-auto rounded-2xl border border-\[var\(--tm-border-default\)\] bg-\[var\(--tm-bg-table\)\]/);
   assert.match(source, /min-w-\[140px\]/);
+  assert.match(source, /start=\{block\.start !== 1 \? block\.start : undefined\}/);
 });

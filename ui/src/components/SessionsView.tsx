@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ChevronRight, MessageSquare } from 'lucide-react';
+import { ArrowRight, ChevronRight, MessageSquare, RotateCcw } from 'lucide-react';
 import { MonitorModel } from '../model/monitorModel';
 import {
   DeviceData,
@@ -54,23 +54,23 @@ export function renderStatusText(status: SessionStatusResult) {
 
   const pillClass = isRunning
     ? inferred
-      ? 'bg-emerald-500/8 border-emerald-400/25 border-dashed text-emerald-200'
-      : 'bg-emerald-500/14 border-emerald-400/30 text-emerald-200'
+      ? 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] border-dashed text-[var(--tm-success-text)]'
+      : 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
     : isWaiting
-    ? 'bg-amber-500/12 border-amber-400/30 text-amber-200'
+    ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
     : isEnded
-    ? 'bg-sky-500/10 border-sky-400/25 text-sky-200'
-    : 'bg-white/[0.05] border-white/10 text-slate-300';
+    ? 'bg-[var(--tm-info-soft-bg)] border-[var(--tm-info-soft-border)] text-[var(--tm-info-text)]'
+    : 'bg-[var(--tm-bg-control)] border-[var(--tm-border-default)] text-[var(--tm-text-secondary)]';
 
   const dotClass = isRunning
     ? inferred
-      ? 'border border-emerald-400 bg-emerald-400/25'
-      : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]'
+      ? 'border border-[var(--tm-success)] bg-[var(--tm-success-soft-bg)]'
+      : 'bg-[var(--tm-success)]'
     : isWaiting
-    ? 'bg-amber-400'
+    ? 'bg-[var(--tm-warning)]'
     : isEnded
-    ? 'bg-sky-400'
-    : 'bg-slate-400';
+    ? 'bg-[var(--tm-info)]'
+    : 'bg-[var(--tm-text-muted)]';
 
   return (
     <span
@@ -81,7 +81,7 @@ export function renderStatusText(status: SessionStatusResult) {
     >
       <i className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} aria-hidden="true" />
       <span>{status.label}</span>
-      {inferred && <span className="text-[11px] text-emerald-300/90">(推断)</span>}
+      {inferred && <span className="text-[11px] opacity-85">(推断)</span>}
     </span>
   );
 }
@@ -113,19 +113,37 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     setStatusFilter('all');
   }, [period, deviceId]);
 
+  // Compute available tools across the full period snapshot BEFORE applying text search,
+  // so typing a transient zero-match search never silently destroys the active tool filter.
+  const periodRows = useMemo(
+    () => MonitorModel.sessions(selected.period, '', { sortBy }),
+    [selected.period, sortBy],
+  );
+  const periodToolSelection = useMemo(
+    () => MonitorModel.filterSessionTools(periodRows, tool),
+    [periodRows, tool],
+  );
+
   const searchedRows = useMemo(
     () => MonitorModel.sessions(selected.period, search, { sortBy }),
     [selected.period, search, sortBy],
   );
-  const selection = useMemo(
-    () => MonitorModel.filterSessionTools(searchedRows, tool),
-    [searchedRows, tool],
-  );
-  useEffect(() => {
-    if (tool && selection.tool !== tool) onToolChange('');
-  }, [tool, selection.tool, onToolChange]);
 
-  const allRows = selection.rows;
+  // Only reset `tool` when the selected tool actually disappears from the period's sessions.
+  useEffect(() => {
+    if (tool && periodToolSelection.tool !== tool) onToolChange('');
+  }, [tool, periodToolSelection.tool, onToolChange]);
+
+  const activeTool = periodToolSelection.tool;
+  const availableTools = periodToolSelection.tools;
+
+  const allRows = useMemo(() => {
+    if (!activeTool) return searchedRows;
+    return searchedRows.filter((row) =>
+      (row.groupRows || [row]).some((member) => member.client === activeTool),
+    );
+  }, [searchedRows, activeTool]);
+
   const omitted = (selected.device || stats).sessionDetailsOmitted?.[period];
 
   const statusOptions = useMemo(
@@ -153,7 +171,14 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     [period, allStatuses, statusFilter],
   );
   const { running: activeCount, waiting: waitingCount, ended: endedCount } = counts;
+  const unknownCount = useMemo(
+    () => allStatuses.filter((s) => s.state === 'unknown').length,
+    [allStatuses],
+  );
   const sortedIndices = filteredIndices;
+  const remainingCount = Math.max(0, filteredIndices.length - sessionLimit);
+  const nextPageBatch = Math.min(40, remainingCount);
+  const hasAnyFilter = Boolean(search.trim() || activeTool || statusFilter !== 'all');
 
   if (period === 'allTime') {
     return (
@@ -166,8 +191,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   }
 
   return (
-    <div className="space-y-3.5">
-      <div id="session-search" className="space-y-2.5">
+    <div className="space-y-3">
+      {/* Compact unified search + status + tool filter toolbar */}
+      <div id="session-search" className="glass-panel rounded-2xl p-3 space-y-2">
         <SearchField
           id="search"
           value={search}
@@ -177,7 +203,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
           clearAriaLabel="清除搜索"
         />
 
-        {allRows.length > 0 && (
+        {periodRows.length > 0 && (
           <div
             className="glass-inset p-1 rounded-2xl flex gap-1 overflow-x-auto no-scrollbar"
             role="group"
@@ -202,10 +228,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     setStatusFilter(fId);
                     onResetLimit?.();
                   }}
-                  className={`flex-1 min-w-fit min-h-[40px] px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-150 whitespace-nowrap active:scale-[0.98] ${
+                  className={`flex-1 min-w-fit min-h-[44px] px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-150 whitespace-nowrap active:scale-[0.98] ${
                     active
-                      ? 'bg-slate-800/95 text-white shadow-sm border border-white/12'
-                      : 'border border-transparent text-slate-400 hover:text-slate-200'
+                      ? 'bg-[var(--tm-selection-bg)] text-[var(--tm-selection-text)] shadow-sm border border-[var(--tm-selection-border)]'
+                      : 'border border-transparent text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
                   }`}
                 >
                   <span>{fLabel}</span>
@@ -215,35 +241,35 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             })}
           </div>
         )}
-      </div>
 
-      {selection.tools.length > 1 && (
-        <div
-          role="group"
-          aria-label="按工具筛选会话"
-          className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5"
-        >
-          {['', ...selection.tools].map((client) => {
-            const active = selection.tool === client;
-            return (
-              <button
-                key={client}
-                type="button"
-                data-session-tool={client}
-                aria-pressed={active}
-                onClick={() => onToolChange(active ? '' : client)}
-                className={`min-h-[40px] shrink-0 px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap ${
-                  active
-                    ? 'bg-sky-400/18 border-sky-400/40 text-sky-100'
-                    : 'glass-inset text-slate-300 hover:border-white/20'
-                }`}
-              >
-                {client ? clientName(client) : '全部工具'}
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {availableTools.length > 1 && (
+          <div
+            role="group"
+            aria-label="按工具筛选会话"
+            className="flex gap-1.5 overflow-x-auto no-scrollbar pt-0.5"
+          >
+            {['', ...availableTools].map((client) => {
+              const active = activeTool === client;
+              return (
+                <button
+                  key={client}
+                  type="button"
+                  data-session-tool={client}
+                  aria-pressed={active}
+                  onClick={() => onToolChange(active ? '' : client)}
+                  className={`min-h-[44px] shrink-0 px-3.5 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap ${
+                    active
+                      ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                      : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
+                  }`}
+                >
+                  {client ? clientName(client) : '全部工具'}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {omitted ? (
         <InlineAlert tone="amber">
@@ -258,19 +284,43 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
           description={
             statusFilter !== 'all'
               ? '当前状态筛选下没有会话，可切换至「全部」查看。'
+              : search && activeTool
+              ? `工具「${clientName(activeTool)}」下没有匹配「${search.trim()}」的会话。`
               : search
               ? '试试其他工具、项目或模型名称。'
               : '采集设备可能尚未提供会话明细。'
           }
           action={
-            statusFilter !== 'all' ? (
-              <button
-                type="button"
-                onClick={() => setStatusFilter('all')}
-                className="min-h-[44px] px-4 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 active:scale-[0.98] border border-sky-400/30 text-xs font-semibold text-sky-200 transition-all"
-              >
-                显示全部会话 ({allRows.length})
-              </button>
+            hasAnyFilter ? (
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {statusFilter !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter('all');
+                      onResetLimit?.();
+                    }}
+                    className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] transition-all"
+                  >
+                    显示全部状态 ({allRows.length})
+                  </button>
+                )}
+                {(search || activeTool) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSearchChange('');
+                      onToolChange('');
+                      setStatusFilter('all');
+                      onResetLimit?.();
+                    }}
+                    className="min-h-[44px] px-4 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-text-primary)] inline-flex items-center gap-1.5 transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>重置全部筛选</span>
+                  </button>
+                )}
+              </div>
             ) : undefined
           }
         />
@@ -278,18 +328,30 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
         <>
           <div className="flex items-center justify-between flex-wrap gap-2 px-1 text-xs">
             <div className="flex items-center gap-2 flex-wrap tabular-nums">
-              <span className="text-slate-300">
-                <strong className="text-white">{filteredIndices.length}</strong> 条
-                {search || statusFilter !== 'all' ? '匹配' : ''}会话
+              <span className="text-[var(--tm-text-secondary)]">
+                <strong className="text-[var(--tm-text-primary)]">{filteredIndices.length}</strong> 条
+                {hasAnyFilter ? '匹配' : ''}会话
               </span>
-              <span className="text-slate-400" aria-hidden="true">
+              <span className="text-[var(--tm-text-muted)]" aria-hidden="true">
                 ·
               </span>
-              <span className="text-emerald-300 font-medium">运行中 {activeCount}</span>
-              <span className="text-slate-400" aria-hidden="true">
-                ·
-              </span>
-              <span className="text-amber-300 font-medium">等待中 {waitingCount}</span>
+              {unknownCount > 0 && activeCount === 0 && waitingCount === 0 && (!statusHealthy || !foreground || unknownCount === allRows.length) ? (
+                <span className="text-[var(--tm-warning-text)] font-medium">
+                  状态待同步 {unknownCount}
+                </span>
+              ) : (
+                <>
+                  <span className="text-[var(--tm-success-text)] font-medium">
+                    运行中 {activeCount}
+                  </span>
+                  <span className="text-[var(--tm-text-muted)]" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-[var(--tm-warning-text)] font-medium">
+                    等待中 {waitingCount}
+                  </span>
+                </>
+              )}
             </div>
 
             <SegmentedControl<SessionSortId>
@@ -342,7 +404,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     type="button"
                     onClick={() => onToggleOpen(encodedKey)}
                     aria-expanded={isOpen}
-                    className="session-toggle w-full text-left p-4 active:bg-white/[0.03] transition-colors"
+                    className="session-toggle w-full text-left p-4 active:bg-[var(--tm-bg-row-hover)] transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
@@ -351,27 +413,27 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         </span>
                         {renderStatusText(status)}
                         {supportsConversation && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-[11px] font-medium text-sky-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[11px] font-medium text-[var(--tm-accent-text)]">
                             对话
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-baseline gap-1.5 shrink-0 font-mono-tabular pt-0.5">
-                        <span className="text-xs font-bold text-slate-50">
+                        <span className="text-xs font-bold text-[var(--tm-text-primary)]">
                           {usageDisplay.tokensText}
                         </span>
-                        <span className="text-[11px] text-emerald-300/90">
+                        <span className="text-[11px] text-[var(--tm-success-text)]">
                           {usageDisplay.costText}
                         </span>
                       </div>
                     </div>
 
-                    <div className="text-sm font-semibold text-slate-50 leading-snug mt-2 mb-1.5 break-words">
+                    <div className="text-sm font-semibold text-[var(--tm-text-primary)] leading-snug mt-2 mb-1.5 break-words">
                       {row.title || row.projectLabel || row.sessionId || row.key}
                     </div>
 
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-slate-400">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-[var(--tm-text-muted)]">
                       {sources.length ? (
                         sources.map((source) => (
                           <span
@@ -389,12 +451,12 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)]">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="font-mono-tabular shrink-0">
                           {formatShortTime(row.lastUsedAt)}
                         </span>
-                        <span className="text-slate-400 shrink-0" aria-hidden="true">
+                        <span className="shrink-0" aria-hidden="true">
                           ·
                         </span>
                         <span
@@ -405,15 +467,17 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                           ]
                             .filter(Boolean)
                             .join('\n')}
-                          className="font-mono-tabular text-slate-300 truncate min-w-0"
+                          className="font-mono-tabular text-[var(--tm-text-secondary)] truncate min-w-0"
                         >
                           {modelNames}
                         </span>
                       </div>
                       <ChevronRight
                         aria-hidden="true"
-                        className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
-                          isOpen ? 'rotate-90 text-sky-400' : ''
+                        className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
+                          isOpen
+                            ? 'rotate-90 text-[var(--tm-accent)]'
+                            : 'text-[var(--tm-text-muted)]'
                         }`}
                       />
                     </div>
@@ -423,7 +487,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         {effort && (
                           <span
                             data-reasoning-effort={effort}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky-500/12 border border-sky-400/25 text-[11px] font-medium text-sky-200"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--tm-info-soft-bg)] border border-[var(--tm-info-soft-border)] text-[11px] font-medium text-[var(--tm-info-text)]"
                           >
                             推理 {effort}
                           </span>
@@ -431,7 +495,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         {row.subagentCount ? (
                           <span
                             data-subagent-count={row.subagentCount}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-500/12 border border-violet-400/25 text-[11px] font-medium text-violet-200 tabular-nums"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--tm-violet-soft-bg)] border border-[var(--tm-violet-soft-border)] text-[11px] font-medium text-[var(--tm-violet-text)] tabular-nums"
                           >
                             {row.subagentCount} 个子代理
                           </span>
@@ -441,68 +505,82 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   </button>
 
                   {!isOpen && (
-                    <button
-                      type="button"
-                      data-session-quick-detail={encodeURIComponent(row.detailKey || row.key)}
-                      onClick={() => onOpenSessionDetail(row.detailKey || row.key)}
-                      className="w-full min-h-[44px] px-4 py-2 border-t border-white/[0.06] bg-white/[0.015] hover:bg-sky-500/[0.07] active:bg-sky-500/12 flex items-center justify-between gap-2 text-xs font-semibold text-sky-300 transition-colors"
-                    >
-                      <span>
-                        {supportsConversation
-                          ? '查看对话与详情'
-                          : row.groupRows
-                          ? '查看主会话详情'
-                          : '查看会话详情'}
-                      </span>
-                      <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    </button>
+                    <div className="px-4 py-1 border-t border-[var(--tm-border-subtle)] bg-[var(--tm-bg-row)] flex items-center justify-end">
+                      <button
+                        type="button"
+                        data-session-quick-detail={encodeURIComponent(row.detailKey || row.key)}
+                        onClick={() => onOpenSessionDetail(row.detailKey || row.key)}
+                        className="w-full min-h-[44px] flex items-center justify-between gap-2 text-xs font-semibold text-[var(--tm-accent-text)] hover:text-[var(--tm-accent)] active:scale-[0.99] transition-all"
+                      >
+                        <span>
+                          {supportsConversation
+                            ? '查看对话与详情'
+                            : row.groupRows
+                            ? '查看主会话详情'
+                            : '查看会话详情'}
+                        </span>
+                        <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      </button>
+                    </div>
                   )}
 
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-3 border-t border-white/8 space-y-3">
+                    <div className="px-4 pb-4 pt-3 border-t border-[var(--tm-border-subtle)] space-y-3">
                       {partSum > 0 && (
                         <div className="space-y-2">
                           <div
-                            className="h-2 w-full rounded-full bg-white/[0.07] overflow-hidden flex gap-px"
+                            className="h-2 w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden flex gap-px"
                             aria-hidden="true"
                           >
                             {inTok > 0 && (
                               <div
-                                style={{ width: `${(inTok / partSum) * 100}%` }}
-                                className="h-full min-w-[3px] bg-sky-400"
+                                style={{
+                                  width: `${(inTok / partSum) * 100}%`,
+                                  backgroundColor: 'var(--tm-chart-input)',
+                                }}
+                                className="h-full min-w-[3px]"
                               />
                             )}
                             {outTok > 0 && (
                               <div
-                                style={{ width: `${(outTok / partSum) * 100}%` }}
-                                className="h-full min-w-[3px] bg-violet-400"
+                                style={{
+                                  width: `${(outTok / partSum) * 100}%`,
+                                  backgroundColor: 'var(--tm-chart-output)',
+                                }}
+                                className="h-full min-w-[3px]"
                               />
                             )}
                             {cacheTok > 0 && (
                               <div
-                                style={{ width: `${(cacheTok / partSum) * 100}%` }}
-                                className="h-full min-w-[3px] bg-emerald-400"
+                                style={{
+                                  width: `${(cacheTok / partSum) * 100}%`,
+                                  backgroundColor: 'var(--tm-chart-cache-read)',
+                                }}
+                                className="h-full min-w-[3px]"
                               />
                             )}
                             {cacheWriteTok > 0 && (
                               <div
-                                style={{ width: `${(cacheWriteTok / partSum) * 100}%` }}
-                                className="h-full min-w-[3px] bg-amber-400"
+                                style={{
+                                  width: `${(cacheWriteTok / partSum) * 100}%`,
+                                  backgroundColor: 'var(--tm-chart-cache-write)',
+                                }}
+                                className="h-full min-w-[3px]"
                               />
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums">
-                            <span className="text-sky-300">
+                            <span className="text-[var(--tm-info-text)]">
                               输入 <span className="font-mono-tabular">{MonitorModel.compact(inTok)}</span>
                             </span>
-                            <span className="text-violet-300">
+                            <span className="text-[var(--tm-violet-text)]">
                               输出 <span className="font-mono-tabular">{MonitorModel.compact(outTok)}</span>
                             </span>
-                            <span className="text-emerald-300">
+                            <span className="text-[var(--tm-success-text)]">
                               缓存读取 <span className="font-mono-tabular">{MonitorModel.compact(cacheTok)}</span>
                             </span>
                             {cacheWriteTok > 0 && (
-                              <span className="text-amber-300">
+                              <span className="text-[var(--tm-warning-text)]">
                                 缓存写入 <span className="font-mono-tabular">{MonitorModel.compact(cacheWriteTok)}</span>
                               </span>
                             )}
@@ -512,47 +590,47 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
                       <dl className="grid grid-cols-2 gap-3 text-xs">
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">当前状态</dt>
-                          <dd className="text-slate-100 font-medium mt-0.5 break-words">{status.label}</dd>
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">当前状态</dt>
+                          <dd className="text-[var(--tm-text-primary)] font-medium mt-0.5 break-words">{status.label}</dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">状态依据</dt>
-                          <dd className="text-slate-200 mt-0.5 break-words">{status.detail}</dd>
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">状态依据</dt>
+                          <dd className="text-[var(--tm-text-secondary)] mt-0.5 break-words">{status.detail}</dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">状态观测</dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">状态观测</dt>
+                          <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5">
                             {status.observedAt ? formatShortTime(status.observedAt) : '—'}
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">项目</dt>
-                          <dd className="text-slate-200 mt-0.5 truncate">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">项目</dt>
+                          <dd className="text-[var(--tm-text-secondary)] mt-0.5 truncate">
                             {row.projectLabel || '—'}
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">最近使用模型</dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-0.5 truncate">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">最近使用模型</dt>
+                          <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5 truncate">
                             {latestModel || '未知'}
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">缓存命中率</dt>
-                          <dd className="font-mono-tabular text-emerald-300 mt-0.5">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">缓存命中率</dt>
+                          <dd className="font-mono-tabular text-[var(--tm-success-text)] mt-0.5 font-medium">
                             {cacheEff ? `${cacheEff.percent.toFixed(1)}%` : '—'}
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] text-slate-400">消息数</dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-0.5">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)]">消息数</dt>
+                          <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5">
                             {MonitorModel.numeric(row.messageCount) === null
                               ? '—'
                               : MonitorModel.compact(row.messageCount)}
                           </dd>
                         </div>
                         <div className="col-span-2 min-w-0">
-                          <dt className="text-[11px] text-slate-400 flex items-center justify-between gap-2">
+                          <dt className="text-[11px] text-[var(--tm-text-muted)] flex items-center justify-between gap-2">
                             <span>会话 ID</span>
                             <CopyButton
                               text={row.sessionId || row.key}
@@ -560,7 +638,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                               label="复制 ID"
                             />
                           </dt>
-                          <dd className="font-mono-tabular text-slate-200 mt-1 break-all">
+                          <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-1 break-all">
                             {row.sessionId || row.key}
                           </dd>
                         </div>
@@ -573,52 +651,52 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       ) : null}
 
                       {row.groupRows && (
-                        <div className="pt-3 border-t border-white/8">
-                          <p className="text-[11px] text-slate-400 mb-2 tabular-nums">
+                        <div className="pt-3 border-t border-[var(--tm-border-subtle)]">
+                          <p className="text-[11px] text-[var(--tm-text-muted)] mb-2 tabular-nums">
                             主会话与子代理 · {row.groupRows.length} 条记录
                           </p>
                           <ul className="space-y-2">
                             {row.groupRows.map((member) => {
                               const memberUsage = MonitorModel.sessionUsageDisplay(member);
                               return (
-                              <li key={member.key}>
-                                <button
-                                  type="button"
-                                  data-session-member={encodeURIComponent(member.key)}
-                                  onClick={() => onOpenSessionDetail(member.key)}
-                                  className="w-full min-h-[44px] glass-inset hover:border-white/20 active:scale-[0.99] rounded-2xl p-3 text-left space-y-1.5 transition-all"
-                                >
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="text-[11px] font-semibold text-sky-300">
-                                      {member.groupRole === 'main' ? '主会话' : '子代理'} ·{' '}
-                                      {clientName(member.client)}
-                                    </span>
-                                    {renderStatusText(
-                                      MonitorModel.sessionStatus(member, statusOptions),
-                                    )}
-                                  </div>
-                                  <div className="text-xs font-medium text-slate-100 break-words">
-                                    {member.title ||
-                                      member.projectLabel ||
-                                      member.sessionId ||
-                                      member.key}
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 font-mono-tabular">
-                                    <span className="min-w-0 truncate">
-                                      {member.sessionId || member.key}
-                                    </span>
-                                    <span className="shrink-0">
-                                      {memberUsage.tokensText}
-                                      {' · '}
-                                      {memberUsage.costText}
-                                    </span>
-                                    <ChevronRight
-                                      className="w-4 h-4 shrink-0 text-sky-300"
-                                      aria-hidden="true"
-                                    />
-                                  </div>
-                                </button>
-                              </li>
+                                <li key={member.key}>
+                                  <button
+                                    type="button"
+                                    data-session-member={encodeURIComponent(member.key)}
+                                    onClick={() => onOpenSessionDetail(member.key)}
+                                    className="w-full min-h-[44px] glass-inset hover:border-[var(--tm-border-strong)] active:scale-[0.99] rounded-2xl p-3 text-left space-y-1.5 transition-all"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <span className="text-[11px] font-semibold text-[var(--tm-accent-text)]">
+                                        {member.groupRole === 'main' ? '主会话' : '子代理'} ·{' '}
+                                        {clientName(member.client)}
+                                      </span>
+                                      {renderStatusText(
+                                        MonitorModel.sessionStatus(member, statusOptions),
+                                      )}
+                                    </div>
+                                    <div className="text-xs font-medium text-[var(--tm-text-primary)] break-words">
+                                      {member.title ||
+                                        member.projectLabel ||
+                                        member.sessionId ||
+                                        member.key}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] font-mono-tabular">
+                                      <span className="min-w-0 truncate">
+                                        {member.sessionId || member.key}
+                                      </span>
+                                      <span className="shrink-0">
+                                        {memberUsage.tokensText}
+                                        {' · '}
+                                        {memberUsage.costText}
+                                      </span>
+                                      <ChevronRight
+                                        className="w-4 h-4 shrink-0 text-[var(--tm-accent)]"
+                                        aria-hidden="true"
+                                      />
+                                    </div>
+                                  </button>
+                                </li>
                               );
                             })}
                           </ul>
@@ -629,7 +707,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         type="button"
                         onClick={() => onOpenSessionDetail(row.detailKey || row.key)}
                         data-session-detail={encodeURIComponent(row.detailKey || row.key)}
-                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-sky-500/12 hover:bg-sky-500/20 active:scale-[0.99] border border-sky-400/25 flex items-center justify-between text-xs font-semibold text-sky-200 transition-all"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.99] border border-[var(--tm-accent-soft-border)] flex items-center justify-between text-xs font-semibold text-[var(--tm-accent-text)] transition-all"
                       >
                         <span>{row.groupRows ? '查看主会话详情' : '查看完整详情'}</span>
                         <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -641,13 +719,13 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             })}
           </div>
 
-          {filteredIndices.length > sessionLimit && (
+          {remainingCount > 0 && (
             <button
               type="button"
               onClick={onLoadMore}
-              className="w-full min-h-[46px] rounded-2xl glass-panel-interactive text-xs font-semibold text-sky-300 hover:text-sky-200 transition-all"
+              className="w-full min-h-[46px] rounded-2xl glass-panel-interactive text-xs font-semibold text-[var(--tm-accent-text)] transition-all"
             >
-              再显示 40 条（剩余 {filteredIndices.length - sessionLimit}）
+              再显示 {nextPageBatch} 条（剩余 {remainingCount}）
             </button>
           )}
         </>

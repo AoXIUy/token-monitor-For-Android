@@ -535,11 +535,11 @@
       ? (windowLabels?.limitWindowLabel ? windowLabels.limitWindowLabel(provider?.provider, window) : rawLabel)
       : (({ session: '当前会话', weekly: '每周额度', daily: '每日额度', monthly: '每月额度', billing: '账期额度' })[window?.kind] || window?.kind || '额度');
 
-    if (String(window.detail || '').trim().toLowerCase() === 'unlimited') {
+    if (String(window?.detail || '').trim().toLowerCase() === 'unlimited') {
       return { label: resolvedWindowLabel || '额度', value: '无限额', percent: null, remaining: false };
     }
-    if (balance.isCreditsWindow(window)) {
-      if (provider.provider === 'muse' && provider.source === 'web' && window.resetDescription?.endsWith(' tokens left')) {
+    if (window && balance.isCreditsWindow(window)) {
+      if (provider?.provider === 'muse' && provider?.source === 'web' && window.resetDescription?.endsWith(' tokens left')) {
         return { label: '额外 Tokens', value: `${window.resetDescription.slice(0, -' tokens left'.length)} Tokens`,
           percent: null, remaining: true, description: '' };
       }
@@ -555,30 +555,30 @@
         ...(limit > 0 ? { detail: `${used === null ? '' : `已用 ${money(used, currency)} / `}总额 ${money(limit, currency)}` } : {}),
       };
     }
-    if (window.metric === 'spend' || (!window.metric && window.kind === 'billing' && window.label === 'Usage credits')) {
-      const curr = window.currency || provider.balance?.currency;
-      const usedText = money(window.used, curr);
-      const limit = numeric(window.limit);
+    if (window?.metric === 'spend' || (!window?.metric && window?.kind === 'billing' && window?.label === 'Usage credits')) {
+      const curr = window?.currency || provider?.balance?.currency;
+      const usedText = money(window?.used, curr);
+      const limit = numeric(window?.limit);
       return {
         label: rawLabel ? resolvedWindowLabel : '已用金额',
-        value: limit > 0 && numeric(window.used) !== null ? `${usedText} / ${money(limit, curr)}` : usedText,
+        value: limit > 0 && numeric(window?.used) !== null ? `${usedText} / ${money(limit, curr)}` : usedText,
         percent: null,
       };
     }
-    const used = numeric(window.usedPercent);
-    const remaining = numeric(window.remainingPercent);
+    const used = numeric(window?.usedPercent);
+    const remaining = numeric(window?.remainingPercent);
     const usedPercent = used ?? (remaining === null ? null : 100 - remaining);
     const remainingPercent = remaining ?? (used === null ? null : 100 - used);
     const shownPercent = showUsed ? usedPercent : remainingPercent;
-    const wt = windowText?.limitWindowText(provider, window, { showLimitUsed: showUsed, formatCompact: compact });
+    const wt = window ? windowText?.limitWindowText(provider, window, { showLimitUsed: showUsed, formatCompact: compact }) : null;
     const detail = wt?.detail || '';
     const overrideValue = shownPercent === null && wt?.value ? wt.value : null;
     return {
       label: resolvedWindowLabel,
       value: overrideValue || (shownPercent === null ? '暂无读数' : `${Math.round(shownPercent * 10) / 10}% ${showUsed ? '已用' : '剩余'}`),
-      percent: shownPercent === null || window.showMeter === false ? null : Math.max(0, Math.min(100, shownPercent)),
+      percent: shownPercent === null || window?.showMeter === false ? null : Math.max(0, Math.min(100, shownPercent)),
       remaining: !showUsed && shownPercent !== null,
-      ...(detail ? { detail: provider.provider === 'minimax' ? `${detail} 次` : detail } : {}),
+      ...(detail ? { detail: provider?.provider === 'minimax' ? `${detail} 次` : detail } : {}),
     };
   }
   function limitWindows(provider) {
@@ -630,8 +630,12 @@
     return provider.status === 'ok';
   }
   function daily(stats) {
-    return (stats?.historyPreview?.daily || []).filter((row) => isCalendarDayKey(row?.date))
-      .slice().sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+    const byDate = new Map();
+    for (const row of stats?.historyPreview?.daily || []) {
+      if (!isCalendarDayKey(row?.date)) continue;
+      byDate.set(row.date, row);
+    }
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
   }
   function activityDays(stats) {
     const summary = stats?.historyPreview?.summary;
@@ -671,7 +675,8 @@
     if (period?.capabilities?.tokenComponents !== true) return null;
     const total = count(period.totalTokens);
     const cached = count(period.cacheReadTokens);
-    return { cached, output: count(period.outputTokens), cachePercent: total > 0 ? (cached / total * 100).toFixed(1) : '0.0' };
+    const cachePercent = total > 0 ? Math.min(100, (cached / total) * 100) : 0;
+    return { cached, output: count(period.outputTokens), cachePercent: cachePercent.toFixed(1) };
   }
   function sessionCacheEfficiency(row) {
     const hit = count(row?.cacheReadTokens), miss = count(row?.inputTokens) + count(row?.cacheWriteTokens);

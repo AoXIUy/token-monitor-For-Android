@@ -38,24 +38,24 @@ const ACCENT_STYLES: Record<
   }
 > = {
   sky: {
-    h2Bar: 'bg-sky-400',
-    blockquote: 'border-sky-400/50 bg-sky-500/[0.07]',
-    inlineCode: 'bg-sky-400/10 text-sky-200 border-sky-400/20',
-    bullet: 'bg-sky-400/85',
-    orderedIndex: 'text-sky-300',
-    linkPill: 'bg-sky-400/10 text-sky-200 border-sky-400/25',
-    taskChecked: 'bg-sky-400/20 border-sky-400/50 text-sky-300',
-    tableHeader: 'bg-sky-500/[0.07] text-sky-100',
+    h2Bar: 'bg-[var(--tm-info)]',
+    blockquote: 'border-[var(--tm-info-soft-border)] bg-[var(--tm-info-soft-bg)]',
+    inlineCode: 'bg-[var(--tm-info-soft-bg)] text-[var(--tm-info-text)] border-[var(--tm-info-soft-border)]',
+    bullet: 'bg-[var(--tm-info)]',
+    orderedIndex: 'text-[var(--tm-info-text)]',
+    linkPill: 'bg-[var(--tm-info-soft-bg)] text-[var(--tm-info-text)] border-[var(--tm-info-soft-border)]',
+    taskChecked: 'bg-[var(--tm-info-soft-bg)] border-[var(--tm-info)] text-[var(--tm-info-text)]',
+    tableHeader: 'bg-[var(--tm-info-soft-bg)] text-[var(--tm-info-text)]',
   },
   violet: {
-    h2Bar: 'bg-violet-400',
-    blockquote: 'border-violet-400/50 bg-violet-500/[0.07]',
-    inlineCode: 'bg-violet-400/10 text-violet-200 border-violet-400/20',
-    bullet: 'bg-violet-400/85',
-    orderedIndex: 'text-violet-300',
-    linkPill: 'bg-violet-400/10 text-violet-200 border-violet-400/25',
-    taskChecked: 'bg-violet-400/20 border-violet-400/50 text-violet-300',
-    tableHeader: 'bg-violet-500/[0.07] text-violet-100',
+    h2Bar: 'bg-[var(--tm-violet)]',
+    blockquote: 'border-[var(--tm-violet-soft-border)] bg-[var(--tm-violet-soft-bg)]',
+    inlineCode: 'bg-[var(--tm-violet-soft-bg)] text-[var(--tm-violet-text)] border-[var(--tm-violet-soft-border)]',
+    bullet: 'bg-[var(--tm-violet)]',
+    orderedIndex: 'text-[var(--tm-violet-text)]',
+    linkPill: 'bg-[var(--tm-violet-soft-bg)] text-[var(--tm-violet-text)] border-[var(--tm-violet-soft-border)]',
+    taskChecked: 'bg-[var(--tm-violet-soft-bg)] border-[var(--tm-violet)] text-[var(--tm-violet-text)]',
+    tableHeader: 'bg-[var(--tm-violet-soft-bg)] text-[var(--tm-violet-text)]',
   },
 };
 
@@ -167,19 +167,19 @@ function renderInlines(
         return <br key={key} />;
       case 'strong':
         return (
-          <strong key={key} className="font-semibold text-white">
+          <strong key={key} className="font-semibold text-[var(--tm-text-primary)]">
             {renderInlines(inline.children, theme, key)}
           </strong>
         );
       case 'em':
         return (
-          <em key={key} className="italic text-slate-300">
+          <em key={key} className="italic text-[var(--tm-text-secondary)]">
             {renderInlines(inline.children, theme, key)}
           </em>
         );
       case 'strike':
         return (
-          <del key={key} className="line-through text-slate-400">
+          <del key={key} className="line-through text-[var(--tm-text-muted)]">
             {renderInlines(inline.children, theme, key)}
           </del>
         );
@@ -187,7 +187,7 @@ function renderInlines(
         return (
           <code
             key={key}
-            className={`px-1.5 py-0.5 mx-[1px] rounded-md font-mono-tabular text-[0.88em] border break-words ${theme.inlineCode}`}
+            className={`px-1.5 py-0.5 mx-[1px] rounded-md font-mono-tabular text-[0.88em] border break-words [overflow-wrap:anywhere] [-webkit-box-decoration-break:clone] [box-decoration-break:clone] ${theme.inlineCode}`}
           >
             {inline.text}
           </code>
@@ -200,10 +200,10 @@ function renderInlines(
           <span
             key={key}
             data-safe-href={inline.safeHref ?? undefined}
-            className={`inline px-1.5 py-0.5 mx-0.5 rounded-md border align-baseline text-[0.9em] break-words [box-decoration-break:clone] ${
+            className={`inline px-1.5 py-0.5 mx-0.5 rounded-md border align-baseline text-[0.9em] break-words [overflow-wrap:anywhere] [-webkit-box-decoration-break:clone] [box-decoration-break:clone] ${
               inline.safeHref
                 ? theme.linkPill
-                : 'bg-white/[0.05] border-white/10 text-slate-300'
+                : 'bg-[var(--tm-bg-control)] border-[var(--tm-border-default)] text-[var(--tm-text-secondary)]'
             }`}
           >
             <Link2
@@ -264,10 +264,10 @@ const MarkdownTableBlockView: React.FC<MarkdownTableBlockViewProps> = ({
         <div
           ref={scrollRef}
           onScroll={updateScrollCue}
-          className="overflow-x-auto rounded-2xl border border-white/[0.09] bg-[#080C12]/80"
+          className="overflow-x-auto rounded-2xl border border-[var(--tm-border-default)] bg-[var(--tm-bg-table)]"
         >
           <table className={`w-full border-collapse text-left ${scale.tableText}`}>
-            <thead className={`border-b border-white/[0.09] ${theme.tableHeader}`}>
+            <thead className={`border-b border-[var(--tm-border-default)] ${theme.tableHeader}`}>
               <tr>
                 {block.headers.map((headerCell, colIdx) => {
                   const align = block.alignments[colIdx] || 'left';
@@ -287,9 +287,9 @@ const MarkdownTableBlockView: React.FC<MarkdownTableBlockViewProps> = ({
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
+            <tbody className="divide-y divide-[var(--tm-border-subtle)]">
               {block.rows.map((row, rowIdx) => (
-                <tr key={`${blockKey}-tr-${rowIdx}`} className="hover:bg-white/[0.02]">
+                <tr key={`${blockKey}-tr-${rowIdx}`} className="hover:bg-[var(--tm-bg-row-hover)]">
                   {row.map((cell, colIdx) => {
                     const align = block.alignments[colIdx] || 'left';
                     const col = columns[colIdx] || { isNumeric: false, isWideText: false };
@@ -301,16 +301,16 @@ const MarkdownTableBlockView: React.FC<MarkdownTableBlockViewProps> = ({
                           col.isNumeric,
                         )} ${
                           col.isWideText
-                            ? 'min-w-[140px] whitespace-normal break-words text-slate-200'
+                            ? 'min-w-[140px] whitespace-normal break-words [overflow-wrap:anywhere] text-[var(--tm-text-secondary)]'
                             : col.isNumeric
-                              ? 'font-mono-tabular whitespace-nowrap text-slate-100'
-                              : 'whitespace-nowrap text-slate-200'
+                              ? 'font-mono-tabular whitespace-nowrap text-[var(--tm-text-primary)]'
+                              : 'max-w-[180px] whitespace-normal break-words [overflow-wrap:anywhere] text-[var(--tm-text-secondary)]'
                         }`}
                       >
                         {cell.length > 0 ? (
                           renderInlines(cell, theme, `${blockKey}-td-${rowIdx}-${colIdx}`)
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-[var(--tm-text-muted)]">—</span>
                         )}
                       </td>
                     );
@@ -323,14 +323,14 @@ const MarkdownTableBlockView: React.FC<MarkdownTableBlockViewProps> = ({
         {canScrollRight && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-[1px] right-[1px] w-7 rounded-r-2xl bg-gradient-to-l from-[#080C12]/95 to-transparent"
+            className="pointer-events-none absolute inset-y-[1px] right-[1px] w-7 rounded-r-2xl bg-gradient-to-l from-[var(--tm-bg-table)] to-transparent"
           />
         )}
       </div>
       {hasOverflow && (
         <div
           aria-hidden="true"
-          className="flex items-center justify-end gap-1 px-1 text-[11px] text-slate-400 select-none"
+          className="flex items-center justify-end gap-1 px-1 text-[11px] text-[var(--tm-text-muted)] select-none"
         >
           <ArrowLeftRight className="w-3 h-3 opacity-80" />
           <span>左右滑动查看完整表格</span>
@@ -356,7 +356,7 @@ function renderHeading(
         <h1
           key={key}
           id={headingId}
-          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-white pb-2 border-b border-white/10 break-words ${scale.h1}`}
+          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-[var(--tm-text-primary)] pb-2 border-b border-[var(--tm-border-default)] break-words ${scale.h1}`}
         >
           {content}
         </h1>
@@ -366,7 +366,7 @@ function renderHeading(
         <h2
           key={key}
           id={headingId}
-          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-white flex items-start gap-2 ${scale.h2}`}
+          className={`scroll-mt-4 !mt-5 first:!mt-0 font-bold tracking-tight text-[var(--tm-text-primary)] flex items-start gap-2 ${scale.h2}`}
         >
           <span
             aria-hidden="true"
@@ -380,7 +380,7 @@ function renderHeading(
         <h3
           key={key}
           id={headingId}
-          className={`scroll-mt-4 !mt-4 first:!mt-0 font-semibold text-slate-100 break-words ${scale.h3}`}
+          className={`scroll-mt-4 !mt-4 first:!mt-0 font-semibold text-[var(--tm-text-primary)] break-words ${scale.h3}`}
         >
           {content}
         </h3>
@@ -390,7 +390,7 @@ function renderHeading(
         <h4
           key={key}
           id={headingId}
-          className={`scroll-mt-4 !mt-3 first:!mt-0 font-semibold text-slate-200 break-words ${scale.h4}`}
+          className={`scroll-mt-4 !mt-3 first:!mt-0 font-semibold text-[var(--tm-text-secondary)] break-words ${scale.h4}`}
         >
           {content}
         </h4>
@@ -400,7 +400,7 @@ function renderHeading(
         <h5
           key={key}
           id={headingId}
-          className="scroll-mt-4 !mt-3 first:!mt-0 text-xs font-semibold uppercase tracking-wide text-slate-300 break-words"
+          className="scroll-mt-4 !mt-3 first:!mt-0 text-xs font-semibold uppercase tracking-wide text-[var(--tm-text-secondary)] break-words"
         >
           {content}
         </h5>
@@ -410,7 +410,7 @@ function renderHeading(
         <h6
           key={key}
           id={headingId}
-          className="scroll-mt-4 !mt-3 first:!mt-0 text-[11px] font-semibold uppercase tracking-wider text-slate-400 break-words"
+          className="scroll-mt-4 !mt-3 first:!mt-0 text-[11px] font-semibold uppercase tracking-wider text-[var(--tm-text-muted)] break-words"
         >
           {content}
         </h6>
@@ -434,19 +434,19 @@ function renderBlocks(
 
       case 'paragraph':
         return (
-          <p key={key} className="text-slate-200/95 break-words">
+          <p key={key} className="text-[var(--tm-text-secondary)] break-words">
             {renderInlines(block.inlines, theme, key)}
           </p>
         );
 
       case 'hr':
-        return <hr key={key} className="border-0 border-t border-white/10 my-2.5" />;
+        return <hr key={key} className="border-0 border-t border-[var(--tm-border-default)] my-2.5" />;
 
       case 'blockquote':
         return (
           <blockquote
             key={key}
-            className={`rounded-2xl border-l-2 px-3.5 py-2.5 text-slate-200 space-y-2 ${theme.blockquote}`}
+            className={`rounded-2xl border-l-2 px-3.5 py-2.5 text-[var(--tm-text-secondary)] space-y-2 ${theme.blockquote}`}
           >
             {renderBlocks(block.blocks, theme, scale, idPrefix, key, listDepth)}
           </blockquote>
@@ -456,10 +456,10 @@ function renderBlocks(
         return (
           <div
             key={key}
-            className="rounded-2xl glass-inset overflow-hidden border border-white/[0.08]"
+            className="rounded-2xl glass-inset overflow-hidden border border-[var(--tm-border-default)]"
           >
-            <div className="px-3 py-1 border-b border-white/[0.07] bg-white/[0.02] flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono-tabular uppercase tracking-wider text-slate-400 min-w-0 truncate">
+            <div className="px-3 py-1 border-b border-[var(--tm-border-subtle)] bg-[var(--tm-bg-row)] flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono-tabular uppercase tracking-wider text-[var(--tm-text-muted)] min-w-0 truncate">
                 <Terminal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{block.lang || 'code'}</span>
               </span>
@@ -468,11 +468,11 @@ function renderBlocks(
                 ariaLabel={`复制 ${block.lang || 'code'} 代码块`}
                 label="复制"
                 copiedLabel="已复制"
-                className="min-h-[36px] px-2.5 py-1 text-[11px]"
+                className="min-h-[40px] px-2.5 py-1 text-[11px]"
               />
             </div>
             <pre
-              className={`p-3 overflow-x-auto font-mono-tabular leading-relaxed text-slate-200 select-text ${scale.codeText}`}
+              className={`p-3 overflow-x-auto font-mono-tabular leading-relaxed text-[var(--tm-text-primary)] select-text ${scale.codeText}`}
             >
               <code>{block.text}</code>
             </pre>
@@ -480,70 +480,74 @@ function renderBlocks(
         );
 
       case 'list': {
-        const ListTag = block.ordered ? 'ol' : 'ul';
-        return (
-          <ListTag key={key} className="space-y-1.5">
-            {block.items.map((item, itemIdx) => {
-              const itemKey = `${key}-item-${itemIdx}`;
-              const isTask = item.checked !== null;
-              return (
-                <li key={itemKey} className="flex items-start gap-2.5">
-                  {isTask ? (
-                    <span
-                      role="img"
-                      aria-label={item.checked ? '已完成' : '未完成'}
-                      className={`mt-[0.25em] w-4 h-4 rounded-[5px] border inline-flex items-center justify-center shrink-0 ${
-                        item.checked
-                          ? theme.taskChecked
-                          : 'border-white/25 bg-white/[0.03]'
-                      }`}
-                    >
-                      {item.checked ? <Check className="w-2.5 h-2.5" /> : null}
-                    </span>
-                  ) : block.ordered ? (
-                    <span
-                      aria-hidden="true"
-                      className={`font-mono-tabular text-[0.9em] font-semibold shrink-0 min-w-[1.35em] text-right select-none ${theme.orderedIndex}`}
-                    >
-                      {block.start + itemIdx}.
-                    </span>
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 mt-[0.62em] ${
-                        listDepth > 0 ? 'bg-slate-400/80' : theme.bullet
-                      }`}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    {item.inlines.length > 0 && (
-                      <div
-                        className={`break-words ${
-                          item.checked
-                            ? 'text-slate-400 line-through decoration-white/25'
-                            : 'text-slate-200/95'
-                        }`}
-                      >
-                        {renderInlines(item.inlines, theme, itemKey)}
-                      </div>
-                    )}
-                    {item.children.length > 0 && (
-                      <div className="space-y-1.5">
-                        {renderBlocks(
-                          item.children,
-                          theme,
-                          scale,
-                          idPrefix,
-                          itemKey,
-                          listDepth + 1,
-                        )}
-                      </div>
+        const listItems = block.items.map((item, itemIdx) => {
+          const itemKey = `${key}-item-${itemIdx}`;
+          const isTask = item.checked !== null;
+          return (
+            <li key={itemKey} className="flex items-start gap-2.5">
+              {isTask ? (
+                <span
+                  role="img"
+                  aria-label={item.checked ? '已完成' : '未完成'}
+                  className={`mt-[0.25em] w-4 h-4 rounded-[5px] border inline-flex items-center justify-center shrink-0 ${
+                    item.checked
+                      ? theme.taskChecked
+                      : 'border-[var(--tm-border-strong)] bg-[var(--tm-bg-control)]'
+                  }`}
+                >
+                  {item.checked ? <Check className="w-2.5 h-2.5" /> : null}
+                </span>
+              ) : block.ordered ? (
+                <span
+                  aria-hidden="true"
+                  className={`font-mono-tabular text-[0.9em] font-semibold shrink-0 min-w-[1.35em] text-right select-none ${theme.orderedIndex}`}
+                >
+                  {block.start + itemIdx}.
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 mt-[0.62em] ${
+                    listDepth > 0 ? 'bg-[var(--tm-text-muted)]' : theme.bullet
+                  }`}
+                />
+              )}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                {item.inlines.length > 0 && (
+                  <div
+                    className={`break-words ${
+                      item.checked
+                        ? 'text-[var(--tm-text-muted)] line-through decoration-[var(--tm-border-strong)]'
+                        : 'text-[var(--tm-text-secondary)]'
+                    }`}
+                  >
+                    {renderInlines(item.inlines, theme, itemKey)}
+                  </div>
+                )}
+                {item.children.length > 0 && (
+                  <div className="space-y-1.5">
+                    {renderBlocks(
+                      item.children,
+                      theme,
+                      scale,
+                      idPrefix,
+                      itemKey,
+                      listDepth + 1,
                     )}
                   </div>
-                </li>
-              );
-            })}
-          </ListTag>
+                )}
+              </div>
+            </li>
+          );
+        });
+        return block.ordered ? (
+          <ol key={key} start={block.start !== 1 ? block.start : undefined} className="space-y-1.5">
+            {listItems}
+          </ol>
+        ) : (
+          <ul key={key} className="space-y-1.5">
+            {listItems}
+          </ul>
         );
       }
 
@@ -582,7 +586,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   if (!hasContent) {
     if (!emptyText) return null;
     return (
-      <p className={`select-text text-xs text-slate-400 leading-relaxed ${className}`}>
+      <p className={`select-text text-xs text-[var(--tm-text-muted)] leading-relaxed ${className}`}>
         {emptyText}
       </p>
     );
@@ -590,27 +594,27 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
   return (
     <div
-      className={`select-text text-slate-200 ${scale.prose} ${spacingClass} ${className}`.trim()}
+      className={`select-text text-[var(--tm-text-secondary)] ${scale.prose} ${spacingClass} ${className}`.trim()}
     >
       {hasFrontmatter && (
         <DetailsDisclosure
           className="glass-inset rounded-2xl px-3.5"
-          summary={<span className="text-xs font-medium text-slate-300">文档元数据</span>}
+          summary={<span className="text-xs font-medium text-[var(--tm-text-secondary)]">文档元数据</span>}
           summaryMeta={
-            <span className="text-[11px] tabular-nums text-slate-400">
+            <span className="text-[11px] tabular-nums text-[var(--tm-text-muted)]">
               {doc.frontmatter.length} 项
             </span>
           }
-          bodyClassName="pb-3 pt-1.5 border-t border-white/[0.06]"
+          bodyClassName="pb-3 pt-1.5 border-t border-[var(--tm-border-subtle)]"
         >
           <dl className="grid grid-cols-2 gap-2">
             {doc.frontmatter.map((entry, idx) => (
               <div
                 key={`${entry.key}-${idx}`}
-                className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-2.5 py-1.5 min-w-0"
+                className="rounded-xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] px-2.5 py-1.5 min-w-0"
               >
-                <dt className="text-[11px] text-slate-400 truncate">{entry.key}</dt>
-                <dd className="text-[11px] font-mono-tabular text-slate-100 mt-0.5 break-all">
+                <dt className="text-[11px] text-[var(--tm-text-muted)] truncate">{entry.key}</dt>
+                <dd className="text-[11px] font-mono-tabular text-[var(--tm-text-primary)] mt-0.5 break-all">
                   {entry.value || '—'}
                 </dd>
               </div>

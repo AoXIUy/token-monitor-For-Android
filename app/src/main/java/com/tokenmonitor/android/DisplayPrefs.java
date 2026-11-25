@@ -15,9 +15,15 @@ final class DisplayPrefs {
     }
 
     static JSONObject sanitize(JSONObject parsed) throws Exception {
+        String rawTheme = null;
+        if (parsed != null && parsed.has("theme") && !parsed.isNull("theme")) {
+            Object candidate = parsed.opt("theme");
+            if (candidate instanceof String) rawTheme = (String) candidate;
+        }
         return new JSONObject()
                 .put("separateQoderClients", parsed != null && parsed.optBoolean("separateQoderClients", false))
-                .put("exactTrendTokens", parsed != null && parsed.optBoolean("exactTrendTokens", false));
+                .put("exactTrendTokens", parsed != null && parsed.optBoolean("exactTrendTokens", false))
+                .put("theme", ThemePolicy.sanitize(rawTheme));
     }
 
     static JSONObject load(Context context) {
@@ -35,11 +41,16 @@ final class DisplayPrefs {
         return load(context).optBoolean("separateQoderClients", false);
     }
 
+    static String theme(Context context) {
+        return ThemePolicy.sanitize(load(context).optString("theme", ThemePolicy.DEFAULT_THEME));
+    }
+
     static boolean save(Context context, String serialized) {
         if (serialized == null || serialized.length() > 8192) return false;
         try {
             JSONObject clean = sanitize(new JSONObject(serialized));
-            return preferences(context).edit().putString(KEY, clean.toString()).commit();
+            preferences(context).edit().putString(KEY, clean.toString()).apply();
+            return true;
         } catch (Exception ignored) {
             return false;
         }

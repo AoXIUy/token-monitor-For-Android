@@ -73,40 +73,40 @@ export function clientTone(client?: string): {
     case 'claude':
     case 'stepfun':
       return {
-        text: 'text-violet-300',
-        dot: 'bg-violet-400',
-        bar: 'from-violet-400 to-fuchsia-400',
+        text: 'tm-tone-violet',
+        dot: 'bg-violet-500',
+        bar: 'from-violet-500 to-fuchsia-500',
       };
     case 'cursor':
       return {
-        text: 'text-sky-300',
-        dot: 'bg-sky-400',
-        bar: 'from-sky-400 to-cyan-300',
+        text: 'tm-tone-sky',
+        dot: 'bg-sky-500',
+        bar: 'from-sky-500 to-cyan-400',
       };
     case 'codex':
     case 'junie':
     case 'opencodereview':
     case 'ollama':
       return {
-        text: 'text-emerald-300',
-        dot: 'bg-emerald-400',
-        bar: 'from-emerald-400 to-teal-300',
+        text: 'tm-tone-emerald',
+        dot: 'bg-emerald-500',
+        bar: 'from-emerald-500 to-teal-400',
       };
     case 'antigravity':
     case 'devin':
       return {
-        text: 'text-cyan-300',
-        dot: 'bg-cyan-400',
-        bar: 'from-cyan-400 to-sky-400',
+        text: 'tm-tone-cyan',
+        dot: 'bg-cyan-500',
+        bar: 'from-cyan-500 to-sky-500',
       };
     case 'copilot':
     case 'zed':
     case 'opencode':
     case 'typesafe':
       return {
-        text: 'text-indigo-300',
-        dot: 'bg-indigo-400',
-        bar: 'from-indigo-400 to-blue-400',
+        text: 'tm-tone-indigo',
+        dot: 'bg-indigo-500',
+        bar: 'from-indigo-500 to-blue-500',
       };
     case 'deepseek':
     case 'qoder':
@@ -114,24 +114,24 @@ export function clientTone(client?: string): {
     case 'mimo':
     case 'workbuddy':
       return {
-        text: 'text-teal-300',
-        dot: 'bg-teal-400',
-        bar: 'from-teal-400 to-emerald-400',
+        text: 'tm-tone-teal',
+        dot: 'bg-teal-500',
+        bar: 'from-teal-500 to-emerald-500',
       };
     case 'openrouter':
     case 'alibaba':
     case 'mistral':
     case 'thirdparty':
       return {
-        text: 'text-amber-300',
-        dot: 'bg-amber-400',
-        bar: 'from-amber-400 to-orange-400',
+        text: 'tm-tone-amber',
+        dot: 'bg-amber-500',
+        bar: 'from-amber-500 to-orange-500',
       };
     case 'grok':
       return {
-        text: 'text-orange-300',
-        dot: 'bg-orange-400',
-        bar: 'from-orange-400 to-amber-400',
+        text: 'tm-tone-orange',
+        dot: 'bg-orange-500',
+        bar: 'from-orange-500 to-amber-500',
       };
     case 'minimax':
     case 'mcode':
@@ -139,9 +139,9 @@ export function clientTone(client?: string): {
     case 'trae':
     case 'manus':
       return {
-        text: 'text-rose-300',
-        dot: 'bg-rose-400',
-        bar: 'from-rose-400 to-pink-400',
+        text: 'tm-tone-rose',
+        dot: 'bg-rose-500',
+        bar: 'from-rose-500 to-pink-500',
       };
     case 'gemini':
     case 'zai':
@@ -150,9 +150,9 @@ export function clientTone(client?: string): {
     case 'commandcode':
     case 'hark':
       return {
-        text: 'text-blue-300',
-        dot: 'bg-blue-400',
-        bar: 'from-blue-400 to-cyan-400',
+        text: 'tm-tone-blue',
+        dot: 'bg-blue-500',
+        bar: 'from-blue-500 to-cyan-500',
       };
     case 'kiro':
     case 'cline':
@@ -160,21 +160,21 @@ export function clientTone(client?: string): {
     case 'opendesign':
     case 'muse':
       return {
-        text: 'text-fuchsia-300',
-        dot: 'bg-fuchsia-400',
-        bar: 'from-fuchsia-400 to-violet-400',
+        text: 'tm-tone-fuchsia',
+        dot: 'bg-fuchsia-500',
+        bar: 'from-fuchsia-500 to-violet-500',
       };
     case 'notion':
       return {
-        text: 'text-slate-200',
-        dot: 'bg-slate-300',
-        bar: 'from-slate-300 to-sky-300',
+        text: 'tm-tone-slate',
+        dot: 'bg-slate-400',
+        bar: 'from-slate-400 to-sky-400',
       };
     default:
       return {
-        text: 'text-slate-300',
+        text: 'tm-tone-slate',
         dot: 'bg-slate-400',
-        bar: 'from-sky-400 to-emerald-400',
+        bar: 'from-sky-500 to-emerald-500',
       };
   }
 }

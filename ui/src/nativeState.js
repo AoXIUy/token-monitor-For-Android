@@ -7,6 +7,43 @@ import {
   receiveAgManagerResult,
 } from './agManagerState.js';
 
+/** @type {readonly import('./types/monitor').ThemeId[]} */
+export const THEME_IDS = Object.freeze(['obsidian', 'daylight', 'amber', 'emerald', 'nebula', 'frost']);
+/** @type {readonly import('./types/monitor').ThemePreference[]} */
+export const THEME_PREFERENCES = Object.freeze([...THEME_IDS, 'auto']);
+/** @type {import('./types/monitor').ThemePreference} */
+export const DEFAULT_THEME_PREFERENCE = 'obsidian';
+
+/** @param {unknown} value @returns {import('./types/monitor').ThemePreference | null} */
+function parseThemePreference(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return THEME_PREFERENCES.includes(/** @type {import('./types/monitor').ThemePreference} */ (normalized))
+    ? /** @type {import('./types/monitor').ThemePreference} */ (normalized)
+    : null;
+}
+
+/** @param {unknown} raw @returns {import('./types/monitor').ThemePreference} */
+export function sanitizeThemePreference(raw) {
+  return parseThemePreference(raw) ?? DEFAULT_THEME_PREFERENCE;
+}
+
+/**
+ * @param {unknown} pref
+ * @param {boolean} systemDark
+ * @returns {import('./types/monitor').ThemeId}
+ */
+export function resolveThemeId(pref, systemDark) {
+  const clean = sanitizeThemePreference(pref);
+  if (clean === 'auto') return systemDark ? 'obsidian' : 'daylight';
+  return clean;
+}
+
+/** @param {import('./types/monitor').ThemeId} id @returns {boolean} */
+export function isLightTheme(id) {
+  return id === 'daylight' || id === 'frost';
+}
+
 /** @param {unknown} value @returns {value is import('./types/monitor').ConnectionStatus} */
 function isConnectionStatus(value) {
   return typeof value === 'string' && ['online', 'offline', 'loading', 'disconnected'].includes(value);
@@ -155,7 +192,9 @@ export function createInitialState() {
     approvalsPending: false,
     connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
-    displayPrefs: { separateQoderClients: false, exactTrendTokens: false },
+    displayPrefs: { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian' },
+    systemDark: true,
+    imeVisible: false,
     limitAccountPresentation: {},
     reports: createInitialReportsState(),
     agManager: createInitialAgManagerState(),
@@ -230,6 +269,8 @@ export function receiveNativeMessage(state, message) {
         appUpdate: state.appUpdate, dismissedUpdateVersion: state.dismissedUpdateVersion, dismissedUpdatePrompt: state.dismissedUpdatePrompt,
         limitsPrefs: state.limitsPrefs,
         displayPrefs: state.displayPrefs,
+        systemDark: state.systemDark,
+        imeVisible: state.imeVisible,
         foreground: state.foreground, message: String(message.error || ''),
         page: connection ? 'overview' : 'settings', connectionEpoch: state.connectionEpoch + 1,
       };
@@ -302,7 +343,8 @@ export function receiveNativeMessage(state, message) {
         },
       };
     }
-    case 'displayPrefs':
+    case 'displayPrefs': {
+      const parsedTheme = parseThemePreference(message.theme);
       return {
         ...state,
         displayPrefs: {
@@ -312,7 +354,15 @@ export function receiveNativeMessage(state, message) {
           exactTrendTokens: typeof message.exactTrendTokens === 'boolean'
             ? message.exactTrendTokens
             : state.displayPrefs.exactTrendTokens,
+          theme: parsedTheme ?? state.displayPrefs.theme,
         },
+        systemDark: typeof message.systemDark === 'boolean' ? message.systemDark : state.systemDark,
+      };
+    }
+    case 'imeVisibility':
+      return {
+        ...state,
+        imeVisible: Boolean(message.visible),
       };
     case 'limitAccountPresentation':
       return {

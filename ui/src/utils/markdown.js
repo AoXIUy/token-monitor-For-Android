@@ -236,6 +236,8 @@ function isSpaceChar(ch) {
   return ch === '' || RE_WHITESPACE.test(ch);
 }
 
+const MAX_LINK_SCAN_CHARS = 2048;
+
 /**
  * @param {string} text
  * @param {number} openIndex Index of `[`
@@ -244,16 +246,17 @@ function isSpaceChar(ch) {
 function tryReadLink(text, openIndex) {
   let depth = 1;
   let i = openIndex + 1;
-  while (i < text.length && depth > 0) {
+  const labelLimit = Math.min(text.length, openIndex + 1 + MAX_LINK_SCAN_CHARS);
+  while (i < labelLimit && depth > 0) {
     const ch = text[i];
-    if (ch === '\\' && i + 1 < text.length) {
+    if (ch === '\\' && i + 1 < labelLimit) {
       i += 2;
       continue;
     }
     if (ch === '`') {
       let tickLen = 1;
       while (text[i + tickLen] === '`') tickLen += 1;
-      const closeTick = findClosingBackticks(text, i + tickLen, tickLen);
+      const closeTick = findClosingBackticks(text, i + tickLen, tickLen, labelLimit);
       if (closeTick !== -1) {
         i = closeTick + tickLen;
         continue;
@@ -274,9 +277,10 @@ function tryReadLink(text, openIndex) {
   let j = i + 1;
   let inSingle = false;
   let inDouble = false;
-  while (j < text.length && parenDepth > 0) {
+  const destLimit = Math.min(text.length, i + 1 + MAX_LINK_SCAN_CHARS);
+  while (j < destLimit && parenDepth > 0) {
     const ch = text[j];
-    if (ch === '\\' && j + 1 < text.length) {
+    if (ch === '\\' && j + 1 < destLimit) {
       j += 2;
       continue;
     }
@@ -319,14 +323,16 @@ function stripOptionalLinkTitle(rawDest) {
  * @param {string} text
  * @param {number} from
  * @param {number} tickLen
+ * @param {number} [limit]
  * @returns {number}
  */
-function findClosingBackticks(text, from, tickLen) {
+function findClosingBackticks(text, from, tickLen, limit = text.length) {
   let i = from;
-  while (i < text.length) {
+  const max = Math.min(text.length, limit);
+  while (i < max) {
     if (text[i] === '`') {
       let run = 1;
-      while (text[i + run] === '`') run += 1;
+      while (i + run < max && text[i + run] === '`') run += 1;
       if (run === tickLen) return i;
       i += run;
     } else {
@@ -510,6 +516,10 @@ export function parseInlines(rawText, allowLinks = true) {
   const tokens = [];
   let i = 0;
   const len = rawText.length;
+  const lastCloseBracket = allowLinks ? rawText.lastIndexOf(']') : -1;
+  const lastCloseParen = allowLinks ? rawText.lastIndexOf(')') : -1;
+  /** @type {Set<number>} */
+  const noClosingBacktickLen = new Set();
 
   while (i < len) {
     const ch = rawText[i];
@@ -551,7 +561,9 @@ export function parseInlines(rawText, allowLinks = true) {
     if (ch === '`') {
       let tickLen = 1;
       while (rawText[i + tickLen] === '`') tickLen += 1;
-      const closePos = findClosingBackticks(rawText, i + tickLen, tickLen);
+      const closePos = noClosingBacktickLen.has(tickLen)
+        ? -1
+        : findClosingBackticks(rawText, i + tickLen, tickLen);
       if (closePos !== -1) {
         let code = rawText.slice(i + tickLen, closePos).replace(/\n/g, ' ');
         if (
@@ -566,6 +578,7 @@ export function parseInlines(rawText, allowLinks = true) {
         i = closePos + tickLen;
         continue;
       }
+      noClosingBacktickLen.add(tickLen);
       pushTextToken(tokens, '`'.repeat(tickLen));
       i += tickLen;
       continue;
@@ -590,7 +603,7 @@ export function parseInlines(rawText, allowLinks = true) {
     }
 
     // Inline link `[label](href)`
-    if (allowLinks && ch === '[') {
+    if (allowLinks && ch === '[' && i < lastCloseBracket && i < lastCloseParen) {
       const linkMatch = tryReadLink(rawText, i);
       if (linkMatch) {
         const labelSlice = rawText.slice(i + 1, linkMatch.labelEnd);
@@ -762,12 +775,12 @@ function hasUnescapedPipe(line) {
 }
 
 /**
- * Try parsing a GFM pipe table starting at `startIndex`.
+ * Lightweight header+delimiter check for a GFM pipe table without parsing body rows.
  * @param {string[]} lines
  * @param {number} startIndex
- * @returns {{ block: MarkdownTableBlock, nextIndex: number } | null}
+ * @returns {{ headerCells: string[], alignments: MarkdownTableAlignment[] } | null}
  */
-function tryParseTable(lines, startIndex) {
+function parseTableHeader(lines, startIndex) {
   if (startIndex + 1 >= lines.length) return null;
   const headerLine = lines[startIndex];
   const delimLine = lines[startIndex + 1];
@@ -791,6 +804,20 @@ function tryParseTable(lines, startIndex) {
     alignments.push(left && right ? 'center' : right ? 'right' : 'left');
   }
 
+  return { headerCells, alignments };
+}
+
+/**
+ * Try parsing a GFM pipe table starting at `startIndex`.
+ * @param {string[]} lines
+ * @param {number} startIndex
+ * @returns {{ block: MarkdownTableBlock, nextIndex: number } | null}
+ */
+function tryParseTable(lines, startIndex) {
+  const header = parseTableHeader(lines, startIndex);
+  if (!header) return null;
+
+  const { headerCells, alignments } = header;
   const colCount = headerCells.length;
   const headers = headerCells.map((cell) => parseInlines(cell));
   /** @type {MarkdownInline[][][]} */
@@ -804,7 +831,8 @@ function tryParseTable(lines, startIndex) {
       RE_HEADING.test(line) ||
       RE_HR.test(line) ||
       RE_FENCE_OPEN.test(line) ||
-      RE_BLOCKQUOTE.test(line)
+      RE_BLOCKQUOTE.test(line) ||
+      matchListItem(line)
     ) {
       break;
     }
@@ -900,7 +928,7 @@ function startsBlockInterrupt(lines, index) {
   if (RE_BLOCKQUOTE.test(line)) return true;
   const listItem = matchListItem(line);
   if (listItem && (!listItem.ordered || listItem.start === 1)) return true;
-  if (tryParseTable(lines, index)) return true;
+  if (parseTableHeader(lines, index)) return true;
   return false;
 }
 
@@ -999,12 +1027,14 @@ function parseList(lines, startIndex, ctx) {
       const indent = measureIndent((/^[ \t]*/.exec(line) || [''])[0]);
       if (indent > baseIndent) {
         const dedented = dedentLine(line, baseIndent + 2);
+        const nextDedented = i + 1 < lines.length ? dedentLine(lines[i + 1], baseIndent + 2) : '';
         if (
           nestedLines.length > 0 ||
           RE_FENCE_OPEN.test(dedented) ||
           RE_BLOCKQUOTE.test(dedented) ||
           RE_HEADING.test(dedented) ||
-          RE_HR.test(dedented)
+          RE_HR.test(dedented) ||
+          parseTableHeader([dedented, nextDedented], 0)
         ) {
           nestedLines.push(dedented);
         } else {

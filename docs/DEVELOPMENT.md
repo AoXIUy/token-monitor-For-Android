@@ -35,6 +35,8 @@ Antigravity 账号池只读视图（额度页内 `AG 账号池` 分段）使用�
 
 原生外层容器根据系统栏、DisplayCutout 和键盘边距缩小整个 WebView 视区，不能只给 WebView 加 padding。已处理的 Insets 继续传给子视图时清零，网页不重复添加安全区留白。验收时覆盖刘海模拟、横竖屏、手势 / 三键导航和键盘弹出收起。
 
+外观主题由纯 Java 的 `ThemePolicy`（允许 `obsidian` / `daylight` / `amber` / `emerald` / `nebula` / `frost` 与 `auto`，非法或旧版缺省配置回退 `obsidian`）与 `DisplayPrefs` 持久化，`auto` 按 `Configuration.UI_MODE_NIGHT_MASK` 解析为 `obsidian` 或 `daylight`。`MainActivity` 在启动创建视图与运行期切换时同步窗口、外层视区、WebView 背景色以及系统状态栏 / 导航栏配色与图标明暗（API 30+ 使用 `WindowInsetsController`，API 26–29 使用 `SYSTEM_UI_FLAG_LIGHT_*`），并经 `HubNative.initialDisplayPrefs()` 在 React 首次挂载前写入文档主题属性，避免启动闪烁（FOUC）。
+
 ## 软件更新
 
 `AppUpdates` 使用独立的有界执行队列和 `GitHubUpdateClient` 读取固定的 `AoXIUy/token-monitor-For-Android/releases/latest` 公开 API，使用系统 TLS、10 秒连接 / 读取超时、512 KiB 响应上限并拒绝重定向。请求不读取 `ConnectionStore`，不带 Hub 凭据，WebView 仍保持禁止直接联网。自动检查默认开启，冷启动时检查，普通前后台切换沿用 12 小时间隔；手动检查可在自动检查关闭时执行。同一次检查合并重复请求，进入后台或销毁时取消；代次检查拒绝迟到结果，取消的检查可在恢复前台后重试。

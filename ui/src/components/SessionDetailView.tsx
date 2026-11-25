@@ -73,9 +73,9 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
       type="button"
       onClick={onBack}
       data-back-sessions="true"
-      className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-white/25 active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-slate-100 transition-all"
+      className="min-h-[44px] px-3.5 py-2 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-[0.98] inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--tm-text-primary)] transition-all"
     >
-      <ArrowLeft className="w-4 h-4 text-sky-300 shrink-0" aria-hidden="true" />
+      <ArrowLeft className="w-4 h-4 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
       <span>返回会话列表</span>
     </button>
   );
@@ -105,22 +105,41 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   });
   const tone = clientTone(row.client);
 
+  // Guard minor backward wall-clock skew (up to 5s) so temporary NTP drift does not deadlock live availability.
+  const effectiveNow = fetchedAt > 0 && fetchedAt > now && fetchedAt - now <= 5000 ? fetchedAt : now;
+  const liveAvailable =
+    foreground &&
+    statusHealthy &&
+    fetchedAt > 0 &&
+    effectiveNow - fetchedAt < 30000 &&
+    effectiveNow >= fetchedAt;
+
+  // Verify the parent session actually exists in the current snapshot before making it clickable.
+  const parentResolvable = Boolean(
+    data.parentKey &&
+      MonitorModel.sessionDetail(stats, data.parentKey, {
+        deviceId,
+        period: data.period,
+        now,
+      }),
+  );
+
   const renderField = (
     label: string,
     value: React.ReactNode,
-    options?: { fullWidth?: boolean; copyValue?: string; mono?: boolean },
+    options?: { fullWidth?: boolean; copyValue?: string; mono?: boolean; breakAll?: boolean },
   ) => (
     <div className={`min-w-0 ${options?.fullWidth ? 'col-span-2' : ''}`}>
-      <dt className="text-[11px] text-slate-400 flex items-center justify-between gap-2">
+      <dt className="text-[11px] text-[var(--tm-text-muted)] flex items-center justify-between gap-2">
         <span className="truncate">{label}</span>
         {options?.copyValue && (
           <CopyButton text={options.copyValue} ariaLabel={`复制 ${label}`} />
         )}
       </dt>
       <dd
-        className={`text-xs font-medium text-slate-100 mt-0.5 break-all ${
-          options?.mono ? 'font-mono-tabular' : 'tabular-nums'
-        }`}
+        className={`text-xs font-medium text-[var(--tm-text-primary)] mt-0.5 ${
+          options?.breakAll ? 'break-all' : 'break-words [overflow-wrap:anywhere]'
+        } ${options?.mono ? 'font-mono-tabular' : 'tabular-nums'}`}
       >
         {value}
       </dd>
@@ -133,29 +152,25 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
       id: 'input',
       label: '输入',
       tokens: MonitorModel.count(row.inputTokens),
-      barClass: 'bg-sky-400',
-      dotClass: 'bg-sky-400',
+      colorVar: 'var(--tm-chart-input)',
     },
     {
       id: 'output',
       label: '输出',
       tokens: MonitorModel.count(row.outputTokens),
-      barClass: 'bg-violet-400',
-      dotClass: 'bg-violet-400',
+      colorVar: 'var(--tm-chart-output)',
     },
     {
       id: 'cacheRead',
       label: '缓存读取',
       tokens: MonitorModel.count(row.cacheReadTokens),
-      barClass: 'bg-emerald-400',
-      dotClass: 'bg-emerald-400',
+      colorVar: 'var(--tm-chart-cache-read)',
     },
     {
       id: 'cacheWrite',
       label: '缓存写入',
       tokens: MonitorModel.count(row.cacheWriteTokens),
-      barClass: 'bg-amber-400',
-      dotClass: 'bg-amber-400',
+      colorVar: 'var(--tm-chart-cache-write)',
     },
   ].filter((part) => part.tokens > 0);
 
@@ -163,6 +178,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   const latestModelLabel = MonitorModel.sessionLatestModel(row) || '未知';
   const reasoningEffort = MonitorModel.sessionReasoningEffort(row);
   const usageDisplay = MonitorModel.sessionUsageDisplay(row);
+  const timedDurationNum = MonitorModel.numeric(row.timedDurationMs);
 
   return (
     <div className="space-y-3.5">
@@ -174,25 +190,25 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             {clientName(row.client)}
           </span>
           {renderStatusText(status)}
-          <span className="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[11px] font-medium text-slate-300">
+          <span className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] font-medium text-[var(--tm-text-secondary)]">
             {PERIOD_LABELS[data.period]}快照
           </span>
         </div>
 
-        <h2 className="text-lg font-bold text-white leading-snug mt-2.5 mb-1 break-words">
+        <h2 className="text-lg font-bold text-[var(--tm-text-primary)] leading-snug mt-2.5 mb-1 break-words">
           {row.title || row.projectLabel || row.sessionId || row.key}
         </h2>
 
-        <p className="text-xs text-slate-300 leading-relaxed break-words">
+        <p className="text-xs text-[var(--tm-text-secondary)] leading-relaxed break-words">
           项目：{row.projectLabel || '未提供项目'}
         </p>
 
         <div className="glass-inset rounded-2xl p-3.5 mt-4 grid grid-cols-2 gap-3">
           <div className="min-w-0">
-            <div className="text-xl sm:text-2xl font-bold text-white font-mono-tabular break-words">
+            <div className="text-xl sm:text-2xl font-bold text-[var(--tm-text-primary)] font-mono-tabular break-words">
               {usageDisplay.tokensText}
             </div>
-            <div className="text-[11px] text-slate-400 font-mono-tabular mt-0.5 break-all">
+            <div className="text-[11px] text-[var(--tm-text-muted)] font-mono-tabular mt-0.5 break-all">
               {usageDisplay.pending && MonitorModel.numeric(row.totalTokens) === null
                 ? '0'
                 : formatExact(row.totalTokens)}{' '}
@@ -200,10 +216,10 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             </div>
           </div>
           <div className="min-w-0">
-            <div className="text-xl sm:text-2xl font-bold text-emerald-300 font-mono-tabular break-words">
+            <div className="text-xl sm:text-2xl font-bold text-[var(--tm-success-text)] font-mono-tabular break-words">
               {usageDisplay.costText}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">已知费用 · USD</div>
+            <div className="text-[11px] text-[var(--tm-text-muted)] mt-0.5">已知费用 · USD</div>
           </div>
         </div>
 
@@ -220,9 +236,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           detailKey={detailKey}
           client={row.client}
           owners={data.owners}
-          available={
-            foreground && statusHealthy && fetchedAt > 0 && now - fetchedAt < 30000 && now >= fetchedAt
-          }
+          available={liveAvailable}
           conversation={conversation}
           onQuery={onQueryConversation}
           onClear={onClearConversation}
@@ -231,7 +245,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
 
       <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3.5">
         <SectionHeader icon={<Clock className="w-4 h-4" />} title="活动与身份" />
-        <dl className="grid grid-cols-2 gap-3.5 pt-3 border-t border-white/8">
+        <dl className="grid grid-cols-2 gap-3.5 pt-3 border-t border-[var(--tm-border-subtle)]">
           {renderField('当前状态', status.label)}
           {renderField('状态依据', status.detail)}
           {renderField('状态观测', formatFullTime(status.observedAt), { mono: true })}
@@ -248,17 +262,20 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             fullWidth: true,
             copyValue: row.sessionId || row.key,
             mono: true,
+            breakAll: true,
           })}
           {renderField('完整键值', row.key, {
             fullWidth: true,
             copyValue: row.key,
             mono: true,
+            breakAll: true,
           })}
           {row.nativeSessionId
             ? renderField('原生会话 ID', row.nativeSessionId, {
                 fullWidth: true,
                 copyValue: row.nativeSessionId,
                 mono: true,
+                breakAll: true,
               })
             : null}
           {row.t3ThreadId
@@ -266,6 +283,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
                 fullWidth: true,
                 copyValue: row.t3ThreadId,
                 mono: true,
+                breakAll: true,
               })
             : null}
           {row.sessionKind ? renderField('会话类型', row.sessionKind, { mono: true }) : null}
@@ -276,28 +294,35 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         <SectionHeader icon={<Layers className="w-4 h-4" />} title="Token 组成" />
 
         {tokenPartsSum > 0 && (
-          <div className="pt-3 border-t border-white/8 space-y-2">
+          <div className="pt-3 border-t border-[var(--tm-border-subtle)] space-y-2">
             <div
-              className="h-2 w-full rounded-full bg-white/[0.07] overflow-hidden flex gap-px"
+              className="h-2 w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden flex gap-px"
               role="img"
               aria-label="Token 组成比例条"
             >
               {tokenParts.map((part) => (
                 <div
                   key={part.id}
-                  style={{ width: `${(part.tokens / tokenPartsSum) * 100}%` }}
-                  className={`h-full min-w-[3px] ${part.barClass}`}
+                  style={{
+                    width: `${(part.tokens / tokenPartsSum) * 100}%`,
+                    backgroundColor: part.colorVar,
+                  }}
+                  className="h-full min-w-[3px]"
                 />
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-slate-300">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-[var(--tm-text-secondary)]">
               {tokenParts.map((part) => {
                 const pct = ((part.tokens / tokenPartsSum) * 100).toFixed(1);
                 return (
                   <span key={part.id} className="inline-flex items-center gap-1.5">
-                    <i className={`w-2 h-2 rounded-full ${part.dotClass}`} aria-hidden="true" />
+                    <i
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: part.colorVar }}
+                      aria-hidden="true"
+                    />
                     <span>{part.label}</span>
-                    <span className="font-mono-tabular text-slate-400">{pct}%</span>
+                    <span className="font-mono-tabular text-[var(--tm-text-muted)]">{pct}%</span>
                   </span>
                 );
               })}
@@ -305,19 +330,15 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           </div>
         )}
 
-        <dl
-          className={`grid grid-cols-2 gap-3.5 ${
-            tokenPartsSum > 0 ? 'pt-2.5 border-t border-white/[0.06]' : 'pt-3 border-t border-white/8'
-          }`}
-        >
+        <dl className="grid grid-cols-2 gap-3.5 pt-2.5 border-t border-[var(--tm-border-subtle)]">
           {renderField('输入 Tokens', formatExact(row.inputTokens), { mono: true })}
           {renderField('输出 Tokens', formatExact(row.outputTokens), { mono: true })}
           {renderField('缓存读取', formatExact(row.cacheReadTokens), { mono: true })}
           {renderField('缓存写入', formatExact(row.cacheWriteTokens), { mono: true })}
           {renderField('输入缓存命中率', cache ? `${cache.percent.toFixed(1)}%` : '—', { mono: true })}
           <div className="min-w-0">
-            <dt className="text-[11px] text-slate-400 truncate">最近使用模型</dt>
-            <dd className="text-xs font-medium text-slate-100 font-mono-tabular mt-0.5 break-all">
+            <dt className="text-[11px] text-[var(--tm-text-muted)] truncate">最近使用模型</dt>
+            <dd className="text-xs font-medium text-[var(--tm-text-primary)] font-mono-tabular mt-0.5 break-words [overflow-wrap:anywhere]">
               {latestModelLabel}
             </dd>
           </div>
@@ -326,12 +347,12 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
           {renderField('匹配计时的输出', formatExact(row.timedOutputTokens), { mono: true })}
           {renderField(
             '匹配输出时长',
-            MonitorModel.numeric(row.timedDurationMs) !== null
-              ? `${(Number(row.timedDurationMs) / 1000).toFixed(2)} 秒`
+            timedDurationNum !== null && timedDurationNum >= 0
+              ? `${(timedDurationNum / 1000).toFixed(2)} 秒`
               : '—',
           )}
         </dl>
-        <p className="text-[11px] text-slate-400 leading-relaxed pt-2.5 border-t border-white/[0.06]">
+        <p className="text-[11px] text-[var(--tm-text-muted)] leading-relaxed pt-2.5 border-t border-[var(--tm-border-subtle)]">
           计时是生成速率测算的依据，不等于会话从开始到结束的持续时间。
         </p>
       </section>
@@ -339,32 +360,26 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
       <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3.5">
         <SectionHeader icon={<Zap className="w-4 h-4" />} title="上下文与性能" />
 
-        <div className="pt-3 border-t border-white/8 space-y-3.5">
+        <div className="pt-3 border-t border-[var(--tm-border-subtle)] space-y-3.5">
           {['antigravity', 'codex'].includes(row.client || '') && (
             <SessionRealtime
               key={`${detailKey}:${deviceId}`}
               stats={stats}
               detailKey={detailKey}
               deviceId={deviceId}
-              available={
-                foreground &&
-                statusHealthy &&
-                fetchedAt > 0 &&
-                now - fetchedAt < 30000 &&
-                now >= fetchedAt
-              }
+              available={liveAvailable}
               foreground={foreground}
             />
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="glass-inset rounded-2xl p-3.5 min-w-0">
-              <span className="text-[11px] text-slate-400 block">历史匹配均速</span>
-              <div className="text-lg font-bold text-sky-300 font-mono-tabular mt-1 break-words">
+              <span className="text-[11px] text-[var(--tm-text-muted)] block">历史匹配均速</span>
+              <div className="text-lg font-bold text-[var(--tm-accent-text)] font-mono-tabular mt-1 break-words">
                 {MonitorModel.numeric(data.tokensPerSecond) !== null ? (
                   <>
                     {data.tokensPerSecond!.toFixed(1)}{' '}
-                    <span className="text-xs text-slate-400 font-normal">tok/s</span>
+                    <span className="text-xs text-[var(--tm-text-muted)] font-normal">tok/s</span>
                   </>
                 ) : (
                   '—'
@@ -372,12 +387,12 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
               </div>
             </div>
             <div className="glass-inset rounded-2xl p-3.5 min-w-0">
-              <span className="text-[11px] text-slate-400 block">提示缓存租约</span>
-              <div className="text-lg font-bold text-emerald-300 font-mono-tabular mt-1 break-words">
+              <span className="text-[11px] text-[var(--tm-text-muted)] block">提示缓存租约</span>
+              <div className="text-lg font-bold text-[var(--tm-success-text)] font-mono-tabular mt-1 break-words">
                 {data.promptCache ? (
                   <>
                     {data.promptCache.minutes}{' '}
-                    <span className="text-xs text-slate-400 font-sans font-normal">分钟</span>
+                    <span className="text-xs text-[var(--tm-text-muted)] font-sans font-normal">分钟</span>
                   </>
                 ) : (
                   '—'
@@ -386,28 +401,28 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-400 leading-relaxed">
+          <p className="text-[11px] text-[var(--tm-text-muted)] leading-relaxed">
             历史均速来自累计匹配计时（非实时）；缺失耗时时不估算。
           </p>
 
           {data.context ? (
-            <div className="pt-3 border-t border-white/8 space-y-2">
-              <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="text-slate-200 min-w-0 truncate tabular-nums">
-                  上下文窗口（
-                  <span className="font-mono-tabular">
-                    {formatExact(data.context.contextTokens)} /{' '}
-                    {formatExact(data.context.contextWindow)}
+            <div className="pt-3 border-t border-[var(--tm-border-subtle)] space-y-2">
+              <div className="space-y-0.5">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="text-[var(--tm-text-primary)] font-medium">上下文窗口</span>
+                  <span
+                    className={`font-semibold shrink-0 font-mono-tabular ${
+                      data.context.percentUsed > 80
+                        ? 'text-[var(--tm-danger-text)]'
+                        : 'text-[var(--tm-accent-text)]'
+                    }`}
+                  >
+                    {data.context.percentUsed}%
                   </span>
-                  ）
-                </span>
-                <span
-                  className={`font-semibold shrink-0 font-mono-tabular ${
-                    data.context.percentUsed > 80 ? 'text-amber-300' : 'text-sky-300'
-                  }`}
-                >
-                  {data.context.percentUsed}%
-                </span>
+                </div>
+                <p className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] break-words">
+                  {formatExact(data.context.contextTokens)} / {formatExact(data.context.contextWindow)} tokens
+                </p>
               </div>
               <ProgressMeter
                 percent={data.context.percentUsed}
@@ -417,12 +432,12 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
               />
             </div>
           ) : (
-            <p className="text-xs text-slate-400 pt-3 border-t border-white/8">
+            <p className="text-xs text-[var(--tm-text-muted)] pt-3 border-t border-[var(--tm-border-subtle)]">
               未提供可用的上下文读数
             </p>
           )}
 
-          <p className="text-[11px] text-slate-400 leading-relaxed">
+          <p className="text-[11px] text-[var(--tm-text-muted)] leading-relaxed">
             {data.promptCache
               ? `提示缓存预计至 ${formatFullTime(data.promptCache.expiresAt)}；这不是服务端承诺的到期时间。`
               : '没有有效的提示缓存估计。'}{' '}
@@ -433,19 +448,19 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
 
       <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
         <SectionHeader icon={<Cpu className="w-4 h-4" />} title="模型与提供方" />
-        <div className="pt-2.5 border-t border-white/8 space-y-2.5">
+        <div className="pt-2.5 border-t border-[var(--tm-border-subtle)] space-y-2.5">
           {data.models.length > 0 ? (
             data.models.map((model) => (
               <div key={model.id} className="space-y-1.5 text-xs">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-slate-100 font-mono-tabular truncate min-w-0">
+                  <span className="text-[var(--tm-text-primary)] font-mono-tabular truncate min-w-0">
                     {model.label}
                   </span>
                   <div className="flex items-baseline gap-2 shrink-0 font-mono-tabular">
-                    <span className="font-semibold text-slate-100">
+                    <span className="font-semibold text-[var(--tm-text-primary)]">
                       {MonitorModel.compact(model.tokens)}
                     </span>
-                    <span className="text-[11px] text-emerald-300/90">
+                    <span className="text-[11px] text-[var(--tm-success-text)]">
                       {MonitorModel.money(model.cost)}
                     </span>
                   </div>
@@ -453,55 +468,55 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
                 {model.components && (
                   <div
                     data-model-components={model.id}
-                    className="glass-inset rounded-2xl p-3 text-[11px] text-slate-300 space-y-2"
+                    className="glass-inset rounded-2xl p-3 text-[11px] text-[var(--tm-text-secondary)] space-y-2"
                   >
-                    <p className="text-slate-400 tabular-nums">
+                    <p className="text-[var(--tm-text-muted)] tabular-nums">
                       已观测组成：
-                      <span className="font-mono-tabular text-slate-200">
+                      <span className="font-mono-tabular text-[var(--tm-text-primary)]">
                         {formatExact(model.components.totalTokens)} / {formatExact(model.tokens)} Tokens
                       </span>
                     </p>
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 tabular-nums">
                       <div className="min-w-0 flex items-baseline justify-between gap-1">
-                        <dt className="text-slate-400">输入</dt>
-                        <dd className="font-mono-tabular text-slate-200">
+                        <dt className="text-[var(--tm-text-muted)]">输入</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-text-primary)]">
                           {formatExact(model.components.inputTokens)}
                         </dd>
                       </div>
                       <div className="min-w-0 flex items-baseline justify-between gap-1">
-                        <dt className="text-slate-400">输出</dt>
-                        <dd className="font-mono-tabular text-slate-200">
+                        <dt className="text-[var(--tm-text-muted)]">输出</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-text-primary)]">
                           {formatExact(model.components.outputTokens)}
                         </dd>
                       </div>
                       <div className="min-w-0 flex items-baseline justify-between gap-1">
-                        <dt className="text-slate-400">缓存读取</dt>
-                        <dd className="font-mono-tabular text-emerald-300">
+                        <dt className="text-[var(--tm-text-muted)]">缓存读取</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-success-text)]">
                           {formatExact(model.components.cacheReadTokens)}
                         </dd>
                       </div>
                       <div className="min-w-0 flex items-baseline justify-between gap-1">
-                        <dt className="text-slate-400">缓存写入</dt>
-                        <dd className="font-mono-tabular text-amber-300">
+                        <dt className="text-[var(--tm-text-muted)]">缓存写入</dt>
+                        <dd className="font-mono-tabular text-[var(--tm-warning-text)]">
                           {formatExact(model.components.cacheWriteTokens)}
                         </dd>
                       </div>
                     </dl>
                     {model.components.totalTokens < model.tokens && (
-                      <p className="text-amber-300/90">其余 Tokens 的组成未知</p>
+                      <p className="text-[var(--tm-warning-text)]">其余 Tokens 的组成未知</p>
                     )}
                   </div>
                 )}
               </div>
             ))
           ) : (
-            <p className="text-xs text-slate-400">未提供模型明细</p>
+            <p className="text-xs text-[var(--tm-text-muted)]">未提供模型明细</p>
           )}
 
           {data.providers.map((prov) => (
             <p
               key={prov.label}
-              className="text-[11px] text-slate-300 font-mono-tabular pt-2 border-t border-white/[0.06]"
+              className="text-[11px] text-[var(--tm-text-secondary)] font-mono-tabular pt-2 border-t border-[var(--tm-border-subtle)]"
             >
               {prov.label} · {formatExact(prov.tokens)} tokens
             </p>
@@ -511,31 +526,31 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
 
       <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
         <SectionHeader icon={<Laptop className="w-4 h-4" />} title="来源设备" />
-        <div className="pt-2.5 border-t border-white/8 divide-y divide-white/8">
+        <div className="pt-2.5 border-t border-[var(--tm-border-subtle)] divide-y divide-[var(--tm-border-subtle)]">
           {data.owners.length > 0 ? (
             data.owners.map((owner) => (
               <div key={owner.deviceId} className="py-3 first:pt-0 last:pb-0 space-y-2">
                 <div className="flex items-start justify-between gap-2 text-xs">
                   <div className="inline-flex items-center gap-1.5 min-w-0 flex-1">
-                    <DeviceIcon kind={owner.deviceKind} className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span className="font-semibold text-slate-100 break-words min-w-0">
+                    <DeviceIcon kind={owner.deviceKind} className="w-4 h-4 text-[var(--tm-accent)] shrink-0" />
+                    <span className="font-semibold text-[var(--tm-text-primary)] break-words min-w-0">
                       {owner.hostname}
                       {owner.platform ? (
-                        <span className="text-slate-400 font-normal ml-1.5">{owner.platform}</span>
+                        <span className="text-[var(--tm-text-muted)] font-normal ml-1.5">{owner.platform}</span>
                       ) : null}
                     </span>
                   </div>
                   <span
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium shrink-0 whitespace-nowrap ${
                       owner.stale
-                        ? 'bg-amber-500/12 border-amber-400/25 text-amber-200'
-                        : 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200'
+                        ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                        : 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
                     }`}
                   >
                     <i
                       aria-hidden="true"
                       className={`w-1.5 h-1.5 rounded-full ${
-                        owner.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                        owner.stale ? 'bg-[var(--tm-warning)]' : 'bg-[var(--tm-success)]'
                       }`}
                     />
                     <span>{owner.stale ? '上报过期' : '近期上报'}</span>
@@ -544,32 +559,32 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
 
                 <dl className="grid grid-cols-2 gap-2 p-3 rounded-2xl glass-inset text-[11px]">
                   <div className="col-span-2 min-w-0">
-                    <dt className="text-slate-400">设备 ID</dt>
-                    <dd className="font-mono-tabular text-slate-200 mt-0.5 break-all">
+                    <dt className="text-[var(--tm-text-muted)]">设备 ID</dt>
+                    <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5 break-all">
                       {owner.deviceId}
                     </dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-slate-400">用量更新</dt>
-                    <dd className="font-mono-tabular text-slate-200 mt-0.5 break-words">
+                    <dt className="text-[var(--tm-text-muted)]">用量更新</dt>
+                    <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5 break-words">
                       {formatFullTime(owner.updatedAt)}
                     </dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-slate-400">Hub 接收</dt>
-                    <dd className="font-mono-tabular text-slate-200 mt-0.5 break-words">
+                    <dt className="text-[var(--tm-text-muted)]">Hub 接收</dt>
+                    <dd className="font-mono-tabular text-[var(--tm-text-secondary)] mt-0.5 break-words">
                       {formatFullTime(owner.receivedAt)}
                     </dd>
                   </div>
-                  <div className="col-span-2 min-w-0 pt-1.5 border-t border-white/[0.06] flex items-baseline justify-between gap-2 flex-wrap">
-                    <dt className="text-slate-400">此设备的会话用量</dt>
-                    <dd className="font-mono-tabular text-slate-100 font-medium">
+                  <div className="col-span-2 min-w-0 pt-1.5 border-t border-[var(--tm-border-subtle)] flex items-baseline justify-between gap-2 flex-wrap">
+                    <dt className="text-[var(--tm-text-muted)]">此设备的会话用量</dt>
+                    <dd className="font-mono-tabular text-[var(--tm-text-primary)] font-medium">
                       {owner.session.tokenDataUnavailable === true &&
                       MonitorModel.numeric(owner.session.totalTokens) === null
                         ? '0'
                         : formatExact(owner.session.totalTokens)}{' '}
                       tokens ·{' '}
-                      <span className="text-emerald-300">
+                      <span className="text-[var(--tm-success-text)]">
                         {MonitorModel.sessionUsageDisplay(owner.session).costText}
                       </span>
                     </dd>
@@ -578,25 +593,34 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
               </div>
             ))
           ) : (
-            <p className="text-xs text-slate-400">未提供来源明细</p>
+            <p className="text-xs text-[var(--tm-text-muted)]">未提供来源明细</p>
           )}
         </div>
       </section>
 
       <section className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
         <SectionHeader icon={<GitBranch className="w-4 h-4" />} title="父子会话关系" />
-        <div className="pt-2.5 border-t border-white/8 space-y-2">
+        <div className="pt-2.5 border-t border-[var(--tm-border-subtle)] space-y-2">
           {data.parentKey ? (
-            <button
-              type="button"
-              onClick={() => onSelectSession(data.parentKey)}
-              className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-sky-500/10 hover:bg-sky-500/18 active:scale-[0.99] border border-sky-400/25 flex items-center justify-between gap-2 text-xs font-medium text-sky-200 transition-all text-left"
-            >
-              <span className="min-w-0 flex-1 truncate">父会话 {row.parentSessionId}</span>
-              <ArrowRight className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
-            </button>
+            parentResolvable ? (
+              <button
+                type="button"
+                onClick={() => onSelectSession(data.parentKey)}
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.99] border border-[var(--tm-accent-soft-border)] flex items-center justify-between gap-2 text-xs font-medium text-[var(--tm-accent-text)] transition-all text-left"
+              >
+                <span className="min-w-0 flex-1 truncate">父会话 {row.parentSessionId}</span>
+                <ArrowRight className="w-4 h-4 shrink-0 text-[var(--tm-accent)]" aria-hidden="true" />
+              </button>
+            ) : (
+              <div className="w-full px-3.5 py-2.5 rounded-2xl glass-inset text-xs text-[var(--tm-text-muted)] flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate font-mono-tabular">
+                  父会话 {row.parentSessionId}
+                </span>
+                <span className="text-[11px] shrink-0">不在当前快照中</span>
+              </div>
+            )
           ) : (
-            <p className="text-xs text-slate-400">未上报父会话</p>
+            <p className="text-xs text-[var(--tm-text-muted)]">未上报父会话</p>
           )}
 
           {data.children.length > 0 ? (
@@ -605,23 +629,23 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
                 key={child.key}
                 type="button"
                 onClick={() => onSelectSession(child.key)}
-                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl glass-inset hover:border-white/20 active:scale-[0.99] flex items-center justify-between gap-2 text-xs font-medium text-sky-200 transition-all text-left"
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl glass-inset hover:border-[var(--tm-border-strong)] active:scale-[0.99] flex items-center justify-between gap-2 text-xs font-medium text-[var(--tm-accent-text)] transition-all text-left"
               >
                 <span className="min-w-0 flex-1 truncate">子会话：{child.label}</span>
-                <ArrowRight className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+                <ArrowRight className="w-4 h-4 shrink-0 text-[var(--tm-accent)]" aria-hidden="true" />
               </button>
             ))
           ) : (
-            <p className="text-xs text-slate-400">此快照没有已同步的子会话</p>
+            <p className="text-xs text-[var(--tm-text-muted)]">此快照没有已同步的子会话</p>
           )}
 
-          <p className="text-[11px] text-slate-400 leading-relaxed pt-2 border-t border-white/[0.06]">
+          <p className="text-[11px] text-[var(--tm-text-muted)] leading-relaxed pt-2 border-t border-[var(--tm-border-subtle)]">
             每条会话保留自己的用量，父子关系不会重复累加 Token。
           </p>
         </div>
       </section>
 
-      <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-2 pb-2">
+      <p className="text-[11px] text-[var(--tm-text-muted)] text-center leading-relaxed pt-2 pb-2">
         统计与元数据来自 Hub 快照；Antigravity 与 Codex 对话仅在查看时向在线设备查询。
         <br />
         缺失字段显示为 —，不代表零。

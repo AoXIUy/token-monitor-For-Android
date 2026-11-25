@@ -28,6 +28,7 @@ import {
   DeviceData,
   LimitAccountPresentationMap,
   LimitProvider,
+  LimitsPrefs,
   MonitorStats,
   PageId,
   PeriodData,
@@ -35,6 +36,7 @@ import {
   ReportGranularity,
 } from '../types/monitor';
 import { clientTone, formatExact, PERIOD_LABELS, clientName, providerName } from '../utils/formatters';
+import { sha256Hex } from '../utils/limitsPrefs';
 
 interface OverviewViewProps {
   stats: MonitorStats;
@@ -61,6 +63,7 @@ interface OverviewViewProps {
   separateQoderClients?: boolean;
   exactTrendTokens?: boolean;
   limitAccountPresentation?: LimitAccountPresentationMap;
+  limitsPrefs?: LimitsPrefs;
 }
 
 type BreakdownSortBy = 'tokens' | 'cost';
@@ -118,10 +121,12 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
     row.available && row.stale ? '状态过期' : null,
   ].filter(Boolean) as string[];
 
+  // Note: Do NOT add `truncate` (text-overflow: ellipsis) on spans inside this card;
+  // StartupTest asserts full unwrapped/wrapped visibility without ellipsis clipping.
   return (
     <div
       data-breakdown-device={row.deviceId}
-      className="rounded-2xl bg-white/[0.025] border border-white/[0.07] p-3.5 space-y-2.5"
+      className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] p-3.5 space-y-2.5"
     >
       <div className="flex items-start justify-between gap-2">
         <button
@@ -130,33 +135,35 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
           aria-expanded={row.available ? isExpanded : undefined}
           disabled={!row.available}
           onClick={onToggle}
-          className={`flex-1 min-w-0 min-h-[36px] text-left flex items-start gap-1.5 py-0.5 ${
+          className={`flex-1 min-w-0 min-h-[44px] text-left flex items-start gap-1.5 py-1 ${
             row.available ? 'cursor-pointer' : 'cursor-default opacity-85'
           }`}
         >
-          <span className="text-[11px] font-mono-tabular text-slate-400 w-5 shrink-0 pt-0.5">
+          <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] w-5 shrink-0 pt-0.5">
             {String(rank).padStart(2, '0')}
           </span>
           {row.available && (
             <ChevronRight
               aria-hidden="true"
-              className={`w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90 text-sky-300' : ''
+              className={`w-3.5 h-3.5 shrink-0 mt-0.5 transition-transform duration-150 ${
+                isExpanded
+                  ? 'rotate-90 text-[var(--tm-accent)]'
+                  : 'text-[var(--tm-text-muted)]'
               }`}
             />
           )}
-          <DeviceIcon kind={row.deviceKind} className="w-3.5 h-3.5 text-sky-300 shrink-0 mt-0.5" />
+          <DeviceIcon kind={row.deviceKind} className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0 mt-0.5" />
           <i
             aria-hidden="true"
             className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
               !row.available
-                ? 'bg-slate-400'
+                ? 'bg-[var(--tm-text-muted)]'
                 : row.stale
-                ? 'bg-amber-400'
-                : 'bg-emerald-400'
+                ? 'bg-[var(--tm-warning)]'
+                : 'bg-[var(--tm-success)]'
             }`}
           />
-          <span className="text-[13px] leading-snug font-semibold text-slate-100 [overflow-wrap:anywhere] min-w-0">
+          <span className="text-[13px] leading-snug font-semibold text-[var(--tm-text-primary)] [overflow-wrap:anywhere] min-w-0">
             {row.label}
           </span>
         </button>
@@ -167,7 +174,7 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
             data-breakdown-device-filter={row.deviceId}
             onClick={() => onSelectDevice(row.deviceId)}
             aria-label={`筛选设备 ${row.label}`}
-            className="inline-flex items-center justify-center gap-1 min-h-[36px] px-3 py-1 rounded-xl bg-white/[0.06] hover:bg-sky-400/15 border border-white/[0.08] text-[11px] font-semibold text-sky-300 active:scale-[0.97] transition-all shrink-0"
+            className="inline-flex items-center justify-center gap-1 min-h-[44px] px-3 py-1 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all shrink-0"
           >
             <span>筛选</span>
             <ArrowRight className="w-3 h-3 shrink-0" aria-hidden="true" />
@@ -180,15 +187,15 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
         className={`space-y-2 ${row.available ? 'cursor-pointer' : ''}`}
       >
         {subtitleParts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-slate-400 tabular-nums">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-[var(--tm-text-muted)] tabular-nums">
             {row.hostname && row.hostname !== row.deviceId && (
-              <span className="font-mono-tabular text-slate-300/90 [overflow-wrap:anywhere]">
+              <span className="font-mono-tabular text-[var(--tm-text-secondary)] [overflow-wrap:anywhere]">
                 {row.deviceId}
               </span>
             )}
             {osLabel && <span className="[overflow-wrap:anywhere]">{osLabel}</span>}
             {row.available && row.stale && (
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/12 border border-amber-400/25 text-[11px] text-amber-300">
+              <span className="px-2 py-0.5 rounded-md bg-[var(--tm-warning-soft-bg)] border border-[var(--tm-warning-soft-border)] text-[11px] text-[var(--tm-warning-text)]">
                 状态过期
               </span>
             )}
@@ -198,13 +205,13 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
         <div className="flex items-baseline justify-between gap-2 tabular-nums">
           {row.available ? (
             <>
-              <span className="text-[11px] text-slate-400">占比 {formatSharePct(pct)}</span>
+              <span className="text-[11px] text-[var(--tm-text-muted)]">占比 {formatSharePct(pct)}</span>
               <div className="flex items-baseline gap-2.5 text-xs font-mono-tabular">
                 <span
                   className={
                     breakdownSort === 'tokens'
-                      ? 'font-semibold text-slate-100'
-                      : 'text-[11px] text-slate-400'
+                      ? 'font-semibold text-[var(--tm-text-primary)]'
+                      : 'text-[11px] text-[var(--tm-text-muted)]'
                   }
                 >
                   {MonitorModel.compact(row.tokens)}
@@ -212,8 +219,8 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
                 <span
                   className={
                     breakdownSort === 'cost'
-                      ? 'font-semibold text-emerald-300'
-                      : 'text-[11px] text-slate-400'
+                      ? 'font-semibold text-[var(--tm-success-text)]'
+                      : 'text-[11px] text-[var(--tm-text-muted)]'
                   }
                 >
                   {MonitorModel.money(row.cost)}
@@ -222,10 +229,10 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
             </>
           ) : (
             <>
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.06] text-slate-300">
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-[var(--tm-bg-control)] text-[var(--tm-text-secondary)]">
                 {row.expired ? '周期已结束' : '暂无读数'}
               </span>
-              <span className="text-xs font-mono-tabular font-semibold text-slate-400">—</span>
+              <span className="text-xs font-mono-tabular font-semibold text-[var(--tm-text-muted)]">—</span>
             </>
           )}
         </div>
@@ -236,9 +243,9 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
       {isExpanded && row.available && (
         <div
           data-breakdown-device-tools={row.deviceId}
-          className="pt-2.5 mt-1 border-t border-white/[0.07] space-y-2"
+          className="pt-2.5 mt-1 border-t border-[var(--tm-border-subtle)] space-y-2"
         >
-          <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)]">
             <span>工具构成</span>
             {row.agentVersion && (
               <span className="font-mono-tabular">Agent v{row.agentVersion}</span>
@@ -253,7 +260,7 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
                     ? Math.min(100, (tool.tokens / row.tokens) * 100)
                     : 0;
                 const tTone = isUnattributed
-                  ? { dot: 'bg-slate-400', bar: 'from-slate-400 to-slate-500' }
+                  ? { dot: 'bg-[var(--tm-text-muted)]', bar: 'from-slate-400 to-slate-500' }
                   : clientTone(tool.id);
                 const toolTitle = isUnattributed ? '未归因' : clientName(tool.label);
                 return (
@@ -264,14 +271,14 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${tTone.dot}`}
                           aria-hidden="true"
                         />
-                        <span className="text-slate-200 [overflow-wrap:anywhere]">{toolTitle}</span>
-                        <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0">
+                        <span className="text-[var(--tm-text-primary)] [overflow-wrap:anywhere]">{toolTitle}</span>
+                        <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] shrink-0">
                           {formatSharePct(toolPct)}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2 shrink-0 font-mono-tabular text-[11px]">
-                        <span className="text-slate-200">{MonitorModel.compact(tool.tokens)}</span>
-                        <span className="text-slate-400">{MonitorModel.money(tool.cost)}</span>
+                        <span className="text-[var(--tm-text-primary)]">{MonitorModel.compact(tool.tokens)}</span>
+                        <span className="text-[var(--tm-text-muted)]">{MonitorModel.money(tool.cost)}</span>
                       </div>
                     </div>
                     <ProgressMeter
@@ -285,7 +292,7 @@ const DeviceBreakdownRowCard: React.FC<DeviceBreakdownRowCardProps> = ({
               })}
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400 py-1">
+            <p className="text-[11px] text-[var(--tm-text-muted)] py-1">
               {(row.tokens ?? 0) === 0 ? '当前周期暂无工具用量记录' : '该设备暂未上报各工具明细'}
             </p>
           )}
@@ -315,11 +322,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   separateQoderClients = false,
   exactTrendTokens = false,
   limitAccountPresentation,
+  limitsPrefs,
 }) => {
   const formatTrendTokens = (tokens: unknown) =>
     exactTrendTokens ? formatExact(tokens) : MonitorModel.compact(tokens);
   const breakdownSectionRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState('');
+  const [chartMode, setChartMode] = useState<'daily' | 'cumulative'>('daily');
+  const [chartStyle, setChartStyle] = useState<'line' | 'bar'>('line');
   const [showDailyList, setShowDailyList] = useState(false);
   const [breakdownSort, setBreakdownSort] = useState<BreakdownSortBy>('tokens');
   const [breakdownSearch, setBreakdownSearch] = useState('');
@@ -331,6 +341,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     setShowAllBreakdown(false);
     setExpandedBreakdownDevices(new Set());
   }, [period, deviceId, breakdownKind]);
+
+  // Clear cross-domain search query whenever breakdown dimension changes (tools / devices / models / projects).
+  useEffect(() => {
+    setBreakdownSearch('');
+  }, [breakdownKind]);
 
   useEffect(() => {
     setShowAllLimits(false);
@@ -378,99 +393,111 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     if (!providers.length) return null;
     const hasValidReading = (val?: string | null) =>
       Boolean(val) && val !== '暂无读数' && !String(val).startsWith('—');
+    const hiddenHashes = new Set(limitsPrefs?.hiddenAccountHashes || []);
+    const showRemaining = Boolean(limitsPrefs?.showRemaining);
 
     const orderedProviders = MonitorModel.limitGroups(providers, stats, deviceId, limitAccountPresentation)
       .flatMap((group) => group.providers);
-    const items = orderedProviders.map((provider, index) => {
-      const account = MonitorModel.limitAccount(provider, stats, deviceId, limitAccountPresentation);
-      const windows = MonitorModel.limitWindows(provider);
-      const quotas = windows.map((win) => ({ win, q: MonitorModel.quota(provider, win) }));
-      const validQuotas = quotas.filter(
-        (item) => item.q.percent !== null || hasValidReading(item.q.value)
-      );
-      const metered = validQuotas
-        .filter((item) => item.q.percent !== null)
-        .slice()
-        .sort((a, b) => {
-          const usedA = a.q.remaining ? 100 - (a.q.percent ?? 100) : (a.q.percent ?? 0);
-          const usedB = b.q.remaining ? 100 - (b.q.percent ?? 100) : (b.q.percent ?? 0);
-          return usedB - usedA;
-        });
-      const spend = MonitorModel.limitSpend(provider).filter((row) => hasValidReading(row.value));
-      const balanceDetails = MonitorModel.limitBalanceDetails(provider).filter((row) =>
-        hasValidReading(row.value)
-      );
+    const items = orderedProviders
+      .map((provider, index) => {
+        const account = MonitorModel.limitAccount(provider, stats, deviceId, limitAccountPresentation);
+        if (hiddenHashes.size > 0 && hiddenHashes.has(sha256Hex(account.key))) {
+          return null;
+        }
+        const windows = MonitorModel.limitWindows(provider);
+        const quotas = windows.map((win) => ({
+          win,
+          q: MonitorModel.quota(provider, win, { showUsed: !showRemaining }),
+        }));
+        const validQuotas = quotas.filter(
+          (item) => item.q.percent !== null || hasValidReading(item.q.value)
+        );
+        const metered = validQuotas
+          .filter((item) => item.q.percent !== null)
+          .slice()
+          .sort((a, b) => {
+            const usedA = a.q.remaining ? 100 - (a.q.percent ?? 100) : (a.q.percent ?? 0);
+            const usedB = b.q.remaining ? 100 - (b.q.percent ?? 100) : (b.q.percent ?? 0);
+            return usedB - usedA;
+          });
+        const spend = MonitorModel.limitSpend(provider).filter((row) => hasValidReading(row.value));
+        const balanceDetails = MonitorModel.limitBalanceDetails(provider).filter((row) =>
+          hasValidReading(row.value)
+        );
 
-      const primary =
-        metered[0] ||
-        validQuotas[0] ||
-        (spend[0]
-          ? {
-              win: null,
-              q: {
-                label: `${spend[0].label}消费`,
-                value: spend[0].value,
-                percent: null,
-                remaining: false,
-              },
-            }
-          : null) ||
-        (balanceDetails[0]
-          ? {
-              win: null,
-              q: {
-                label: balanceDetails[0].label,
-                value: balanceDetails[0].value,
-                percent: null,
-                remaining: true,
-              },
-            }
-          : null);
+        const primary =
+          metered[0] ||
+          validQuotas[0] ||
+          (spend[0]
+            ? {
+                win: null,
+                q: {
+                  label: `${spend[0].label}消费`,
+                  value: spend[0].value,
+                  percent: null,
+                  remaining: false,
+                },
+              }
+            : null) ||
+          (balanceDetails[0]
+            ? {
+                win: null,
+                q: {
+                  label: balanceDetails[0].label,
+                  value: balanceDetails[0].value,
+                  percent: null,
+                  remaining: true,
+                },
+              }
+            : null);
 
-      const secondaryQuotas = validQuotas
-        .filter((item) => item !== primary)
-        .slice(0, 2)
-        .map((item) => item.q);
+        const secondaryQuotas = validQuotas
+          .filter((item) => item !== primary)
+          .slice(0, 2)
+          .map((item) => item.q);
 
-      const dataTier =
-        metered.length > 0
-          ? 3
-          : validQuotas.length > 0
-          ? 2
-          : spend.length > 0 || balanceDetails.length > 0
-          ? 1
-          : 0;
-      const hasCollectedData = dataTier > 0;
-      const isFresh = (!provider.status || provider.status === 'ok') && !provider.stale;
+        const dataTier =
+          metered.length > 0
+            ? 3
+            : validQuotas.length > 0
+            ? 2
+            : spend.length > 0 || balanceDetails.length > 0
+            ? 1
+            : 0;
+        const hasCollectedData = dataTier > 0;
+        const isFresh = (!provider.status || provider.status === 'ok') && !provider.stale;
 
-      const usedScore =
-        primary && primary.q.percent !== null
-          ? primary.q.remaining
-            ? 100 - primary.q.percent
-            : primary.q.percent
-          : -1;
-      const isAbnormal = Boolean(provider.stale || (provider.status && provider.status !== 'ok'));
-      const isWarn =
-        hasCollectedData &&
-        primary !== null &&
-        primary.q.percent !== null &&
-        (primary.q.remaining ? primary.q.percent < 15 : primary.q.percent > 85);
+        const usedScore =
+          primary && primary.q.percent !== null
+            ? primary.q.remaining
+              ? 100 - primary.q.percent
+              : primary.q.percent
+            : -1;
+        const isAbnormal = Boolean(provider.stale || (provider.status && provider.status !== 'ok'));
+        const isWarn =
+          hasCollectedData &&
+          primary !== null &&
+          primary.q.percent !== null &&
+          (primary.q.remaining ? primary.q.percent < 15 : primary.q.percent > 85);
 
-      return {
-        key: `${account.key}:${index}`,
-        provider,
-        account,
-        primary,
-        secondaryQuotas,
-        dataTier,
-        hasCollectedData,
-        isFresh,
-        usedScore,
-        isAbnormal,
-        isWarn,
-        index,
-      };
-    });
+        return {
+          key: `${account.key}:${index}`,
+          provider,
+          account,
+          primary,
+          secondaryQuotas,
+          dataTier,
+          hasCollectedData,
+          isFresh,
+          usedScore,
+          isAbnormal,
+          isWarn,
+          index,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    if (!items.length) return null;
 
     const sortedItems = items.slice().sort((a, b) => {
       if (a.hasCollectedData !== b.hasCollectedData) {
@@ -501,7 +528,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       collectedItems,
       fallbackItems: sortedItems.slice(0, 3),
     };
-  }, [selected.providers, stats, deviceId, limitAccountPresentation]);
+  }, [selected.providers, stats, deviceId, limitAccountPresentation, limitsPrefs]);
 
   const devicesPulse = useMemo(() => {
     const list = stats.devices || [];
@@ -587,12 +614,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       ? (totalCostNum / totalTokensCount) * 1_000_000
       : null;
 
-  const maxTrendTokens = trend.length
-    ? Math.max(1, ...trend.map((row) => MonitorModel.count(row.tokens)))
-    : 1;
-  const trendTotalTokens = trend.reduce((sum, row) => sum + MonitorModel.count(row.tokens), 0);
+  // Dedupe trend dates for clean daily list keys
+  const uniqueTrend = Array.from(
+    trend.reduce((acc, row) => {
+      if (row?.date) acc.set(row.date, row);
+      return acc;
+    }, new Map<string, (typeof trend)[number]>()).values(),
+  );
+  const trendTotalTokens = uniqueTrend.reduce((sum, row) => sum + MonitorModel.count(row.tokens), 0);
   const activeTrendDay =
-    trend.find((row) => row.date === selectedDate) || trend[trend.length - 1] || null;
+    uniqueTrend.find((row) => row.date === selectedDate) || uniqueTrend[uniqueTrend.length - 1] || null;
   const activeDayShare =
     activeTrendDay && trendTotalTokens > 0
       ? ((MonitorModel.count(activeTrendDay.tokens) / trendTotalTokens) * 100).toFixed(1)
@@ -677,33 +708,29 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       key: 'input',
       label: '输入',
       count: inputTokensCount,
-      barClass: 'bg-sky-400',
-      dotClass: 'bg-sky-400',
-      textClass: 'text-sky-300',
+      colorVar: 'var(--tm-chart-input)',
+      textClass: 'text-[var(--tm-info-text)]',
     },
     {
       key: 'output',
       label: '输出',
       count: outputTokensCount,
-      barClass: 'bg-violet-400',
-      dotClass: 'bg-violet-400',
-      textClass: 'text-violet-300',
+      colorVar: 'var(--tm-chart-output)',
+      textClass: 'text-[var(--tm-violet-text)]',
     },
     {
       key: 'cacheRead',
       label: '缓存读取',
       count: cacheReadTokensCount,
-      barClass: 'bg-emerald-400',
-      dotClass: 'bg-emerald-400',
-      textClass: 'text-emerald-300',
+      colorVar: 'var(--tm-chart-cache-read)',
+      textClass: 'text-[var(--tm-success-text)]',
     },
     {
       key: 'cacheWrite',
       label: '缓存写入',
       count: cacheWriteTokensCount,
-      barClass: 'bg-amber-400',
-      dotClass: 'bg-amber-400',
-      textClass: 'text-amber-300',
+      colorVar: 'var(--tm-chart-cache-write)',
+      textClass: 'text-[var(--tm-warning-text)]',
     },
   ].filter((seg) => seg.count > 0);
 
@@ -712,20 +739,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       {/* 1. Hero 核心遥测看板 */}
       <section className="glass-hero rounded-3xl p-4 sm:p-5 relative overflow-hidden">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-sky-200 tracking-wide">
+          <span className="text-xs font-semibold text-[var(--tm-accent-text)] tracking-wide">
             {PERIOD_LABELS[period]} Token 用量
           </span>
 
           <div className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
             {deviceId ? (
-              <div className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-0.5 rounded-full bg-black/30 border border-white/12 text-[11px] text-sky-200 min-w-0 max-w-full">
+              <div className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] text-[var(--tm-accent-text)] min-w-0 max-w-full">
                 <i
                   aria-hidden="true"
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    selected.device?.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                    selected.device?.stale ? 'bg-[var(--tm-warning)]' : 'bg-[var(--tm-success)]'
                   }`}
                 />
-                <span className="max-w-[130px] truncate">
+                <span className="max-w-[130px] truncate font-medium">
                   {selected.device?.hostname || selected.device?.deviceId}
                 </span>
                 {onSelectDevice && (
@@ -734,7 +761,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     data-clear-device="true"
                     onClick={() => onSelectDevice('')}
                     aria-label="返回全部设备统计"
-                    className="min-h-[32px] px-2.5 rounded-full bg-white/12 hover:bg-white/20 active:scale-95 text-[11px] font-semibold text-slate-100 transition-all shrink-0"
+                    className="min-h-[44px] px-3 rounded-full bg-[var(--tm-bg-control-hover)] hover:bg-[var(--tm-accent-soft-bg)] active:scale-95 text-[11px] font-semibold text-[var(--tm-text-primary)] transition-all shrink-0"
                   >
                     全部
                   </button>
@@ -744,12 +771,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate?.('devices')}
-                className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1 rounded-full bg-black/28 hover:bg-black/45 border border-white/12 text-[11px] tabular-nums text-sky-200 active:scale-[0.97] transition-all"
+                className="inline-flex items-center gap-1.5 min-h-[44px] px-3 py-1 rounded-full bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-medium tabular-nums text-[var(--tm-accent-text)] active:scale-[0.97] transition-all"
               >
                 <i
                   aria-hidden="true"
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    activeDevicesCount > 0 ? 'bg-emerald-400' : 'bg-slate-400'
+                    activeDevicesCount > 0 ? 'bg-[var(--tm-success)]' : 'bg-[var(--tm-text-muted)]'
                   }`}
                 />
                 <span>
@@ -761,23 +788,28 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
 
         <div className="my-3.5 flex items-baseline gap-2 flex-wrap">
-          <div className="token-total text-[42px] sm:text-5xl font-extrabold tracking-tight text-white font-mono-tabular leading-none break-all">
+          <div className="token-total text-[42px] sm:text-[48px] font-extrabold tracking-[-0.03em] text-[var(--tm-text-primary)] font-mono-tabular leading-none break-all">
             {MonitorModel.compact(p.totalTokens)}
           </div>
-          <span className="text-xs font-medium text-slate-300 font-mono-tabular">tokens</span>
+          <span className="text-xs font-medium text-[var(--tm-text-secondary)] font-mono-tabular">
+            tokens
+          </span>
         </div>
 
         {components && heroPartsSum > 0 && (
           <div className="mb-3.5 space-y-2.5">
             <div
-              className="h-2 w-full rounded-full bg-white/[0.08] overflow-hidden flex gap-[1px] p-[1px]"
+              className="h-2 w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden flex gap-[1px] p-[1px]"
               aria-hidden="true"
             >
               {heroSegments.map((seg) => (
                 <div
                   key={seg.key}
-                  style={{ width: `${(seg.count / heroPartsSum) * 100}%` }}
-                  className={`h-full first:rounded-l-full last:rounded-r-full ${seg.barClass}`}
+                  style={{
+                    width: `${(seg.count / heroPartsSum) * 100}%`,
+                    backgroundColor: seg.colorVar,
+                  }}
+                  className="h-full first:rounded-l-full last:rounded-r-full"
                 />
               ))}
             </div>
@@ -787,20 +819,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 return (
                   <div
                     key={seg.key}
-                    className="px-3 py-2 rounded-xl bg-black/25 border border-white/[0.07] space-y-0.5 min-w-0"
+                    className="px-3 py-2 rounded-xl glass-inset space-y-0.5 min-w-0"
                   >
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <div className="flex items-center gap-1.5 text-[11px] text-[var(--tm-text-secondary)]">
                       <i
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${seg.dotClass}`}
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: seg.colorVar }}
                         aria-hidden="true"
                       />
                       <span className="truncate">{seg.label}</span>
                     </div>
                     <div className="flex items-baseline justify-between gap-1.5 font-mono-tabular">
-                      <span className="text-xs font-semibold text-slate-100">
+                      <span className="text-xs font-semibold text-[var(--tm-text-primary)]">
                         {MonitorModel.compact(seg.count)}
                       </span>
-                      <span className={`text-[11px] ${seg.textClass}`}>{pct}%</span>
+                      <span className={`text-[11px] font-medium ${seg.textClass}`}>{pct}%</span>
                     </div>
                   </div>
                 );
@@ -809,21 +842,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
         )}
 
-        <div className="pt-3 mt-1 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap text-xs text-slate-300 tabular-nums">
+        <div className="pt-3 mt-1 border-t border-[var(--tm-border-subtle)] flex items-center justify-between gap-2 flex-wrap text-xs text-[var(--tm-text-secondary)] tabular-nums">
           <span>
             精确累计:{' '}
-            <span className="font-mono-tabular text-slate-100 font-medium">
+            <span className="font-mono-tabular text-[var(--tm-text-primary)] font-medium">
               {formatExact(totalTokensCount)}
             </span>
           </span>
           <div className="flex items-center gap-2.5">
             {unclassified > 0 && (
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-[var(--tm-text-muted)]">
                 未分类 <span className="font-mono-tabular">{MonitorModel.compact(unclassified)}</span>
               </span>
             )}
             {components && heroPartsSum === 0 && (
-              <span className="text-violet-300 text-[11px]">
+              <span className="text-[var(--tm-violet-text)] text-[11px]">
                 输出 <span className="font-mono-tabular">{MonitorModel.compact(components.output)}</span>
               </span>
             )}
@@ -835,17 +868,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div className="grid grid-cols-2 gap-3">
         <section className="glass-panel rounded-2xl p-4 flex flex-col justify-between min-w-0">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">{PERIOD_LABELS[period]}费用 · USD</p>
-            <div className="text-xl sm:text-2xl font-bold text-slate-50 font-mono-tabular mt-2 mb-1 tracking-tight truncate">
+            <p className="text-xs font-medium text-[var(--tm-text-muted)]">
+              {PERIOD_LABELS[period]}费用 · USD
+            </p>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--tm-text-primary)] font-mono-tabular mt-2 mb-1 tracking-tight truncate">
               {MonitorModel.money(p.costUsd)}
             </div>
             {avgCostPerMillion !== null && (
-              <p className="text-[11px] tabular-nums text-sky-300 mb-1 truncate">
+              <p className="text-[11px] tabular-nums text-[var(--tm-accent-text)] mb-1 truncate">
                 均价 <span className="font-mono-tabular">{MonitorModel.money(avgCostPerMillion)}</span> / 1M
               </p>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 leading-snug mt-1.5">
+          <p className="text-[11px] text-[var(--tm-text-muted)] leading-snug mt-1.5">
             {unpriced
               ? `${MonitorModel.compact(unpriced)} tokens 暂无定价；费用为已知小计`
               : '按采集端定价统计'}
@@ -857,12 +892,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           className="glass-panel rounded-2xl p-4 flex flex-col justify-between min-w-0"
         >
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">输入缓存命中率</p>
-            <div className="text-xl sm:text-2xl font-bold text-emerald-400 font-mono-tabular mt-2 mb-1.5 tracking-tight">
+            <p className="text-xs font-medium text-[var(--tm-text-muted)]">输入缓存命中率</p>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--tm-success-text)] font-mono-tabular mt-2 mb-1.5 tracking-tight">
               {cache ? (
                 <>
                   {cache.percent.toFixed(1)}
-                  <span className="text-sm font-semibold ml-0.5 text-emerald-400/80">%</span>
+                  <span className="text-sm font-semibold ml-0.5 opacity-80">%</span>
                 </>
               ) : (
                 '—'
@@ -870,7 +905,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
             {cache && <ProgressMeter percent={cache.percent} tone="emerald" className="mb-1.5" />}
           </div>
-          <p className="text-[11px] text-slate-400 leading-snug mt-1 tabular-nums">
+          <p className="text-[11px] text-[var(--tm-text-muted)] leading-snug mt-1 tabular-nums">
             {cache
               ? `命中 ${MonitorModel.compact(cache.hit)} · 未命中 ${MonitorModel.compact(cache.miss)}`
               : '暂无可用的输入缓存读数'}
@@ -882,21 +917,25 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <DetailsDisclosure
           data-cache-sessions=""
           className="glass-panel rounded-2xl px-4"
-          summary={<span className="text-sky-300 font-semibold tabular-nums">会话缓存明细 · {cacheRows.length}</span>}
+          summary={
+            <span className="text-[var(--tm-accent-text)] font-semibold tabular-nums">
+              会话缓存明细 · {cacheRows.length}
+            </span>
+          }
           summaryMeta={<span>展开查看</span>}
         >
-          <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+          <p className="text-[11px] text-[var(--tm-text-muted)] mb-3 leading-relaxed">
             按已观测输入量排序，包含已结束会话；输出与未知用量不计入命中率。
           </p>
           <ul className="max-h-80 overflow-y-auto space-y-3 pb-4" aria-label="会话缓存命中明细">
             {cacheRows.map((row) => (
-              <li key={row.key} className="border-t border-white/[0.08] pt-3 text-xs">
+              <li key={row.key} className="border-t border-[var(--tm-border-subtle)] pt-3 text-xs">
                 <div className="flex justify-between items-start gap-2.5">
-                  <span className="min-w-0 flex-1 break-words text-slate-100 font-medium leading-snug">
+                  <span className="min-w-0 flex-1 break-words text-[var(--tm-text-primary)] font-medium leading-snug">
                     {row.title}
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-emerald-300 font-mono-tabular font-semibold">
+                    <span className="text-[var(--tm-success-text)] font-mono-tabular font-semibold">
                       {row.percent.toFixed(1)}%
                     </span>
                     {onOpenSessionDetail && period !== 'allTime' && (
@@ -904,14 +943,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         type="button"
                         onClick={() => onOpenSessionDetail(row.key)}
                         aria-label={`查看会话 ${row.title} 详情`}
-                        className="min-h-[36px] px-2.5 rounded-xl bg-white/[0.06] hover:bg-sky-400/15 border border-white/[0.08] text-[11px] font-semibold text-sky-300 active:scale-[0.97] transition-all"
+                        className="min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all"
                       >
                         详情
                       </button>
                     )}
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1 tabular-nums">
+                <p className="text-[11px] text-[var(--tm-text-muted)] mt-1 tabular-nums">
                   {clientName(row.client)} · 命中{' '}
                   <span className="font-mono-tabular">{MonitorModel.compact(row.hit)}</span> · 未命中{' '}
                   <span className="font-mono-tabular">{MonitorModel.compact(row.miss)}</span>
@@ -937,18 +976,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 badge={
                   <div className="flex items-center gap-1.5 flex-wrap tabular-nums text-[11px]">
                     {sessionPulse.runningCount > 0 && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-emerald-300">
-                        <i className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--tm-success-soft-bg)] border border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)] font-medium">
+                        <i className="w-1.5 h-1.5 rounded-full bg-[var(--tm-success)]" aria-hidden="true" />
                         <span>{sessionPulse.runningCount} 运行中</span>
                       </span>
                     )}
                     {sessionPulse.waitingCount > 0 && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/12 border border-amber-400/25 text-amber-300">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--tm-warning-soft-bg)] border border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)] font-medium">
                         <span>{sessionPulse.waitingCount} 等待</span>
                       </span>
                     )}
                     {sessionPulse.runningCount === 0 && sessionPulse.waitingCount === 0 && (
-                      <span className="text-slate-400">共 {sessionPulse.totalCount} 个会话</span>
+                      <span className="text-[var(--tm-text-muted)]">共 {sessionPulse.totalCount} 个会话</span>
                     )}
                   </div>
                 }
@@ -957,7 +996,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate('sessions')}
-                      className="inline-flex items-center gap-0.5 min-h-[36px] px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-[11px] font-semibold text-sky-300 hover:text-sky-200 active:scale-[0.97] transition-all tabular-nums whitespace-nowrap"
+                      className="inline-flex items-center gap-0.5 min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all tabular-nums whitespace-nowrap"
                     >
                       <span>全部 ({sessionPulse.totalCount})</span>
                       <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -970,22 +1009,26 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 {sessionPulse.topItems.map(({ row, status }) => {
                   const tone = clientTone(row.client);
                   const targetKey = row.detailKey || row.key;
+                  const usageDisplay = MonitorModel.sessionUsageDisplay(row);
+                  const inferred = status.source === 'inferred';
                   const stateTone =
                     status.state === 'running'
-                      ? 'text-emerald-300'
-                      : status.state === 'waiting' || status.source === 'inferred'
-                      ? 'text-amber-300'
+                      ? 'text-[var(--tm-success-text)]'
+                      : status.state === 'waiting'
+                      ? 'text-[var(--tm-warning-text)]'
                       : status.state === 'ended'
-                      ? 'text-sky-300'
-                      : 'text-slate-400';
+                      ? 'text-[var(--tm-info-text)]'
+                      : 'text-[var(--tm-text-muted)]';
                   const stateDot =
                     status.state === 'running'
-                      ? 'bg-emerald-400'
-                      : status.state === 'waiting' || status.source === 'inferred'
-                      ? 'bg-amber-400'
+                      ? inferred
+                        ? 'border border-[var(--tm-success)] bg-[var(--tm-success-soft-bg)]'
+                        : 'bg-[var(--tm-success)]'
+                      : status.state === 'waiting'
+                      ? 'bg-[var(--tm-warning)]'
                       : status.state === 'ended'
-                      ? 'bg-sky-400'
-                      : 'bg-slate-400';
+                      ? 'bg-[var(--tm-info)]'
+                      : 'bg-[var(--tm-text-muted)]';
                   return (
                     <button
                       key={row.key}
@@ -996,16 +1039,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           ? onOpenSessionDetail(targetKey)
                           : onNavigate?.('sessions')
                       }
-                      className="w-full min-h-[52px] text-left px-3 py-2.5 rounded-2xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.07] active:scale-[0.99] transition-all flex items-center justify-between gap-2.5"
+                      className="w-full min-h-[52px] text-left px-3 py-2.5 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.99] transition-all flex items-center justify-between gap-2.5"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <i className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
-                          <span className="text-xs font-medium text-slate-100 truncate">
+                          <span className="text-xs font-medium text-[var(--tm-text-primary)] truncate">
                             {row.title || row.projectLabel || row.sessionId || row.key}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 truncate">
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--tm-text-muted)] truncate">
                           <span className="shrink-0">{clientName(row.client)}</span>
                           <span aria-hidden="true">·</span>
                           <span className="font-mono-tabular truncate">
@@ -1015,12 +1058,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className="text-xs font-semibold font-mono-tabular text-slate-100">
-                          {MonitorModel.compact(row.totalTokens)}
+                        <div className="text-xs font-semibold font-mono-tabular text-[var(--tm-text-primary)]">
+                          {usageDisplay.tokensText}
                         </div>
                         <div className={`inline-flex items-center gap-1 text-[11px] mt-0.5 ${stateTone}`}>
-                          <i className={`w-1.5 h-1.5 rounded-full ${stateDot}`} aria-hidden="true" />
+                          <i className={`w-1.5 h-1.5 rounded-full shrink-0 ${stateDot}`} aria-hidden="true" />
                           <span>{status.label}</span>
+                          {inferred && <span className="opacity-85">(推断)</span>}
                         </div>
                       </div>
                     </button>
@@ -1042,16 +1086,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 badge={
                   limitsPulse.collectedCount > 0 ? (
                     limitsPulse.warnCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/12 border border-amber-400/25 text-[11px] tabular-nums text-amber-300">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--tm-warning-soft-bg)] border border-[var(--tm-warning-soft-border)] text-[11px] tabular-nums text-[var(--tm-warning-text)] font-medium">
                         已采集 {limitsPulse.collectedCount} · {limitsPulse.warnCount} 项预警
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-400/20 text-[11px] tabular-nums text-emerald-300">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--tm-success-soft-bg)] border border-[var(--tm-success-soft-border)] text-[11px] tabular-nums text-[var(--tm-success-text)] font-medium">
                         已采集 {limitsPulse.collectedCount} 个账户
                       </span>
                     )
                   ) : (
-                    <span className="text-[11px] tabular-nums text-slate-400">
+                    <span className="text-[11px] tabular-nums text-[var(--tm-text-muted)]">
                       共 {limitsPulse.totalCount} 个账户
                     </span>
                   )
@@ -1061,7 +1105,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate('limits')}
-                      className="inline-flex items-center gap-0.5 min-h-[36px] px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-[11px] font-semibold text-sky-300 hover:text-sky-200 active:scale-[0.97] transition-all whitespace-nowrap"
+                      className="inline-flex items-center gap-0.5 min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all whitespace-nowrap"
                     >
                       <span>全部额度</span>
                       <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1074,12 +1118,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigate?.('limits')}
-                  className="w-full min-h-[48px] text-left px-3.5 py-3 rounded-2xl bg-white/[0.025] hover:bg-white/[0.055] border border-white/[0.07] text-xs text-slate-300 flex items-center justify-between gap-2 active:scale-[0.99] transition-all"
+                  className="w-full min-h-[48px] text-left px-3.5 py-3 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] text-xs text-[var(--tm-text-secondary)] flex items-center justify-between gap-2 active:scale-[0.99] transition-all"
                 >
                   <span className="leading-relaxed">
                     当前尚无已采集到有效读数的额度账户，点击查看账户配置状态
                   </span>
-                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
+                  <ChevronRight className="w-4 h-4 text-[var(--tm-text-muted)] shrink-0" aria-hidden="true" />
                 </button>
               ) : (
                 <>
@@ -1108,48 +1152,54 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           account.regionLabel ||
                           '';
                         const q = primary?.q || null;
+                        const formatQuotaVal = (
+                          quota: { value: string; remaining?: boolean },
+                        ) =>
+                          quota.remaining && !String(quota.value).includes('剩余')
+                            ? `剩余 ${quota.value}`
+                            : quota.value;
                         return (
                           <button
                             key={key}
                             type="button"
                             data-overview-limit={account.key}
                             onClick={() => onNavigate?.('limits')}
-                            className="w-full text-left px-3.5 py-3 rounded-2xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.07] active:scale-[0.99] transition-all space-y-2"
+                            className="w-full text-left px-3.5 py-3 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.99] transition-all space-y-2"
                           >
-                            {/* Row 1: Provider identity + freshness badge */}
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <i
                                   className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`}
                                   aria-hidden="true"
                                 />
-                                <span className="text-xs font-semibold text-slate-100 truncate">
+                                <span className="text-xs font-semibold text-[var(--tm-text-primary)] truncate">
                                   {displayTitle}
                                 </span>
                                 {subLabel && (
-                                  <span className="text-[11px] text-slate-400 truncate">
+                                  <span className="text-[11px] text-[var(--tm-text-muted)] truncate">
                                     · {subLabel}
                                   </span>
                                 )}
                               </div>
                               {!isFresh && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-500/12 border border-amber-400/25 text-[11px] text-amber-300 shrink-0 whitespace-nowrap">
+                                <span className="px-2 py-0.5 rounded-full bg-[var(--tm-warning-soft-bg)] border border-[var(--tm-warning-soft-border)] text-[11px] text-[var(--tm-warning-text)] shrink-0 whitespace-nowrap">
                                   历史读数
                                 </span>
                               )}
                             </div>
 
-                            {/* Row 2: Primary window label + value above bar */}
                             <div className="flex items-baseline justify-between gap-2 text-xs">
-                              <span className="text-[11px] text-slate-300 truncate min-w-0">
+                              <span className="text-[11px] text-[var(--tm-text-secondary)] truncate min-w-0">
                                 {q ? q.label : '额度详情'}
                               </span>
                               <span
                                 className={`text-xs font-mono-tabular font-semibold shrink-0 ${
-                                  isWarn ? 'text-amber-300' : 'text-sky-300'
+                                  isWarn
+                                    ? 'text-[var(--tm-danger-text)]'
+                                    : 'text-[var(--tm-accent-text)]'
                                 }`}
                               >
-                                {q ? (q.remaining ? `剩余 ${q.value}` : q.value) : '查看详情'}
+                                {q ? formatQuotaVal(q) : '查看详情'}
                               </span>
                             </div>
 
@@ -1161,17 +1211,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                             )}
 
                             {(q?.detail || secondaryQuotas.length > 0) && (
-                              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 tabular-nums flex-wrap">
+                              <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums flex-wrap">
                                 {q?.detail && <span className="truncate">{q.detail}</span>}
                                 {secondaryQuotas.length > 0 && (
-                                  <span className="truncate text-slate-300/90">
+                                  <span className="truncate text-[var(--tm-text-secondary)]">
                                     {secondaryQuotas
-                                      .map(
-                                        (sq) =>
-                                          `${sq.label}: ${
-                                            sq.remaining ? `剩余 ${sq.value}` : sq.value
-                                          }`
-                                      )
+                                      .map((sq) => `${sq.label}: ${formatQuotaVal(sq)}`)
                                       .join(' · ')}
                                   </span>
                                 )}
@@ -1188,7 +1233,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       type="button"
                       data-overview-limits-expand="true"
                       onClick={() => setShowAllLimits((prev) => !prev)}
-                      className="w-full min-h-[40px] py-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] text-xs font-semibold text-sky-300 active:scale-[0.985] transition-all"
+                      className="w-full min-h-[44px] py-2 rounded-2xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-accent-text)] active:scale-[0.985] transition-all"
                     >
                       {showAllLimits
                         ? '收起至前 4 项已采集账户'
@@ -1222,7 +1267,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           block: 'start',
                         });
                       }}
-                      className="inline-flex items-center gap-0.5 min-h-[36px] px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-[11px] font-semibold text-sky-300 hover:text-sky-200 active:scale-[0.97] transition-all whitespace-nowrap"
+                      className="inline-flex items-center gap-0.5 min-h-[44px] px-2.5 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all whitespace-nowrap"
                     >
                       <span>完整分布</span>
                       <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1231,7 +1276,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       <button
                         type="button"
                         onClick={() => onNavigate('devices')}
-                        className="inline-flex items-center gap-0.5 min-h-[36px] px-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] text-[11px] font-semibold text-slate-300 hover:text-white active:scale-[0.97] transition-all whitespace-nowrap"
+                        className="inline-flex items-center gap-0.5 min-h-[44px] px-2.5 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-text-secondary)] hover:text-[var(--tm-text-primary)] active:scale-[0.97] transition-all whitespace-nowrap"
                       >
                         <span>设备页</span>
                         <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1253,31 +1298,31 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       type="button"
                       data-overview-device={dev.deviceId}
                       onClick={() => onSelectDevice?.(dev.deviceId)}
-                      className="text-left p-3 rounded-2xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.07] active:scale-[0.985] transition-all space-y-2 min-w-0"
+                      className="text-left p-3 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.985] transition-all space-y-2 min-w-0"
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <DeviceIcon
                             kind={dev.deviceKind}
-                            className="w-3.5 h-3.5 text-sky-300 shrink-0"
+                            className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0"
                           />
-                          <span className="text-xs font-medium text-slate-100 truncate">
+                          <span className="text-xs font-medium text-[var(--tm-text-primary)] truncate">
                             {dev.hostname || dev.deviceId}
                           </span>
                         </div>
                         <i
                           aria-hidden="true"
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            dev.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                            dev.stale ? 'bg-[var(--tm-warning)]' : 'bg-[var(--tm-success)]'
                           }`}
                         />
                       </div>
 
                       <div className="flex items-baseline justify-between gap-1 tabular-nums">
-                        <span className="text-xs font-bold font-mono-tabular text-slate-100 truncate">
+                        <span className="text-xs font-bold font-mono-tabular text-[var(--tm-text-primary)] truncate">
                           {tokens === null ? '—' : MonitorModel.compact(tokens)}
                         </span>
-                        <span className="text-[11px] text-slate-400 shrink-0">
+                        <span className="text-[11px] text-[var(--tm-text-muted)] shrink-0">
                           {tokens === null
                             ? expired
                               ? '周期已结束'
@@ -1302,7 +1347,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
       )}
 
-      {/* 4. 统一「历史与每日趋势」联动面板 */}
+      {/* 4. 统一「历史与每日趋势」面板（去重合并折线 / 柱状，节省约 140px 纵向高度） */}
       {!deviceId && (
         <section className="trend-card glass-panel rounded-3xl p-4 sm:p-5 space-y-3">
           <SectionHeader
@@ -1313,7 +1358,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               activity ? (
                 <span
                   data-active-days
-                  className="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[11px] tabular-nums text-slate-300"
+                  className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] tabular-nums text-[var(--tm-text-secondary)]"
                 >
                   {activity.complete ? '累计活跃' : '所示日期内活跃'} {activity.count} 天
                 </span>
@@ -1321,111 +1366,78 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             }
           />
 
-          {trend.length > 0 ? (
-            <div>
+          {uniqueTrend.length > 0 ? (
+            <div className="space-y-3">
+              {/* Crisp 2-row selected-day telemetry strip + range total */}
+              <div className="glass-inset rounded-2xl px-3.5 py-2.5 space-y-1">
+                <div className="flex items-baseline justify-between gap-2 text-xs tabular-nums">
+                  <div className="trend-selection min-w-0 flex-1" aria-live="polite">
+                    {activeTrendDay ? (
+                      <span className="inline-flex items-baseline gap-1.5 flex-wrap">
+                        <strong className="font-mono-tabular text-[var(--tm-text-primary)]">
+                          {activeTrendDay.date}
+                        </strong>
+                        <span className="text-[var(--tm-text-muted)]">·</span>
+                        <span className="font-mono-tabular text-[var(--tm-accent-text)] font-semibold">
+                          {formatTrendTokens(activeTrendDay.tokens)}
+                        </span>
+                        {MonitorModel.numeric(activeTrendDay.cost) !== null && (
+                          <>
+                            <span className="text-[var(--tm-text-muted)]">·</span>
+                            <span className="font-mono-tabular text-[var(--tm-success-text)] font-medium">
+                              {MonitorModel.money(activeTrendDay.cost)}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--tm-text-secondary)]">Token 用量</span>
+                    )}
+                  </div>
+                  {activeDayShare && (
+                    <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] shrink-0">
+                      占比 {activeDayShare}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums">
+                  <span>{chartMode === 'cumulative' ? '当前图表按区间累计绘制' : '当前图表按单日用量绘制'}</span>
+                  <span className="shrink-0">
+                    区间合计{' '}
+                    <span className="font-mono-tabular text-[var(--tm-text-secondary)] font-medium">
+                      {formatTrendTokens(trendTotalTokens)}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
               <HistoryChart
-                trend={trend}
+                trend={uniqueTrend}
                 selectedDate={activeTrendDay?.date}
                 onSelectDate={setSelectedDate}
                 embedded={true}
                 exactTrendTokens={exactTrendTokens}
+                mode={chartMode}
+                onModeChange={setChartMode}
+                chartStyle={chartStyle}
+                onChartStyleChange={setChartStyle}
               />
 
-              <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-                <div
-                  className="trend-selection text-xs text-slate-300 tabular-nums"
-                  aria-live="polite"
-                >
-                  {activeTrendDay ? (
-                    <span>
-                      <strong className="font-mono-tabular text-white">{activeTrendDay.date}</strong>
-                      <span className="mx-1.5 text-slate-400/70">·</span>
-                      <span className="font-mono-tabular text-sky-300 font-semibold">
-                        {formatTrendTokens(activeTrendDay.tokens)}
-                      </span>
-                      {MonitorModel.numeric(activeTrendDay.cost) !== null && (
-                        <>
-                          <span className="mx-1.5 text-slate-400/70">·</span>
-                          <span className="font-mono-tabular text-emerald-300">
-                            {MonitorModel.money(activeTrendDay.cost)}
-                          </span>
-                        </>
-                      )}
-                      {activeDayShare && (
-                        <>
-                          <span className="mx-1.5 text-slate-400/70">·</span>
-                          <span className="font-mono-tabular text-slate-400">{activeDayShare}%</span>
-                        </>
-                      )}
-                    </span>
-                  ) : (
-                    <span>Token 用量</span>
-                  )}
-                </div>
-                <span className="text-[11px] tabular-nums text-slate-400">
-                  合计{' '}
-                  <span className="font-mono-tabular text-slate-200">
-                    {formatTrendTokens(trendTotalTokens)}
-                  </span>
-                </span>
-              </div>
-
-              <div
-                className="flex items-end gap-1.5 h-28 pt-2 pb-1 border-b border-white/[0.08]"
-                role="group"
-                aria-label="每日 Token 用量，轻触柱体查看单日详情"
-              >
-                {trend.map((row) => {
-                  const pct = Math.max(
-                    5,
-                    (MonitorModel.count(row.tokens) / maxTrendTokens) * 100
-                  );
-                  const isSelected = activeTrendDay?.date === row.date;
-                  return (
-                    <button
-                      key={row.date}
-                      type="button"
-                      onClick={() => setSelectedDate(row.date)}
-                      data-trend={row.date}
-                      aria-pressed={isSelected}
-                      aria-label={`${row.date} · ${formatTrendTokens(row.tokens)} tokens · ${MonitorModel.money(row.cost)}`}
-                      title={`${row.date} · ${formatTrendTokens(row.tokens)}`}
-                      className="trend-col flex-1 h-full flex flex-col justify-end items-center group rounded-t-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 min-h-0"
-                    >
-                      <div
-                        style={{ height: `${pct}%` }}
-                        className={`trend-bar w-full rounded-t-md transition-all duration-150 ${
-                          isSelected
-                            ? 'bg-gradient-to-t from-sky-500/85 to-cyan-300 shadow-[0_0_12px_rgba(56,189,248,0.45)]'
-                            : 'bg-gradient-to-t from-sky-500/25 to-sky-400/55 group-hover:from-sky-400/50 group-hover:to-cyan-300/80'
-                        }`}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex justify-between items-center gap-2 text-[11px] text-slate-400 pt-2">
-                <span className="font-mono-tabular shrink-0">{trend[0].date.slice(5)}</span>
-                <span className="text-[11px] text-slate-400 truncate text-center">
-                  轻触柱体或曲线查看单日详情
-                </span>
-                <span className="font-mono-tabular shrink-0">{trend[trend.length - 1].date.slice(5)}</span>
-              </div>
-
-              <div className="daily-details mt-3 pt-2 border-t border-white/[0.06]">
+              <div className="daily-details pt-2 border-t border-[var(--tm-border-subtle)]">
                 <button
                   type="button"
                   onClick={() => setShowDailyList((prev) => !prev)}
                   data-daily-toggle="true"
                   aria-expanded={showDailyList}
-                  className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-slate-300 hover:text-white transition-colors"
+                  className="w-full min-h-[44px] flex items-center justify-between text-xs font-medium text-[var(--tm-text-secondary)] hover:text-[var(--tm-text-primary)] transition-colors"
                 >
-                  <span className="tabular-nums">查看每日数值明细 ({trend.length} 天)</span>
+                  <span className="tabular-nums">查看每日数值明细 ({uniqueTrend.length} 天)</span>
                   <ChevronDown
                     aria-hidden="true"
-                    className={`w-4 h-4 text-slate-400 transition-transform duration-150 ${
-                      showDailyList ? 'rotate-180 text-sky-400' : ''
+                    className={`w-4 h-4 transition-transform duration-150 ${
+                      showDailyList
+                        ? 'rotate-180 text-[var(--tm-accent)]'
+                        : 'text-[var(--tm-text-muted)]'
                     }`}
                   />
                 </button>
@@ -1434,7 +1446,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     data-daily-values="true"
                     className="mt-2 space-y-1.5 pt-1 max-h-60 overflow-y-auto pr-1"
                   >
-                    {trend
+                    {uniqueTrend
                       .slice()
                       .reverse()
                       .map((row) => {
@@ -1444,18 +1456,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                             key={row.date}
                             type="button"
                             onClick={() => setSelectedDate(row.date)}
-                            className={`w-full min-h-[40px] flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-xl border font-mono-tabular active:scale-[0.99] transition-all ${
+                            className={`w-full min-h-[44px] flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-xl border font-mono-tabular active:scale-[0.99] transition-all ${
                               isSelected
-                                ? 'bg-sky-500/14 border-sky-400/35 text-white'
-                                : 'bg-white/[0.025] border-white/[0.06] text-slate-300 hover:bg-white/[0.05]'
+                                ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-text-primary)]'
+                                : 'bg-[var(--tm-bg-row)] border-[var(--tm-border-subtle)] text-[var(--tm-text-secondary)] hover:bg-[var(--tm-bg-row-hover)]'
                             }`}
                           >
                             <span className="shrink-0">{row.date}</span>
                             <div className="flex items-center gap-2.5 min-w-0 justify-end">
-                              <span className="text-slate-100 font-semibold truncate">
+                              <span className="text-[var(--tm-text-primary)] font-semibold truncate">
                                 {formatTrendTokens(row.tokens)}
                               </span>
-                              <span className="text-slate-400 min-w-[54px] text-right shrink-0">
+                              <span className="text-[var(--tm-text-muted)] min-w-[54px] text-right shrink-0">
                                 {MonitorModel.money(row.cost)}
                               </span>
                             </div>
@@ -1469,7 +1481,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           ) : (
             <EmptyState
               compact
-              className="bg-transparent border-white/[0.06] shadow-none"
+              className="bg-transparent border-[var(--tm-border-subtle)] shadow-none"
               title="暂无历史趋势"
               description="请在采集设备开启历史记录并等待上传。"
             />
@@ -1567,12 +1579,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               ))}
             </div>
           ) : (
-            <p className="text-center text-xs text-slate-400 py-6">
+            <p className="text-center text-xs text-[var(--tm-text-muted)] py-6">
               {searchKeyword ? '无匹配的设备' : '当前周期暂无设备明细'}
             </p>
           )
         ) : visibleRows.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {visibleRows.map((row, idx) => {
               const tokenPct =
                 totalTokensCount > 0 ? Math.min(100, (row.tokens / totalTokensCount) * 100) : 0;
@@ -1599,12 +1611,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               return (
                 <div
                   key={row.id}
-                  className="rounded-2xl bg-white/[0.02] border border-white/[0.06] px-3 py-2.5 space-y-2"
+                  className="rounded-2xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] px-3 py-2.5 space-y-2"
                 >
-                  {/* Row 1: Rank + dot + full-width name + primary sorted figure */}
                   <div className="flex items-baseline justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-[11px] font-mono-tabular text-slate-400 w-5 shrink-0">
+                      <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] w-5 shrink-0">
                         {String(idx + 1).padStart(2, '0')}
                       </span>
                       {effectiveBreakdownKind === 'clients' && (
@@ -1613,13 +1624,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           aria-hidden="true"
                         />
                       )}
-                      <span className="font-semibold text-slate-100 truncate min-w-0">
+                      <span className="font-semibold text-[var(--tm-text-primary)] truncate min-w-0">
                         {displayLabel}
                       </span>
                     </div>
                     <span
                       className={`shrink-0 font-mono-tabular font-semibold ${
-                        breakdownSort === 'cost' ? 'text-emerald-300' : 'text-slate-100'
+                        breakdownSort === 'cost'
+                          ? 'text-[var(--tm-success-text)]'
+                          : 'text-[var(--tm-text-primary)]'
                       }`}
                     >
                       {breakdownSort === 'cost'
@@ -1628,12 +1641,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Row 2: Share + secondary metric + optional session drill button */}
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)]">
                     <div className="flex items-baseline gap-2 min-w-0 flex-wrap tabular-nums">
                       <span>占比 {formatSharePct(pct)}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="font-mono-tabular text-slate-300">
+                      <span className="font-mono-tabular text-[var(--tm-text-secondary)]">
                         {breakdownSort === 'cost'
                           ? MonitorModel.compact(row.tokens)
                           : MonitorModel.money(row.cost)}
@@ -1649,7 +1661,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           )
                         }
                         aria-label={`查看 ${displayLabel} 的会话`}
-                        className="inline-flex items-center justify-center gap-1 min-h-[36px] px-2.5 rounded-xl bg-white/[0.06] hover:bg-sky-400/15 border border-white/[0.08] text-[11px] font-semibold text-sky-300 active:scale-[0.97] transition-all shrink-0"
+                        className="inline-flex items-center justify-center gap-1 min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all shrink-0"
                       >
                         <span>会话</span>
                         <ArrowRight className="w-3 h-3" aria-hidden="true" />
@@ -1667,7 +1679,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             })}
           </div>
         ) : (
-          <p className="text-center text-xs text-slate-400 py-6">
+          <p className="text-center text-xs text-[var(--tm-text-muted)] py-6">
             {searchKeyword ? '无匹配的分布项' : '此周期暂无明细'}
           </p>
         )}
@@ -1680,7 +1692,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 type="button"
                 data-breakdown-expand="true"
                 onClick={() => setShowAllBreakdown((prev) => !prev)}
-                className="min-h-[36px] px-3 rounded-xl bg-amber-400/18 hover:bg-amber-400/28 border border-amber-300/35 text-xs font-semibold text-amber-100 whitespace-nowrap active:scale-[0.97] transition-all"
+                className="min-h-[44px] px-3 rounded-xl bg-[var(--tm-warning-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-warning-soft-border)] text-xs font-semibold text-[var(--tm-warning-text)] whitespace-nowrap active:scale-[0.97] transition-all"
               >
                 {showAllBreakdown ? '收起至前 30 项' : `展开全部 (${sortedBreakdownCount} 项)`}
               </button>
@@ -1711,18 +1723,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       {onOpenReports && (
         <section
           id="overview-reports-card"
-          className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3 border-sky-400/25 bg-[radial-gradient(115%_95%_at_95%_0%,rgba(139,92,246,0.14)_0%,rgba(56,189,248,0.05)_48%,transparent_78%)]"
+          className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3 border-[var(--tm-border-accent)]"
         >
           <div className="flex items-start justify-between gap-2.5">
             <div className="min-w-0 space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-500/16 border border-violet-400/30 text-[11px] font-semibold text-violet-200">
-                <Sparkles className="w-3 h-3 text-violet-300 shrink-0" aria-hidden="true" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--tm-violet-soft-bg)] border border-[var(--tm-violet-soft-border)] text-[11px] font-semibold text-[var(--tm-violet-text)]">
+                <Sparkles className="w-3 h-3 text-[var(--tm-violet)] shrink-0" aria-hidden="true" />
                 <span>报告专区 · AI 智能分析</span>
               </div>
-              <h3 className="text-sm font-bold text-slate-100 tracking-tight">
+              <h3 className="text-sm font-bold text-[var(--tm-text-primary)] tracking-tight">
                 周期与项目分析报告
               </h3>
-              <p className="text-[11px] text-slate-300/90 leading-relaxed">
+              <p className="text-[11px] text-[var(--tm-text-secondary)] leading-relaxed">
                 查看主 Hub 生成的日报 / 周报 / 月报排版文档、项目归因与 AI 深度总结
               </p>
             </div>
@@ -1730,7 +1742,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               type="button"
               id="open-reports-button"
               onClick={() => onOpenReports('daily')}
-              className="min-h-[40px] px-3 py-1.5 rounded-xl bg-sky-400/16 hover:bg-sky-400/25 border border-sky-400/35 text-xs font-semibold text-sky-100 inline-flex items-center gap-1 shrink-0 active:scale-[0.97] transition-all"
+              className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[var(--tm-accent-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-accent-soft-border)] text-xs font-semibold text-[var(--tm-accent-text)] inline-flex items-center gap-1 shrink-0 active:scale-[0.97] transition-all"
             >
               <span>进入专区</span>
               <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1750,10 +1762,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 type="button"
                 data-open-report={granularity}
                 onClick={() => onOpenReports(granularity)}
-                className="min-h-[54px] px-3 py-2 rounded-2xl bg-white/[0.04] hover:bg-sky-400/12 border border-white/[0.08] hover:border-sky-400/30 text-left flex flex-col justify-between active:scale-[0.97] transition-all"
+                className="min-h-[54px] px-3 py-2 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-border-default)] hover:border-[var(--tm-accent-soft-border)] text-left flex flex-col justify-between active:scale-[0.97] transition-all"
               >
-                <span className="text-xs font-bold text-slate-100">{label}</span>
-                <span className="text-[11px] text-slate-400">{periodHint}</span>
+                <span className="text-xs font-bold text-[var(--tm-text-primary)]">{label}</span>
+                <span className="text-[11px] text-[var(--tm-text-muted)]">{periodHint}</span>
               </button>
             ))}
           </div>
@@ -1763,19 +1775,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               type="button"
               id="overview-open-report-window"
               onClick={() => onOpenReportWindow('daily')}
-              className="w-full min-h-[44px] px-3.5 py-2 rounded-2xl bg-gradient-to-r from-violet-500/22 via-sky-500/18 to-emerald-400/15 hover:from-violet-500/30 hover:to-sky-500/25 border border-violet-400/35 text-xs font-semibold text-slate-100 flex items-center justify-between gap-2 active:scale-[0.985] transition-all"
+              className="w-full min-h-[44px] px-3.5 py-2 rounded-2xl bg-[var(--tm-violet-soft-bg)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-violet-soft-border)] text-xs font-semibold text-[var(--tm-violet-text)] flex items-center justify-between gap-2 active:scale-[0.985] transition-all"
             >
               <span className="inline-flex items-center gap-2 min-w-0">
-                <BookOpen className="w-4 h-4 text-violet-300 shrink-0" aria-hidden="true" />
+                <BookOpen className="w-4 h-4 text-[var(--tm-violet)] shrink-0" aria-hidden="true" />
                 <span className="truncate">打开 AI 报告窗口</span>
               </span>
-              <ArrowRight className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+              <ArrowRight className="w-3.5 h-3.5 text-[var(--tm-accent)] shrink-0" aria-hidden="true" />
             </button>
           )}
         </section>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-2 pb-2">
+      <p className="text-[11px] text-[var(--tm-text-muted)] text-center leading-relaxed pt-2 pb-2">
         数据来自 Hub · 保留离线设备历史
         <br />
         今日与本月使用各采集设备的本地统计周期

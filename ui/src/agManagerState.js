@@ -115,9 +115,12 @@ function sanitizeAccount(raw) {
   const rawModels = Array.isArray(rawQuota.models) ? rawQuota.models : [];
   /** @type {import('./types/monitor').AgManagerModelQuota[]} */
   const models = [];
+  const seenModels = new Set();
   for (const entry of rawModels.slice(0, 64)) {
     const model = sanitizeModel(entry);
-    if (model) models.push(model);
+    if (!model || seenModels.has(model.name)) continue;
+    seenModels.add(model.name);
+    models.push(model);
   }
   return {
     id,
@@ -228,9 +231,12 @@ export function receiveAgManagerResult(previous, message) {
   const rawDevices = Array.isArray(rawPayload.devices) ? rawPayload.devices : [];
   /** @type {import('./types/monitor').AgManagerDeviceSnapshot[]} */
   const devices = [];
+  const seenDevices = new Set();
   for (const item of rawDevices.slice(0, 32)) {
     const dev = sanitizeDeviceSnapshot(item);
-    if (dev) devices.push(dev);
+    if (!dev || seenDevices.has(dev.deviceId)) continue;
+    seenDevices.add(dev.deviceId);
+    devices.push(dev);
   }
   const hasSelected = devices.some(d => d.deviceId === previous.selectedDeviceId);
   return {

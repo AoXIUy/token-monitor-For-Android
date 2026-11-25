@@ -90,3 +90,30 @@ test('Android detail ignores legacy Codex cache estimates while retaining the Cl
   assert.equal(M.sessionDetail(stats, 'claude:cache', { now: now + 300000 }).promptCache, null);
   assert.equal(JSON.stringify(stats), before);
 });
+
+test('UI view regressions: detail parent guard, chart zero peak, approval recovery and pulse token fallback', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const read = (rel) => fs.readFileSync(path.resolve(__dirname, '../../ui/src/components', rel), 'utf8');
+
+  const detailSrc = read('SessionDetailView.tsx');
+  assert.ok(detailSrc.includes('parentResolvable'));
+  assert.ok(detailSrc.includes('timedDurationNum >= 0'));
+  assert.equal(detailSrc.includes('whitespace-nowrap">\n                上下文'), false);
+
+  const chartSrc = read('HistoryChart.tsx');
+  assert.ok(chartSrc.includes('const peak = values.length ? Math.max(0, ...values) : 0'));
+  assert.ok(chartSrc.includes('const scaleMax = peak > 0 ? peak : 1'));
+  assert.ok(chartSrc.includes('var(--tm-chart-grid)'));
+  assert.equal(chartSrc.includes('preserveAspectRatio="none"'), false);
+
+  const approvalsSrc = read('ApprovalsPanel.tsx');
+  assert.ok(approvalsSrc.includes('approval-alerts-collapsed'));
+  assert.ok(approvalsSrc.includes('data-approval-restore="true"'));
+  assert.ok(approvalsSrc.includes('visibilitychange'));
+
+  const overviewSrc = read('OverviewView.tsx');
+  assert.ok(overviewSrc.includes('MonitorModel.sessionUsageDisplay(row)'));
+  assert.ok(overviewSrc.includes('hiddenAccountHashes'));
+  assert.ok(overviewSrc.includes('showRemaining'));
+});

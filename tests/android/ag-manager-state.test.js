@@ -749,3 +749,48 @@ test('scoreAgAccountAvailability ranks high-quota healthy accounts above low, em
   assert.ok(scoreAgAccountAvailability(emptyHealthy) > scoreAgAccountAvailability(abnormalHigh));
   assert.equal(scoreAgAccountAvailability(abnormalHigh), -1);
 });
+
+test('agManagerState deduplicates repeated deviceIds and model names to keep React keys unique', async () => {
+  const {
+    createInitialAgManagerState,
+    beginAgManagerQuery,
+    receiveAgManagerResult,
+  } = await stateModule;
+
+  let state = createInitialAgManagerState();
+  state = beginAgManagerQuery(state, { requestId: 'req-dedupe' });
+  state = receiveAgManagerResult(state, {
+    requestId: 'req-dedupe',
+    payload: {
+      devices: [
+        {
+          deviceId: 'host-dup',
+          hostname: 'Primary',
+          accounts: [
+            {
+              id: 'acc-1',
+              email: 'one@example.com',
+              quota: {
+                models: [
+                  { name: 'gemini-3-pro', displayName: 'Gemini 3 Pro', percentage: 80 },
+                  { name: 'gemini-3-pro', displayName: 'Duplicate Model', percentage: 10 },
+                  { name: 'claude-4', displayName: 'Claude 4', percentage: 60 },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          deviceId: 'host-dup',
+          hostname: 'Duplicate Host',
+          accounts: [{ id: 'acc-2', email: 'two@example.com' }],
+        },
+      ],
+    },
+  });
+
+  assert.equal(state.devices.length, 1);
+  assert.equal(state.devices[0].hostname, 'Primary');
+  assert.equal(state.devices[0].accounts[0].quota.models.length, 2);
+  assert.equal(state.devices[0].accounts[0].quota.models[0].percentage, 80);
+});

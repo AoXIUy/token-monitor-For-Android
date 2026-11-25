@@ -5,13 +5,16 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
+import android.content.res.Configuration;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -45,6 +48,7 @@ public final class MainActivity extends Activity {
     private HubClient agManagerClient;
     private int agManagerGeneration;
     private final Runnable poll = () -> refresh(false);
+    private FrameLayout viewport;
     private WebView web;
     private ConnectionStore store;
     private ConnectionSpec spec;
@@ -56,6 +60,7 @@ public final class MainActivity extends Activity {
     private boolean ready;
     private boolean busy;
     private boolean subscriptionsRequested;
+    private boolean lastImeVisible;
     private int generation;
     private int failures;
     private String subscriptionVersion;
@@ -64,11 +69,13 @@ public final class MainActivity extends Activity {
     private String initialError = "";
     private String pendingNotificationAction;
     private JSONObject latestStats;
+    private long latestStatsFetchedAt;
     private boolean historyBusy;
     private String pendingHistoryKey;
     private final ExecutorService certImportNetwork = Executors.newSingleThreadExecutor();
     private final java.util.LinkedHashMap<String, CertificateTrustPolicy.ParsedBundle> caDrafts = new java.util.LinkedHashMap<>();
     private String pendingCaPickRequestId;
+    private JSONObject pendingCaDraftPayload;
     private String historyError = "";
     private static final int NOTIFICATION_REQUEST = 42;
     private static final int CA_PICK_REQUEST = 43;
@@ -84,9 +91,13 @@ public final class MainActivity extends Activity {
         SessionNotifications.channels(this);
         try { spec = store.load(); }
         catch (Exception error) { initialError = "无法解密已保存的连接，请重新输入 Hub 和 secret"; }
+        ThemePolicy.Spec initialTheme = ThemePolicy.resolve(DisplayPrefs.theme(this), isSystemDark());
+        if (getWindow() != null) {
+            getWindow().setBackgroundDrawable(new ColorDrawable(initialTheme.canvasColor));
+        }
         web = new WebView(this);
         WebView.setWebContentsDebuggingEnabled(false);
-        web.setBackgroundColor(Color.rgb(9, 12, 16));
+        web.setBackgroundColor(initialTheme.canvasColor);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(false);
@@ -102,12 +113,12 @@ public final class MainActivity extends Activity {
         if (savedInstanceState != null) updates.restore(savedInstanceState);
         downloads = new AppUpdateDownloads(this, AppUpdates.installedVersion(this), this::emit, this::installUpdate);
         // Resize the WebView itself: its padding does not protect fixed CSS controls.
-        FrameLayout viewport = new FrameLayout(this);
-        viewport.setBackgroundColor(Color.rgb(9, 12, 16));
-        viewport.setOnApplyWindowInsetsListener(MainActivity::applySafeArea);
+        viewport = new FrameLayout(this);
+        viewport.setBackgroundColor(initialTheme.canvasColor);
+        viewport.setOnApplyWindowInsetsListener(this::applySafeArea);
         viewport.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(viewport);
-        configureSystemBarAppearance();
+        applyThemeChrome(initialTheme);
         viewport.requestApplyInsets();
         try {
             web.loadUrl(LocalContentClient.START_URL);
@@ -115,7 +126,7 @@ public final class MainActivity extends Activity {
             int paddingPx = Math.round(24 * getResources().getDisplayMetrics().density);
             android.widget.TextView message = new android.widget.TextView(this);
             message.setText(R.string.resources_unavailable);
-            message.setTextColor(Color.rgb(203, 213, 225));
+            message.setTextColor(initialTheme.fallbackTextColor);
             message.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f);
             message.setLineSpacing(0f, 1.4f);
             message.setGravity(android.view.Gravity.CENTER);
@@ -128,23 +139,55 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void configureSystemBarAppearance() {
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            android.view.WindowInsetsController controller = getWindow().getInsetsController();
-            if (controller != null) {
-                int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                        | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                controller.setSystemBarsAppearance(0, mask);
-            }
-        }
+    private boolean isSystemDark() {
+        int nightMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return nightMode == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    private static WindowInsets applySafeArea(View view, WindowInsets insets) {
+    @SuppressWarnings("deprecation")
+    private void applyThemeChrome(ThemePolicy.Spec theme) {
+        ThemePolicy.Spec resolved = theme != null ? theme : ThemePolicy.resolve(ThemePolicy.DEFAULT_THEME, isSystemDark());
+        Window window = getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(resolved.canvasColor));
+            if (android.os.Build.VERSION.SDK_INT < 35) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+                        | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+                window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                window.setStatusBarColor(resolved.statusBarColor);
+                window.setNavigationBarColor(resolved.navBarColor);
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.view.WindowInsetsController controller = window.getInsetsController();
+                if (controller != null) {
+                    int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                            | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                    controller.setSystemBarsAppearance(resolved.isLight ? mask : 0, mask);
+                }
+            } else {
+                View decor = window.getDecorView();
+                int flags = decor.getSystemUiVisibility();
+                int lightMask = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                if (resolved.isLight) flags |= lightMask;
+                else flags &= ~lightMask;
+                decor.setSystemUiVisibility(flags);
+            }
+        }
+        if (viewport != null) viewport.setBackgroundColor(resolved.canvasColor);
+        if (web != null) web.setBackgroundColor(resolved.canvasColor);
+    }
+
+    @SuppressWarnings("deprecation")
+    private WindowInsets applySafeArea(View view, WindowInsets insets) {
+        boolean imeVisible;
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             int safeTypes = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
             int handledTypes = safeTypes | WindowInsets.Type.ime();
             android.graphics.Insets safe = insets.getInsets(handledTypes);
+            imeVisible = insets.isVisible(WindowInsets.Type.ime())
+                    && insets.getInsets(WindowInsets.Type.ime()).bottom > 0;
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+            updateImeVisibility(imeVisible);
             // Still dispatch zeroed insets so WebView clears old safe areas / IME
             // without applying the parent's spacing a second time.
             return new WindowInsets.Builder(insets)
@@ -157,6 +200,9 @@ public final class MainActivity extends Activity {
         int top = insets.getSystemWindowInsetTop();
         int right = insets.getSystemWindowInsetRight();
         int bottom = insets.getSystemWindowInsetBottom();
+        int stableBottom = insets.getStableInsetBottom();
+        int imeThresholdPx = Math.round(100f * getResources().getDisplayMetrics().density);
+        imeVisible = bottom > 0 && bottom > stableBottom + imeThresholdPx;
         if (android.os.Build.VERSION.SDK_INT >= 28 && insets.getDisplayCutout() != null) {
             android.view.DisplayCutout cutout = insets.getDisplayCutout();
             left = Math.max(left, cutout.getSafeInsetLeft());
@@ -165,9 +211,18 @@ public final class MainActivity extends Activity {
             bottom = Math.max(bottom, cutout.getSafeInsetBottom());
         }
         view.setPadding(left, top, right, bottom);
+        updateImeVisibility(imeVisible);
         WindowInsets remaining = insets.replaceSystemWindowInsets(0, 0, 0, 0).consumeStableInsets();
         if (android.os.Build.VERSION.SDK_INT >= 28) remaining = remaining.consumeDisplayCutout();
         return remaining;
+    }
+
+    private void updateImeVisibility(boolean visible) {
+        if (lastImeVisible == visible) return;
+        lastImeVisible = visible;
+        if (ready && !isDestroyed()) {
+            try { emit(event("imeVisibility").put("visible", visible)); } catch (Exception ignored) { }
+        }
     }
 
     private void back() {
@@ -232,6 +287,7 @@ public final class MainActivity extends Activity {
 
     private void activateConnection(ConnectionSpec next) {
         caDrafts.clear();
+        pendingCaDraftPayload = null;
         cancel();
         spec = next;
         failures = 0;
@@ -244,6 +300,7 @@ public final class MainActivity extends Activity {
 
     private void connectionChanged() {
         latestStats = null;
+        latestStatsFetchedAt = 0L;
         historyError = "";
         historyBusy = false;
         pendingHistoryKey = null;
@@ -280,9 +337,13 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) { }
     }
 
+    private JSONObject displayPrefsPayload() throws Exception {
+        return DisplayPrefs.load(this).put("systemDark", isSystemDark());
+    }
+
     private void displayPrefsChanged() {
         try {
-            emit(DisplayPrefs.load(this).put("type", "displayPrefs"));
+            emit(displayPrefsPayload().put("type", "displayPrefs"));
         } catch (Exception ignored) { }
     }
 
@@ -576,13 +637,15 @@ public final class MainActivity extends Activity {
                     if (epoch != generation || !foreground) return;
                     busy = false;
                     failures = 0;
+                    long fetchedAt = System.currentTimeMillis();
                     latestStats = stats;
+                    latestStatsFetchedAt = fetchedAt;
                     historyError = historyMessage;
                     if (UsageWidgetProvider.hasAnyWidgets(MainActivity.this)) {
-                        UsageWidgetStore.publish(MainActivity.this, widgetBinding, stats, System.currentTimeMillis(), startedAt);
+                        UsageWidgetStore.publish(MainActivity.this, widgetBinding, stats, fetchedAt, startedAt);
                     }
                     try {
-                        emit(event("stats").put("data", stats).put("fetchedAt", System.currentTimeMillis()).put("historyError", historyError));
+                        emit(event("stats").put("data", stats).put("fetchedAt", fetchedAt).put("historyError", historyError));
                         if (subscriptionData != null) {
                             subscriptionVersion = marker;
                             emit(event("subscriptions").put("data", subscriptionData));
@@ -630,9 +693,25 @@ public final class MainActivity extends Activity {
     }
 
     private final class Bridge {
+        @JavascriptInterface public String initialDisplayPrefs() {
+            try {
+                return displayPrefsPayload().toString();
+            } catch (Exception ignored) {
+                return "{\"separateQoderClients\":false,\"exactTrendTokens\":false,\"theme\":\"obsidian\",\"systemDark\":false}";
+            }
+        }
         @JavascriptInterface public void ready() {
             main.post(() -> {
-                ready = true; foregroundChanged(); limitsPrefsChanged(); displayPrefsChanged(); connectionChanged(); openNotificationSession(); MainActivity.this.refresh(true);
+                ready = true; foregroundChanged(); limitsPrefsChanged(); displayPrefsChanged(); connectionChanged();
+                if (lastImeVisible) {
+                    try { emit(event("imeVisibility").put("visible", true)); } catch (Exception ignored) { }
+                }
+                if (pendingCaDraftPayload != null) {
+                    JSONObject queued = pendingCaDraftPayload;
+                    pendingCaDraftPayload = null;
+                    emit(queued);
+                }
+                openNotificationSession(); MainActivity.this.refresh(true);
                 if (foreground) updates.resume(); else updates.send();
                 downloads.send();
             });
@@ -640,12 +719,26 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void saveDisplayPrefs(String serialized) {
             if (serialized == null || serialized.length() > 8192) return;
             main.post(() -> {
+                if (isDestroyed()) return;
+                boolean previousSeparateQoder = DisplayPrefs.separateQoderClients(MainActivity.this);
                 if (DisplayPrefs.save(MainActivity.this, serialized)) {
-                    displayPrefsChanged();
-                    if (latestStats != null && spec != null) {
-                        long now = System.currentTimeMillis();
-                        UsageWidgetStore.publish(MainActivity.this, store.binding(), latestStats, now, now);
+                    JSONObject saved = DisplayPrefs.load(MainActivity.this);
+                    applyThemeChrome(ThemePolicy.resolve(saved.optString("theme", ThemePolicy.DEFAULT_THEME), isSystemDark()));
+                    boolean nextSeparateQoder = saved.optBoolean("separateQoderClients", false);
+                    if (nextSeparateQoder != previousSeparateQoder
+                            && latestStats != null
+                            && latestStatsFetchedAt > 0
+                            && spec != null
+                            && UsageWidgetProvider.hasAnyWidgets(MainActivity.this)) {
+                        UsageWidgetStore.publish(
+                                MainActivity.this,
+                                store.binding(),
+                                latestStats,
+                                latestStatsFetchedAt,
+                                latestStatsFetchedAt);
                     }
+                } else {
+                    displayPrefsChanged();
                 }
             });
         }
@@ -865,12 +958,19 @@ public final class MainActivity extends Activity {
                 try { SessionMonitorService.stop(MainActivity.this, "Hub 已断开，完成提醒已关闭", true); store.disconnectActive(); }
                 catch (Exception error) { status("offline", "无法断开或清理当前连接，请检查设备存储"); return; }
                 caDrafts.clear();
+                pendingCaDraftPayload = null;
                 cancel();
                 spec = null;
                 subscriptionVersion = null;
                 connectionChanged();
             });
         }
+    }
+
+    private void emitOrQueueCaDraft(JSONObject payload) {
+        if (isDestroyed() || payload == null) return;
+        if (ready) emit(payload);
+        else pendingCaDraftPayload = payload;
     }
 
     private String resolveCaDraftPem(String draftToken) {
@@ -907,7 +1007,7 @@ public final class MainActivity extends Activity {
                     .put("notAfter", bundle.notAfterMs)
                     .put("certCount", bundle.certCount)
                     .put("isCa", bundle.isCa);
-            emit(event("caCertDraft")
+            emitOrQueueCaDraft(event("caCertDraft")
                     .put("requestId", requestId)
                     .put("ok", true)
                     .put("draftToken", draftToken)
@@ -917,7 +1017,7 @@ public final class MainActivity extends Activity {
 
     private void emitCaDraftError(String requestId, String message) {
         try {
-            emit(event("caCertDraft")
+            emitOrQueueCaDraft(event("caCertDraft")
                     .put("requestId", requestId)
                     .put("ok", false)
                     .put("error", message == null ? "证书解析失败" : message));
@@ -926,7 +1026,7 @@ public final class MainActivity extends Activity {
 
     private void emitCaDraftCancelled(String requestId) {
         try {
-            emit(event("caCertDraft")
+            emitOrQueueCaDraft(event("caCertDraft")
                     .put("requestId", requestId)
                     .put("ok", false)
                     .put("cancelled", true));
@@ -1299,6 +1399,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         caDrafts.clear();
+        pendingCaDraftPayload = null;
         cancel();
         network.shutdownNow();
         certImportNetwork.shutdownNow();

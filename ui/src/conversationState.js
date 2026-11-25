@@ -1,5 +1,27 @@
 // @ts-check
 
+const TERMINAL_CONVERSATION_ERRORS = new Set([
+  'source_changed',
+  'invalid_cursor',
+  'not_found',
+  'file_too_large',
+  'unsupported_hub',
+  'unsupported_app',
+  'disabled',
+  'unauthorized',
+  'preview_unavailable',
+]);
+
+/**
+ * Returns true when pagination cannot safely resume with the current cursor
+ * and requires a full reload (or hub/app support).
+ * @param {string | null | undefined} error
+ * @returns {boolean}
+ */
+export function isTerminalConversationError(error) {
+  return Boolean(error && TERMINAL_CONVERSATION_ERRORS.has(error));
+}
+
 /** @param {import('./types/monitor').SessionConversationState | null} previous
  * @param {{deviceId: string, key: string, cursor: string, requestId: string}} query
  * @returns {import('./types/monitor').SessionConversationState} */
@@ -26,11 +48,15 @@ export function receiveConversation(current, message) {
     || (current.cursor && current.revision !== page.revision)) return { ...current, loading: false, error: 'invalid_response' };
   /** @type {import('./types/monitor').SessionConversationMessage[]} */
   const messages = [];
+  const seenIds = new Set(current.messages.map((existing) => existing.id));
   for (const item of page.messages) {
-    if (!item || !['user', 'assistant', 'tool', 'system'].includes(item.role) || typeof item.id !== 'string' || item.id.length > 100
+    if (!item || !['user', 'assistant', 'tool', 'system'].includes(item.role) || typeof item.id !== 'string' || item.id.trim().length === 0 || item.id.length > 100
       || typeof item.text !== 'string' || item.text.length > 12000 || typeof item.timestamp !== 'string' || item.timestamp.length > 40
       || typeof item.kind !== 'string' || item.kind.length > 80) return { ...current, loading: false, error: 'invalid_response' };
-    messages.push({ id: item.id, role: item.role, text: item.text, timestamp: item.timestamp, kind: item.kind, continued: item.continued === true });
+    const cleanId = item.id.trim();
+    if (seenIds.has(cleanId)) continue;
+    seenIds.add(cleanId);
+    messages.push({ id: cleanId, role: item.role, text: item.text, timestamp: item.timestamp, kind: item.kind, continued: item.continued === true });
   }
   return { ...current, messages: [...current.messages, ...messages], revision: page.revision,
     nextCursor: page.nextCursor, incomplete: current.incomplete || page.incomplete === true, loading: false, error: '' };

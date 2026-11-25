@@ -1,22 +1,680 @@
 @import "tailwindcss";
 
+/* ========================================================================== */
+/* Tailwind v4 Semantic Token Registration                                    */
+/* ========================================================================== */
 @theme {
   --font-sans: "Roboto", "Noto Sans SC", "Noto Sans CJK SC", "PingFang SC", -apple-system, BlinkMacSystemFont, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* Surfaces */
+  --color-tm-canvas: var(--tm-bg-canvas);
+  --color-tm-surface: var(--tm-bg-surface);
+  --color-tm-elevated: var(--tm-bg-surface-elevated);
+  --color-tm-inset: var(--tm-bg-inset);
+  --color-tm-chrome: var(--tm-bg-chrome);
+  --color-tm-pill: var(--tm-bg-pill);
+  --color-tm-dialog: var(--tm-bg-dialog);
+
+  /* Borders */
+  --color-tm-border-subtle: var(--tm-border-subtle);
+  --color-tm-border: var(--tm-border-default);
+  --color-tm-border-strong: var(--tm-border-strong);
+  --color-tm-border-accent: var(--tm-border-accent);
+
+  /* Text */
+  --color-tm-primary: var(--tm-text-primary);
+  --color-tm-secondary: var(--tm-text-secondary);
+  --color-tm-muted: var(--tm-text-muted);
+  --color-tm-subtle: var(--tm-text-subtle);
+  --color-tm-inverse: var(--tm-text-inverse);
+
+  /* Brand & Selection */
+  --color-tm-accent: var(--tm-accent);
+  --color-tm-accent-text: var(--tm-accent-text);
+  --color-tm-accent-secondary: var(--tm-accent-secondary);
+  --color-tm-accent-soft: var(--tm-accent-soft-bg);
+  --color-tm-selection-bg: var(--tm-selection-bg);
+  --color-tm-selection-text: var(--tm-selection-text);
+
+  /* Semantic Status */
+  --color-tm-success: var(--tm-success);
+  --color-tm-success-text: var(--tm-success-text);
+  --color-tm-success-soft: var(--tm-success-soft-bg);
+  --color-tm-success-border: var(--tm-success-soft-border);
+
+  --color-tm-warning: var(--tm-warning);
+  --color-tm-warning-text: var(--tm-warning-text);
+  --color-tm-warning-soft: var(--tm-warning-soft-bg);
+  --color-tm-warning-border: var(--tm-warning-soft-border);
+
+  --color-tm-danger: var(--tm-danger);
+  --color-tm-danger-text: var(--tm-danger-text);
+  --color-tm-danger-soft: var(--tm-danger-soft-bg);
+  --color-tm-danger-border: var(--tm-danger-soft-border);
+
+  --color-tm-info: var(--tm-info);
+  --color-tm-info-text: var(--tm-info-text);
+  --color-tm-info-soft: var(--tm-info-soft-bg);
+  --color-tm-info-border: var(--tm-info-soft-border);
+
+  --color-tm-violet: var(--tm-violet);
+  --color-tm-violet-text: var(--tm-violet-text);
+  --color-tm-violet-soft: var(--tm-violet-soft-bg);
+  --color-tm-violet-border: var(--tm-violet-soft-border);
 }
 
 @layer base {
-  :root {
+  /* ======================================================================== */
+  /* 1) 深空遥测 — Obsidian Telemetry (Default Dark)                          */
+  /* ======================================================================== */
+  :root,
+  :root[data-theme="obsidian"] {
     color-scheme: dark;
+
+    /* Surfaces */
     --tm-bg-canvas: #090C10;
     --tm-bg-surface: #111822;
-    --tm-bg-surface-elevated: #16202E;
-    --tm-bg-inset: rgba(7, 10, 15, 0.72);
+    --tm-bg-surface-elevated: #172131;
+    --tm-bg-inset: #070A0F;
     --tm-bg-chrome: rgba(9, 12, 16, 0.88);
+    --tm-bg-pill: rgba(17, 24, 34, 0.90);
     --tm-bg-dialog: #0E1520;
+    --tm-bg-dialog-header: rgba(14, 21, 32, 0.95);
+    --tm-bg-table: rgba(8, 12, 18, 0.82);
+    --tm-bg-hero: #101926;
+    --tm-bg-row: rgba(255, 255, 255, 0.03);
+    --tm-bg-row-hover: rgba(255, 255, 255, 0.065);
+    --tm-bg-control: rgba(255, 255, 255, 0.055);
+    --tm-bg-control-hover: rgba(255, 255, 255, 0.10);
+    --tm-track-bg: rgba(255, 255, 255, 0.08);
+    --tm-ambient-glow: radial-gradient(ellipse 80% 55% at 50% -18%, rgba(56, 189, 248, 0.14), transparent);
+
+    /* Surface effects */
+    --tm-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.032) 0%, rgba(0, 0, 0, 0.14) 100%);
+    --tm-panel-tint: radial-gradient(110% 90% at 100% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 56%);
+    --tm-hero-gradient: radial-gradient(115% 95% at 92% 0%, rgba(56, 189, 248, 0.20) 0%, transparent 58%),
+                        radial-gradient(90% 85% at 8% 100%, rgba(52, 211, 153, 0.12) 0%, transparent 62%),
+                        linear-gradient(165deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.18) 100%);
+    --tm-shadow-panel: 0 10px 26px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+    --tm-shadow-hero: 0 16px 38px -14px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.13);
+    --tm-shadow-inset: inset 0 2px 5px rgba(0, 0, 0, 0.42);
+    --tm-shadow-dialog: 0 24px 56px -12px rgba(0, 0, 0, 0.80);
+
+    /* Borders */
     --tm-border-subtle: rgba(255, 255, 255, 0.07);
     --tm-border-default: rgba(255, 255, 255, 0.10);
-    --tm-border-strong: rgba(255, 255, 255, 0.16);
+    --tm-border-strong: rgba(255, 255, 255, 0.17);
+    --tm-border-accent: rgba(56, 189, 248, 0.34);
+
+    /* Typography */
+    --tm-text-primary: #F4F8FC;
+    --tm-text-secondary: #CBD5E1;
+    --tm-text-muted: #8B9BB4;
+    --tm-text-subtle: #7B8CA6;
+    --tm-text-inverse: #061019;
+
+    /* Brand & Selection */
+    --tm-accent: #38BDF8;
+    --tm-accent-text: #7DD3FC;
+    --tm-accent-secondary: #34D399;
+    --tm-accent-gradient: linear-gradient(90deg, #38BDF8 0%, #34D399 100%);
+    --tm-accent-soft-bg: rgba(56, 189, 248, 0.14);
+    --tm-accent-soft-border: rgba(56, 189, 248, 0.32);
+    --tm-focus-ring: #38BDF8;
+    --tm-selection-bg: #1B283B;
+    --tm-selection-text: #F8FAFC;
+    --tm-selection-border: rgba(255, 255, 255, 0.14);
+    --tm-nav-active-bg: rgba(56, 189, 248, 0.14);
+    --tm-nav-active-text: #7DD3FC;
+
+    /* Semantic Status */
+    --tm-success: #34D399;
+    --tm-success-text: #6EE7B7;
+    --tm-success-soft-bg: rgba(52, 211, 153, 0.14);
+    --tm-success-soft-border: rgba(52, 211, 153, 0.30);
+
+    --tm-warning: #FBBF24;
+    --tm-warning-text: #FDE68A;
+    --tm-warning-soft-bg: rgba(251, 191, 36, 0.14);
+    --tm-warning-soft-border: rgba(251, 191, 36, 0.32);
+
+    --tm-danger: #FB7185;
+    --tm-danger-text: #FECDD3;
+    --tm-danger-soft-bg: rgba(251, 113, 133, 0.14);
+    --tm-danger-soft-border: rgba(251, 113, 133, 0.32);
+
+    --tm-info: #38BDF8;
+    --tm-info-text: #BAE6FD;
+    --tm-info-soft-bg: rgba(56, 189, 248, 0.13);
+    --tm-info-soft-border: rgba(56, 189, 248, 0.30);
+
+    --tm-violet: #A78BFA;
+    --tm-violet-text: #DDD6FE;
+    --tm-violet-soft-bg: rgba(167, 139, 250, 0.15);
+    --tm-violet-soft-border: rgba(167, 139, 250, 0.32);
+
+    /* Charts */
+    --tm-chart-grid: rgba(255, 255, 255, 0.08);
+    --tm-chart-axis: #8B9BB4;
+    --tm-chart-primary: #38BDF8;
+    --tm-chart-secondary: #34D399;
+    --tm-chart-input: #38BDF8;
+    --tm-chart-output: #A78BFA;
+    --tm-chart-cache-read: #34D399;
+    --tm-chart-cache-write: #FBBF24;
+    --tm-chart-cost: #34D399;
+    --tm-chart-bar-idle-start: rgba(56, 189, 248, 0.24);
+    --tm-chart-bar-idle-end: rgba(56, 189, 248, 0.56);
+    --tm-chart-bar-active-start: #0EA5E9;
+    --tm-chart-bar-active-end: #67E8F9;
+    --tm-chart-tooltip-bg: #131D2B;
+    --tm-chart-tooltip-border: rgba(56, 189, 248, 0.32);
+
+    --tm-scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  }
+
+  /* ======================================================================== */
+  /* 2) 晴空纸韵 — Daylight Paper (Crisp Light)                               */
+  /* ======================================================================== */
+  :root[data-theme="daylight"] {
+    color-scheme: light;
+
+    --tm-bg-canvas: #F4F6F9;
+    --tm-bg-surface: #FFFFFF;
+    --tm-bg-surface-elevated: #FFFFFF;
+    --tm-bg-inset: #EDF1F6;
+    --tm-bg-chrome: rgba(244, 246, 249, 0.88);
+    --tm-bg-pill: rgba(255, 255, 255, 0.94);
+    --tm-bg-dialog: #FFFFFF;
+    --tm-bg-dialog-header: rgba(255, 255, 255, 0.96);
+    --tm-bg-table: #F8FAFC;
+    --tm-bg-hero: #FFFFFF;
+    --tm-bg-row: #F7F9FC;
+    --tm-bg-row-hover: #EDF2F7;
+    --tm-bg-control: rgba(15, 23, 42, 0.045);
+    --tm-bg-control-hover: rgba(15, 23, 42, 0.085);
+    --tm-track-bg: rgba(15, 23, 42, 0.09);
+    --tm-ambient-glow: radial-gradient(ellipse 85% 50% at 50% -18%, rgba(2, 132, 199, 0.09), transparent);
+
+    --tm-panel-sheen: none;
+    --tm-panel-tint: none;
+    --tm-hero-gradient: radial-gradient(115% 95% at 95% 0%, rgba(2, 132, 199, 0.09) 0%, transparent 56%),
+                        radial-gradient(90% 85% at 5% 100%, rgba(5, 150, 105, 0.07) 0%, transparent 58%);
+    --tm-shadow-panel: 0 2px 10px -2px rgba(15, 23, 42, 0.06), 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    --tm-shadow-hero: 0 10px 28px -10px rgba(3, 105, 161, 0.14), 0 2px 6px -1px rgba(15, 23, 42, 0.05);
+    --tm-shadow-inset: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+    --tm-shadow-dialog: 0 22px 48px -12px rgba(15, 23, 42, 0.24), 0 4px 12px rgba(15, 23, 42, 0.08);
+
+    --tm-border-subtle: rgba(15, 23, 42, 0.06);
+    --tm-border-default: rgba(15, 23, 42, 0.095);
+    --tm-border-strong: rgba(15, 23, 42, 0.16);
+    --tm-border-accent: rgba(3, 105, 161, 0.30);
+
+    --tm-text-primary: #0F172A;
+    --tm-text-secondary: #334155;
+    --tm-text-muted: #52627A;
+    --tm-text-subtle: #5D6E87;
+    --tm-text-inverse: #FFFFFF;
+
+    --tm-accent: #0369A1;
+    --tm-accent-text: #0369A1;
+    --tm-accent-secondary: #047857;
+    --tm-accent-gradient: linear-gradient(90deg, #0369A1 0%, #059669 100%);
+    --tm-accent-soft-bg: rgba(2, 132, 199, 0.10);
+    --tm-accent-soft-border: rgba(3, 105, 161, 0.26);
+    --tm-focus-ring: #0284C7;
+    --tm-selection-bg: #FFFFFF;
+    --tm-selection-text: #0F172A;
+    --tm-selection-border: rgba(15, 23, 42, 0.10);
+    --tm-nav-active-bg: rgba(2, 132, 199, 0.11);
+    --tm-nav-active-text: #0369A1;
+
+    --tm-success: #047857;
+    --tm-success-text: #047857;
+    --tm-success-soft-bg: rgba(5, 150, 105, 0.10);
+    --tm-success-soft-border: rgba(5, 150, 105, 0.26);
+
+    --tm-warning: #B45309;
+    --tm-warning-text: #92400E;
+    --tm-warning-soft-bg: rgba(217, 119, 6, 0.10);
+    --tm-warning-soft-border: rgba(217, 119, 6, 0.28);
+
+    --tm-danger: #BE123C;
+    --tm-danger-text: #BE123C;
+    --tm-danger-soft-bg: rgba(225, 29, 72, 0.09);
+    --tm-danger-soft-border: rgba(225, 29, 72, 0.26);
+
+    --tm-info: #0369A1;
+    --tm-info-text: #0369A1;
+    --tm-info-soft-bg: rgba(2, 132, 199, 0.10);
+    --tm-info-soft-border: rgba(2, 132, 199, 0.26);
+
+    --tm-violet: #6D28D9;
+    --tm-violet-text: #5B21B6;
+    --tm-violet-soft-bg: rgba(124, 58, 237, 0.10);
+    --tm-violet-soft-border: rgba(124, 58, 237, 0.26);
+
+    --tm-chart-grid: rgba(15, 23, 42, 0.09);
+    --tm-chart-axis: #52627A;
+    --tm-chart-primary: #0284C7;
+    --tm-chart-secondary: #059669;
+    --tm-chart-input: #0284C7;
+    --tm-chart-output: #7C3AED;
+    --tm-chart-cache-read: #059669;
+    --tm-chart-cache-write: #D97706;
+    --tm-chart-cost: #047857;
+    --tm-chart-bar-idle-start: rgba(2, 132, 199, 0.20);
+    --tm-chart-bar-idle-end: rgba(2, 132, 199, 0.48);
+    --tm-chart-bar-active-start: #0369A1;
+    --tm-chart-bar-active-end: #0EA5E9;
+    --tm-chart-tooltip-bg: #FFFFFF;
+    --tm-chart-tooltip-border: rgba(3, 105, 161, 0.28);
+
+    --tm-scrollbar-thumb: rgba(15, 23, 42, 0.20);
+  }
+
+  /* ======================================================================== */
+  /* 3) 琥珀终端 — Amber Terminal (Warm Dark)                                 */
+  /* ======================================================================== */
+  :root[data-theme="amber"] {
+    color-scheme: dark;
+
+    --tm-bg-canvas: #0D0B09;
+    --tm-bg-surface: #171310;
+    --tm-bg-surface-elevated: #211B16;
+    --tm-bg-inset: #080605;
+    --tm-bg-chrome: rgba(13, 11, 9, 0.90);
+    --tm-bg-pill: rgba(23, 19, 16, 0.88);
+    --tm-bg-dialog: #14100D;
+    --tm-bg-dialog-header: rgba(20, 16, 13, 0.95);
+    --tm-bg-table: rgba(10, 8, 6, 0.84);
+    --tm-bg-hero: #1B1510;
+    --tm-bg-row: rgba(255, 245, 230, 0.03);
+    --tm-bg-row-hover: rgba(255, 245, 230, 0.065);
+    --tm-bg-control: rgba(255, 245, 230, 0.055);
+    --tm-bg-control-hover: rgba(255, 245, 230, 0.10);
+    --tm-track-bg: rgba(255, 245, 230, 0.09);
+    --tm-ambient-glow: radial-gradient(ellipse 80% 55% at 50% -18%, rgba(245, 158, 11, 0.14), transparent);
+
+    --tm-panel-sheen: linear-gradient(180deg, rgba(255, 244, 224, 0.032) 0%, rgba(0, 0, 0, 0.16) 100%);
+    --tm-panel-tint: radial-gradient(110% 90% at 100% 0%, rgba(245, 158, 11, 0.055) 0%, transparent 56%);
+    --tm-hero-gradient: radial-gradient(115% 95% at 92% 0%, rgba(245, 158, 11, 0.22) 0%, transparent 58%),
+                        radial-gradient(90% 85% at 8% 100%, rgba(234, 88, 12, 0.13) 0%, transparent 62%),
+                        linear-gradient(165deg, rgba(255, 244, 224, 0.04) 0%, rgba(0, 0, 0, 0.20) 100%);
+    --tm-shadow-panel: 0 10px 26px -12px rgba(0, 0, 0, 0.62), inset 0 1px 0 0 rgba(255, 240, 215, 0.075);
+    --tm-shadow-hero: 0 16px 38px -14px rgba(0, 0, 0, 0.70), inset 0 1px 0 0 rgba(252, 211, 77, 0.16);
+    --tm-shadow-inset: inset 0 2px 5px rgba(0, 0, 0, 0.48);
+    --tm-shadow-dialog: 0 24px 56px -12px rgba(0, 0, 0, 0.84);
+
+    --tm-border-subtle: rgba(255, 238, 214, 0.075);
+    --tm-border-default: rgba(255, 238, 214, 0.11);
+    --tm-border-strong: rgba(255, 238, 214, 0.18);
+    --tm-border-accent: rgba(245, 158, 11, 0.36);
+
+    --tm-text-primary: #FAF5EE;
+    --tm-text-secondary: #D6CBC0;
+    --tm-text-muted: #A19385;
+    --tm-text-subtle: #8F8275;
+    --tm-text-inverse: #140E06;
+
+    --tm-accent: #F59E0B;
+    --tm-accent-text: #FCD34D;
+    --tm-accent-secondary: #FB923C;
+    --tm-accent-gradient: linear-gradient(90deg, #F59E0B 0%, #FB923C 100%);
+    --tm-accent-soft-bg: rgba(245, 158, 11, 0.15);
+    --tm-accent-soft-border: rgba(245, 158, 11, 0.35);
+    --tm-focus-ring: #FBBF24;
+    --tm-selection-bg: #2B2219;
+    --tm-selection-text: #FEF3C7;
+    --tm-selection-border: rgba(251, 191, 36, 0.22);
+    --tm-nav-active-bg: rgba(245, 158, 11, 0.15);
+    --tm-nav-active-text: #FCD34D;
+
+    --tm-success: #34D399;
+    --tm-success-text: #6EE7B7;
+    --tm-success-soft-bg: rgba(52, 211, 153, 0.14);
+    --tm-success-soft-border: rgba(52, 211, 153, 0.30);
+
+    --tm-warning: #FB923C;
+    --tm-warning-text: #FED7AA;
+    --tm-warning-soft-bg: rgba(251, 146, 60, 0.15);
+    --tm-warning-soft-border: rgba(251, 146, 60, 0.34);
+
+    --tm-danger: #FB7185;
+    --tm-danger-text: #FECDD3;
+    --tm-danger-soft-bg: rgba(251, 113, 133, 0.14);
+    --tm-danger-soft-border: rgba(251, 113, 133, 0.32);
+
+    --tm-info: #38BDF8;
+    --tm-info-text: #BAE6FD;
+    --tm-info-soft-bg: rgba(56, 189, 248, 0.13);
+    --tm-info-soft-border: rgba(56, 189, 248, 0.30);
+
+    --tm-violet: #C084FC;
+    --tm-violet-text: #E9D5FF;
+    --tm-violet-soft-bg: rgba(192, 132, 252, 0.15);
+    --tm-violet-soft-border: rgba(192, 132, 252, 0.32);
+
+    --tm-chart-grid: rgba(255, 238, 214, 0.085);
+    --tm-chart-axis: #A19385;
+    --tm-chart-primary: #F59E0B;
+    --tm-chart-secondary: #34D399;
+    --tm-chart-input: #F59E0B;
+    --tm-chart-output: #C084FC;
+    --tm-chart-cache-read: #34D399;
+    --tm-chart-cache-write: #FB923C;
+    --tm-chart-cost: #6EE7B7;
+    --tm-chart-bar-idle-start: rgba(245, 158, 11, 0.24);
+    --tm-chart-bar-idle-end: rgba(245, 158, 11, 0.56);
+    --tm-chart-bar-active-start: #D97706;
+    --tm-chart-bar-active-end: #FCD34D;
+    --tm-chart-tooltip-bg: #1E1813;
+    --tm-chart-tooltip-border: rgba(245, 158, 11, 0.34);
+
+    --tm-scrollbar-thumb: rgba(255, 238, 214, 0.18);
+  }
+
+  /* ======================================================================== */
+  /* 4) 翠影幽境 — Emerald Pine (Deep Forest Dark)                            */
+  /* ======================================================================== */
+  :root[data-theme="emerald"] {
+    color-scheme: dark;
+
+    --tm-bg-canvas: #060E0C;
+    --tm-bg-surface: #0D1916;
+    --tm-bg-surface-elevated: #132420;
+    --tm-bg-inset: #040A08;
+    --tm-bg-chrome: rgba(6, 14, 12, 0.90);
+    --tm-bg-pill: rgba(13, 25, 22, 0.88);
+    --tm-bg-dialog: #0B1513;
+    --tm-bg-dialog-header: rgba(11, 21, 19, 0.95);
+    --tm-bg-table: rgba(5, 11, 9, 0.84);
+    --tm-bg-hero: #0D1E19;
+    --tm-bg-row: rgba(236, 253, 245, 0.03);
+    --tm-bg-row-hover: rgba(236, 253, 245, 0.065);
+    --tm-bg-control: rgba(236, 253, 245, 0.055);
+    --tm-bg-control-hover: rgba(236, 253, 245, 0.10);
+    --tm-track-bg: rgba(236, 253, 245, 0.085);
+    --tm-ambient-glow: radial-gradient(ellipse 80% 55% at 50% -18%, rgba(45, 212, 191, 0.14), transparent);
+
+    --tm-panel-sheen: linear-gradient(180deg, rgba(236, 253, 245, 0.032) 0%, rgba(0, 0, 0, 0.16) 100%);
+    --tm-panel-tint: radial-gradient(110% 90% at 100% 0%, rgba(45, 212, 191, 0.055) 0%, transparent 56%);
+    --tm-hero-gradient: radial-gradient(115% 95% at 92% 0%, rgba(45, 212, 191, 0.21) 0%, transparent 58%),
+                        radial-gradient(90% 85% at 8% 100%, rgba(163, 230, 53, 0.10) 0%, transparent 62%),
+                        linear-gradient(165deg, rgba(236, 253, 245, 0.04) 0%, rgba(0, 0, 0, 0.20) 100%);
+    --tm-shadow-panel: 0 10px 26px -12px rgba(0, 0, 0, 0.60), inset 0 1px 0 0 rgba(204, 251, 241, 0.075);
+    --tm-shadow-hero: 0 16px 38px -14px rgba(0, 0, 0, 0.68), inset 0 1px 0 0 rgba(94, 234, 212, 0.15);
+    --tm-shadow-inset: inset 0 2px 5px rgba(0, 0, 0, 0.46);
+    --tm-shadow-dialog: 0 24px 56px -12px rgba(0, 0, 0, 0.82);
+
+    --tm-border-subtle: rgba(204, 251, 241, 0.075);
+    --tm-border-default: rgba(204, 251, 241, 0.11);
+    --tm-border-strong: rgba(204, 251, 241, 0.18);
+    --tm-border-accent: rgba(45, 212, 191, 0.35);
+
+    --tm-text-primary: #EFFCF7;
+    --tm-text-secondary: #C2DBD1;
+    --tm-text-muted: #85A69A;
+    --tm-text-subtle: #76978B;
+    --tm-text-inverse: #04140F;
+
+    --tm-accent: #2DD4BF;
+    --tm-accent-text: #5EEAD4;
+    --tm-accent-secondary: #34D399;
+    --tm-accent-gradient: linear-gradient(90deg, #2DD4BF 0%, #4ADE80 100%);
+    --tm-accent-soft-bg: rgba(45, 212, 191, 0.14);
+    --tm-accent-soft-border: rgba(45, 212, 191, 0.34);
+    --tm-focus-ring: #2DD4BF;
+    --tm-selection-bg: #152B25;
+    --tm-selection-text: #CCFBF1;
+    --tm-selection-border: rgba(94, 234, 212, 0.20);
+    --tm-nav-active-bg: rgba(45, 212, 191, 0.14);
+    --tm-nav-active-text: #5EEAD4;
+
+    --tm-success: #4ADE80;
+    --tm-success-text: #86EFAC;
+    --tm-success-soft-bg: rgba(74, 222, 128, 0.14);
+    --tm-success-soft-border: rgba(74, 222, 128, 0.30);
+
+    --tm-warning: #FBBF24;
+    --tm-warning-text: #FDE68A;
+    --tm-warning-soft-bg: rgba(251, 191, 36, 0.14);
+    --tm-warning-soft-border: rgba(251, 191, 36, 0.32);
+
+    --tm-danger: #FB7185;
+    --tm-danger-text: #FECDD3;
+    --tm-danger-soft-bg: rgba(251, 113, 133, 0.14);
+    --tm-danger-soft-border: rgba(251, 113, 133, 0.32);
+
+    --tm-info: #38BDF8;
+    --tm-info-text: #BAE6FD;
+    --tm-info-soft-bg: rgba(56, 189, 248, 0.13);
+    --tm-info-soft-border: rgba(56, 189, 248, 0.30);
+
+    --tm-violet: #A78BFA;
+    --tm-violet-text: #DDD6FE;
+    --tm-violet-soft-bg: rgba(167, 139, 250, 0.15);
+    --tm-violet-soft-border: rgba(167, 139, 250, 0.32);
+
+    --tm-chart-grid: rgba(204, 251, 241, 0.085);
+    --tm-chart-axis: #85A69A;
+    --tm-chart-primary: #2DD4BF;
+    --tm-chart-secondary: #4ADE80;
+    --tm-chart-input: #2DD4BF;
+    --tm-chart-output: #A78BFA;
+    --tm-chart-cache-read: #4ADE80;
+    --tm-chart-cache-write: #FBBF24;
+    --tm-chart-cost: #86EFAC;
+    --tm-chart-bar-idle-start: rgba(45, 212, 191, 0.24);
+    --tm-chart-bar-idle-end: rgba(45, 212, 191, 0.56);
+    --tm-chart-bar-active-start: #0D9488;
+    --tm-chart-bar-active-end: #5EEAD4;
+    --tm-chart-tooltip-bg: #10201C;
+    --tm-chart-tooltip-border: rgba(45, 212, 191, 0.34);
+
+    --tm-scrollbar-thumb: rgba(204, 251, 241, 0.18);
+  }
+
+  /* ======================================================================== */
+  /* 5) 暮霞紫境 — Nebula Dusk (Twilight Dark)                                */
+  /* ======================================================================== */
+  :root[data-theme="nebula"] {
+    color-scheme: dark;
+
+    --tm-bg-canvas: #090914;
+    --tm-bg-surface: #121226;
+    --tm-bg-surface-elevated: #1B1B36;
+    --tm-bg-inset: #06060F;
+    --tm-bg-chrome: rgba(9, 9, 20, 0.90);
+    --tm-bg-pill: rgba(18, 18, 38, 0.88);
+    --tm-bg-dialog: #101022;
+    --tm-bg-dialog-header: rgba(16, 16, 34, 0.95);
+    --tm-bg-table: rgba(8, 8, 18, 0.84);
+    --tm-bg-hero: #15142E;
+    --tm-bg-row: rgba(244, 243, 255, 0.032);
+    --tm-bg-row-hover: rgba(244, 243, 255, 0.07);
+    --tm-bg-control: rgba(244, 243, 255, 0.06);
+    --tm-bg-control-hover: rgba(244, 243, 255, 0.11);
+    --tm-track-bg: rgba(244, 243, 255, 0.09);
+    --tm-ambient-glow: radial-gradient(ellipse 80% 55% at 50% -18%, rgba(167, 139, 250, 0.16), transparent);
+
+    --tm-panel-sheen: linear-gradient(180deg, rgba(244, 243, 255, 0.036) 0%, rgba(0, 0, 0, 0.16) 100%);
+    --tm-panel-tint: radial-gradient(110% 90% at 100% 0%, rgba(167, 139, 250, 0.065) 0%, transparent 56%);
+    --tm-hero-gradient: radial-gradient(115% 95% at 92% 0%, rgba(167, 139, 250, 0.24) 0%, transparent 58%),
+                        radial-gradient(90% 85% at 8% 100%, rgba(56, 189, 248, 0.14) 0%, transparent 62%),
+                        linear-gradient(165deg, rgba(244, 243, 255, 0.045) 0%, rgba(0, 0, 0, 0.20) 100%);
+    --tm-shadow-panel: 0 10px 26px -12px rgba(0, 0, 0, 0.62), inset 0 1px 0 0 rgba(233, 213, 255, 0.08);
+    --tm-shadow-hero: 0 16px 38px -14px rgba(0, 0, 0, 0.70), inset 0 1px 0 0 rgba(196, 181, 253, 0.16);
+    --tm-shadow-inset: inset 0 2px 5px rgba(0, 0, 0, 0.48);
+    --tm-shadow-dialog: 0 24px 56px -12px rgba(0, 0, 0, 0.84);
+
+    --tm-border-subtle: rgba(233, 213, 255, 0.08);
+    --tm-border-default: rgba(233, 213, 255, 0.12);
+    --tm-border-strong: rgba(233, 213, 255, 0.19);
+    --tm-border-accent: rgba(167, 139, 250, 0.38);
+
+    --tm-text-primary: #F4F3FF;
+    --tm-text-secondary: #CBC9E6;
+    --tm-text-muted: #9290B8;
+    --tm-text-subtle: #8280A8;
+    --tm-text-inverse: #0D0820;
+
+    --tm-accent: #A78BFA;
+    --tm-accent-text: #C4B5FD;
+    --tm-accent-secondary: #38BDF8;
+    --tm-accent-gradient: linear-gradient(90deg, #A78BFA 0%, #38BDF8 100%);
+    --tm-accent-soft-bg: rgba(167, 139, 250, 0.16);
+    --tm-accent-soft-border: rgba(167, 139, 250, 0.36);
+    --tm-focus-ring: #A78BFA;
+    --tm-selection-bg: #232145;
+    --tm-selection-text: #F5F3FF;
+    --tm-selection-border: rgba(196, 181, 253, 0.22);
+    --tm-nav-active-bg: rgba(167, 139, 250, 0.16);
+    --tm-nav-active-text: #C4B5FD;
+
+    --tm-success: #34D399;
+    --tm-success-text: #6EE7B7;
+    --tm-success-soft-bg: rgba(52, 211, 153, 0.14);
+    --tm-success-soft-border: rgba(52, 211, 153, 0.30);
+
+    --tm-warning: #FBBF24;
+    --tm-warning-text: #FDE68A;
+    --tm-warning-soft-bg: rgba(251, 191, 36, 0.14);
+    --tm-warning-soft-border: rgba(251, 191, 36, 0.32);
+
+    --tm-danger: #FB7185;
+    --tm-danger-text: #FECDD3;
+    --tm-danger-soft-bg: rgba(251, 113, 133, 0.14);
+    --tm-danger-soft-border: rgba(251, 113, 133, 0.32);
+
+    --tm-info: #38BDF8;
+    --tm-info-text: #BAE6FD;
+    --tm-info-soft-bg: rgba(56, 189, 248, 0.14);
+    --tm-info-soft-border: rgba(56, 189, 248, 0.30);
+
+    --tm-violet: #C084FC;
+    --tm-violet-text: #E9D5FF;
+    --tm-violet-soft-bg: rgba(192, 132, 252, 0.16);
+    --tm-violet-soft-border: rgba(192, 132, 252, 0.34);
+
+    --tm-chart-grid: rgba(233, 213, 255, 0.09);
+    --tm-chart-axis: #9290B8;
+    --tm-chart-primary: #A78BFA;
+    --tm-chart-secondary: #38BDF8;
+    --tm-chart-input: #38BDF8;
+    --tm-chart-output: #C084FC;
+    --tm-chart-cache-read: #34D399;
+    --tm-chart-cache-write: #FBBF24;
+    --tm-chart-cost: #6EE7B7;
+    --tm-chart-bar-idle-start: rgba(167, 139, 250, 0.26);
+    --tm-chart-bar-idle-end: rgba(167, 139, 250, 0.58);
+    --tm-chart-bar-active-start: #7C3AED;
+    --tm-chart-bar-active-end: #C4B5FD;
+    --tm-chart-tooltip-bg: #171631;
+    --tm-chart-tooltip-border: rgba(167, 139, 250, 0.36);
+
+    --tm-scrollbar-thumb: rgba(233, 213, 255, 0.18);
+  }
+
+  /* ======================================================================== */
+  /* 6) 冰川薄雾 — Nordic Frost (Cool Soft Light)                             */
+  /* ======================================================================== */
+  :root[data-theme="frost"] {
+    color-scheme: light;
+
+    --tm-bg-canvas: #EBF1F8;
+    --tm-bg-surface: #F8FBFF;
+    --tm-bg-surface-elevated: #FFFFFF;
+    --tm-bg-inset: #E2EAF4;
+    --tm-bg-chrome: rgba(235, 241, 248, 0.90);
+    --tm-bg-pill: rgba(248, 251, 255, 0.94);
+    --tm-bg-dialog: #FAFCFF;
+    --tm-bg-dialog-header: rgba(250, 252, 255, 0.96);
+    --tm-bg-table: #F1F6FC;
+    --tm-bg-hero: #F8FBFF;
+    --tm-bg-row: #EFF5FC;
+    --tm-bg-row-hover: #E4EDF8;
+    --tm-bg-control: rgba(14, 27, 46, 0.05);
+    --tm-bg-control-hover: rgba(14, 27, 46, 0.09);
+    --tm-track-bg: rgba(14, 27, 46, 0.095);
+    --tm-ambient-glow: radial-gradient(ellipse 85% 50% at 50% -18%, rgba(79, 70, 229, 0.09), transparent);
+
+    --tm-panel-sheen: none;
+    --tm-panel-tint: none;
+    --tm-hero-gradient: radial-gradient(115% 95% at 95% 0%, rgba(79, 70, 229, 0.095) 0%, transparent 56%),
+                        radial-gradient(90% 85% at 5% 100%, rgba(13, 148, 136, 0.075) 0%, transparent 58%);
+    --tm-shadow-panel: 0 2px 10px -2px rgba(14, 27, 46, 0.065), 0 1px 2px 0 rgba(14, 27, 46, 0.04);
+    --tm-shadow-hero: 0 10px 28px -10px rgba(79, 70, 229, 0.14), 0 2px 6px -1px rgba(14, 27, 46, 0.05);
+    --tm-shadow-inset: inset 0 1px 2px rgba(14, 27, 46, 0.07);
+    --tm-shadow-dialog: 0 22px 48px -12px rgba(14, 27, 46, 0.25), 0 4px 12px rgba(14, 27, 46, 0.08);
+
+    --tm-border-subtle: rgba(14, 27, 46, 0.065);
+    --tm-border-default: rgba(14, 27, 46, 0.10);
+    --tm-border-strong: rgba(14, 27, 46, 0.17);
+    --tm-border-accent: rgba(79, 70, 229, 0.30);
+
+    --tm-text-primary: #0E1B2E;
+    --tm-text-secondary: #2E4059;
+    --tm-text-muted: #4C607D;
+    --tm-text-subtle: #586C8A;
+    --tm-text-inverse: #FFFFFF;
+
+    --tm-accent: #4F46E5;
+    --tm-accent-text: #3730A3;
+    --tm-accent-secondary: #0F766E;
+    --tm-accent-gradient: linear-gradient(90deg, #4F46E5 0%, #0D9488 100%);
+    --tm-accent-soft-bg: rgba(79, 70, 229, 0.10);
+    --tm-accent-soft-border: rgba(79, 70, 229, 0.28);
+    --tm-focus-ring: #4F46E5;
+    --tm-selection-bg: #FFFFFF;
+    --tm-selection-text: #0E1B2E;
+    --tm-selection-border: rgba(14, 27, 46, 0.10);
+    --tm-nav-active-bg: rgba(79, 70, 229, 0.11);
+    --tm-nav-active-text: #3730A3;
+
+    --tm-success: #0F766E;
+    --tm-success-text: #115E59;
+    --tm-success-soft-bg: rgba(15, 118, 110, 0.10);
+    --tm-success-soft-border: rgba(15, 118, 110, 0.26);
+
+    --tm-warning: #B45309;
+    --tm-warning-text: #92400E;
+    --tm-warning-soft-bg: rgba(180, 83, 9, 0.10);
+    --tm-warning-soft-border: rgba(180, 83, 9, 0.28);
+
+    --tm-danger: #BE123C;
+    --tm-danger-text: #9F1239;
+    --tm-danger-soft-bg: rgba(190, 18, 60, 0.095);
+    --tm-danger-soft-border: rgba(190, 18, 60, 0.26);
+
+    --tm-info: #0369A1;
+    --tm-info-text: #075985;
+    --tm-info-soft-bg: rgba(3, 105, 161, 0.10);
+    --tm-info-soft-border: rgba(3, 105, 161, 0.26);
+
+    --tm-violet: #6D28D9;
+    --tm-violet-text: #5B21B6;
+    --tm-violet-soft-bg: rgba(109, 40, 217, 0.10);
+    --tm-violet-soft-border: rgba(109, 40, 217, 0.26);
+
+    --tm-chart-grid: rgba(14, 27, 46, 0.095);
+    --tm-chart-axis: #4C607D;
+    --tm-chart-primary: #4F46E5;
+    --tm-chart-secondary: #0D9488;
+    --tm-chart-input: #4F46E5;
+    --tm-chart-output: #7C3AED;
+    --tm-chart-cache-read: #0D9488;
+    --tm-chart-cache-write: #D97706;
+    --tm-chart-cost: #0F766E;
+    --tm-chart-bar-idle-start: rgba(79, 70, 229, 0.20);
+    --tm-chart-bar-idle-end: rgba(79, 70, 229, 0.48);
+    --tm-chart-bar-active-start: #4338CA;
+    --tm-chart-bar-active-end: #6366F1;
+    --tm-chart-tooltip-bg: #FFFFFF;
+    --tm-chart-tooltip-border: rgba(79, 70, 229, 0.28);
+
+    --tm-scrollbar-thumb: rgba(14, 27, 46, 0.22);
   }
 
   * {
@@ -24,11 +682,17 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Zero-FOUC startup: let already-themed native WebView canvas show before main.tsx sets data-theme */
+  html:not([data-theme]),
+  html:not([data-theme]) body {
+    background-color: transparent;
+  }
+
   body {
     margin: 0;
     font-family: var(--font-sans);
-    background-color: #090C10;
-    color: #F8FAFC;
+    background-color: var(--tm-bg-canvas);
+    color: var(--tm-text-primary);
     overflow-x: clip;
     user-select: none;
     -webkit-font-smoothing: antialiased;
@@ -37,6 +701,12 @@
 
   input, select, button, textarea {
     font-family: inherit;
+  }
+
+  /* Hide native Chromium search cancel button so custom SearchField clear button never duplicates */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   /* The native parent sizes the whole WebView inside the safe area, including
@@ -54,7 +724,7 @@
   select:focus-visible,
   textarea:focus-visible,
   summary:focus-visible {
-    outline: 2px solid #38bdf8;
+    outline: 2px solid var(--tm-focus-ring);
     outline-offset: 2px;
   }
 
@@ -76,7 +746,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--tm-scrollbar-thumb);
     border-radius: 9999px;
   }
 }
@@ -98,63 +768,69 @@
     height: 0;
   }
 
-  /* Precision Telemetry Dark Surfaces (no backdrop-filter on scrolling cards) */
+  /* Scoped smooth transition during user-initiated theme changes */
+  .tm-theme-transitioning body,
+  .tm-theme-transitioning .glass-panel,
+  .tm-theme-transitioning .glass-panel-interactive,
+  .tm-theme-transitioning .glass-hero,
+  .tm-theme-transitioning .glass-inset,
+  .tm-theme-transitioning .glass-pill-bar,
+  .tm-theme-transitioning .tm-chrome-bar,
+  .tm-theme-transitioning .tm-dialog {
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+
+  /* Precision Telemetry Surfaces (no backdrop-filter on scrolling cards) */
   .glass-panel {
     background-color: var(--tm-bg-surface);
-    background-image:
-      radial-gradient(110% 90% at 100% 0%, rgba(56, 189, 248, 0.055) 0%, rgba(56, 189, 248, 0) 58%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.032) 0%, rgba(0, 0, 0, 0.14) 100%);
+    background-image: var(--tm-panel-tint), var(--tm-panel-sheen);
     border: 1px solid var(--tm-border-default);
-    box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.075);
+    box-shadow: var(--tm-shadow-panel);
   }
 
   .glass-panel-interactive {
     background-color: var(--tm-bg-surface);
-    background-image:
-      radial-gradient(110% 90% at 100% 0%, rgba(56, 189, 248, 0.065) 0%, rgba(56, 189, 248, 0) 58%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.036) 0%, rgba(0, 0, 0, 0.14) 100%);
+    background-image: var(--tm-panel-tint), var(--tm-panel-sheen);
     border: 1px solid var(--tm-border-default);
-    box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    box-shadow: var(--tm-shadow-panel);
     transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 120ms ease;
   }
 
   @media (hover: hover) {
     .glass-panel-interactive:hover {
-      border-color: rgba(56, 189, 248, 0.28);
+      border-color: var(--tm-border-accent);
       background-color: var(--tm-bg-surface-elevated);
     }
   }
 
   .glass-panel-interactive:active {
-    border-color: rgba(56, 189, 248, 0.36);
+    border-color: var(--tm-border-accent);
     background-color: var(--tm-bg-surface-elevated);
     transform: scale(0.99);
   }
 
   .glass-hero {
-    background-color: #101925;
-    background-image:
-      radial-gradient(120% 100% at 92% 0%, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0) 60%),
-      radial-gradient(95% 90% at 8% 100%, rgba(52, 211, 153, 0.14) 0%, rgba(52, 211, 153, 0) 64%),
-      linear-gradient(165deg, rgba(255, 255, 255, 0.045) 0%, rgba(0, 0, 0, 0.20) 100%);
-    border: 1px solid rgba(56, 189, 248, 0.30);
-    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.64), inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+    background-color: var(--tm-bg-hero);
+    background-image: var(--tm-hero-gradient);
+    border: 1px solid var(--tm-border-accent);
+    box-shadow: var(--tm-shadow-hero);
   }
 
   .glass-inset {
     background-color: var(--tm-bg-inset);
     border: 1px solid var(--tm-border-subtle);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--tm-shadow-inset);
   }
 
-  /* Floating/sticky chrome only: unprefixed backdrop-filter for Chromium WebView */
+  /* Pill controls inside chrome bars must NOT apply a second backdrop-filter
+     (avoids Chromium WebView nested backdrop-filter compositing bugs & GPU cost). */
   .glass-pill-bar {
-    background-color: rgba(14, 21, 31, 0.86);
-    backdrop-filter: blur(16px) saturate(160%);
+    background-color: var(--tm-bg-pill);
     border: 1px solid var(--tm-border-default);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+    box-shadow: var(--tm-shadow-panel);
   }
 
+  /* Sticky/fixed chrome only: unprefixed backdrop-filter for Chromium WebView */
   .tm-chrome-bar {
     background-color: var(--tm-bg-chrome);
     backdrop-filter: blur(16px) saturate(160%);
@@ -162,21 +838,48 @@
 
   .glass-select {
     background-color: var(--tm-bg-dialog);
-    color: #f1f5f9;
+    color: var(--tm-text-primary);
     border: 1px solid var(--tm-border-default);
     border-radius: 0.75rem;
   }
 
-  /* Unified dialog frame; literal ::backdrop values avoid Chromium 111-121 var() inheritance bug */
+  /* Unified dialog frame */
   .tm-dialog {
     background-color: var(--tm-bg-dialog);
-    color: #f1f5f9;
+    color: var(--tm-text-primary);
     border: 1px solid var(--tm-border-strong);
-    box-shadow: 0 24px 56px -12px rgba(0, 0, 0, 0.78);
+    box-shadow: var(--tm-shadow-dialog);
   }
 
-  .tm-dialog::backdrop {
+  /* Literal ::backdrop values (Chromium 111-121 var() inheritance workaround) */
+  .tm-dialog::backdrop,
+  :root[data-theme="obsidian"] .tm-dialog::backdrop {
     background: rgba(3, 6, 11, 0.78);
+    backdrop-filter: blur(4px);
+  }
+
+  :root[data-theme="daylight"] .tm-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(4px);
+  }
+
+  :root[data-theme="amber"] .tm-dialog::backdrop {
+    background: rgba(7, 5, 3, 0.80);
+    backdrop-filter: blur(4px);
+  }
+
+  :root[data-theme="emerald"] .tm-dialog::backdrop {
+    background: rgba(2, 8, 6, 0.80);
+    backdrop-filter: blur(4px);
+  }
+
+  :root[data-theme="nebula"] .tm-dialog::backdrop {
+    background: rgba(5, 5, 14, 0.80);
+    backdrop-filter: blur(4px);
+  }
+
+  :root[data-theme="frost"] .tm-dialog::backdrop {
+    background: rgba(14, 27, 46, 0.44);
     backdrop-filter: blur(4px);
   }
 
@@ -186,6 +889,37 @@
   .tm-dialog[open] {
     animation: sheet-rise 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  /* Polarity-aware client / category text tones (WCAG AA+ on both dark & light) */
+  .tm-tone-sky { color: #7DD3FC; }
+  .tm-tone-emerald { color: #6EE7B7; }
+  .tm-tone-amber { color: #FCD34D; }
+  .tm-tone-rose { color: #FDA4AF; }
+  .tm-tone-violet { color: #C4B5FD; }
+  .tm-tone-indigo { color: #A5B4FC; }
+  .tm-tone-cyan { color: #67E8F9; }
+  .tm-tone-orange { color: #FDBA74; }
+  .tm-tone-teal { color: #5EEAD4; }
+  .tm-tone-fuchsia { color: #F0ABFC; }
+  .tm-tone-blue { color: #93C5FD; }
+  .tm-tone-lime { color: #BEF264; }
+  .tm-tone-pink { color: #F9A8D4; }
+  .tm-tone-slate { color: #CBD5E1; }
+
+  :root[data-color-mode="light"] .tm-tone-sky { color: #0369A1; }
+  :root[data-color-mode="light"] .tm-tone-emerald { color: #047857; }
+  :root[data-color-mode="light"] .tm-tone-amber { color: #B45309; }
+  :root[data-color-mode="light"] .tm-tone-rose { color: #BE123C; }
+  :root[data-color-mode="light"] .tm-tone-violet { color: #6D28D9; }
+  :root[data-color-mode="light"] .tm-tone-indigo { color: #4338CA; }
+  :root[data-color-mode="light"] .tm-tone-cyan { color: #0E7490; }
+  :root[data-color-mode="light"] .tm-tone-orange { color: #C2410C; }
+  :root[data-color-mode="light"] .tm-tone-teal { color: #0F766E; }
+  :root[data-color-mode="light"] .tm-tone-fuchsia { color: #A21CAF; }
+  :root[data-color-mode="light"] .tm-tone-blue { color: #1D4ED8; }
+  :root[data-color-mode="light"] .tm-tone-lime { color: #4D7C0F; }
+  :root[data-color-mode="light"] .tm-tone-pink { color: #BE185D; }
+  :root[data-color-mode="light"] .tm-tone-slate { color: #334155; }
 }
 
 @keyframes sheet-rise {

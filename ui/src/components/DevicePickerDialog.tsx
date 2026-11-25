@@ -32,21 +32,31 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
   onClose,
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
+    if (open && !el.open && el.isConnected) {
+      el.showModal();
+      // Move initial focus to sheet container so mobile showModal() does not highlight the X button.
+      sheetRef.current?.focus({ preventScroll: true });
+    }
     if (!open && el.open) el.close();
     if (!open) setSearch('');
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const handleBack = () => onClose();
     window.addEventListener('tm-close-device-picker', handleBack);
-    return () => window.removeEventListener('tm-close-device-picker', handleBack);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('tm-close-device-picker', handleBack);
+    };
   }, [open, onClose]);
 
   const devices = stats?.devices || [];
@@ -117,25 +127,25 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
       onClick={(event) => {
         if (event.target === dialogRef.current) onClose();
       }}
-      className="tm-dialog device-picker-sheet mt-auto mb-0 mx-auto w-full max-w-[460px] sm:my-auto sm:w-[calc(100%_-_2rem)] sm:max-w-[420px] max-h-[82dvh] rounded-t-3xl sm:rounded-3xl p-0 overflow-hidden"
+      className="tm-dialog device-picker-sheet mt-auto mb-0 mx-auto w-full max-w-[460px] sm:my-auto sm:w-[calc(100%_-_2rem)] sm:max-w-[420px] max-h-[82dvh] rounded-t-3xl sm:rounded-3xl p-0 overflow-hidden overscroll-contain"
     >
-      <div className="flex flex-col max-h-[82dvh]">
+      <div ref={sheetRef} tabIndex={-1} className="flex flex-col max-h-[82dvh] focus:outline-none">
         {/* Mobile bottom-sheet grabber */}
         <div
           aria-hidden="true"
-          className="w-9 h-1 rounded-full bg-white/20 mx-auto mt-2.5 sm:hidden shrink-0"
+          className="w-9 h-1 rounded-full bg-[var(--tm-border-strong)] mx-auto mt-2.5 sm:hidden shrink-0"
         />
 
         {/* Header */}
-        <div className="px-5 pt-3.5 pb-3 border-b border-white/10 flex items-start justify-between gap-3 shrink-0">
+        <div className="px-5 pt-3.5 pb-3 border-b border-[var(--tm-border-default)] flex items-start justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Laptop className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
-              <h2 id="device-picker-title" className="text-base font-bold text-white">
+              <Laptop className="w-4 h-4 text-[var(--tm-accent-text)] shrink-0" aria-hidden="true" />
+              <h2 id="device-picker-title" className="text-base font-bold text-[var(--tm-text-primary)]">
                 选择统计设备
               </h2>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
+            <p className="text-xs text-[var(--tm-text-muted)] mt-0.5 tabular-nums">
               共 {devices.length} 台设备 · {activeCount} 台近期上报
             </p>
           </div>
@@ -143,7 +153,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
             type="button"
             aria-label="关闭设备选择"
             onClick={onClose}
-            className="min-h-[44px] min-w-[44px] -mr-2 -mt-1.5 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] active:scale-95 transition-all shrink-0"
+            className="min-h-[44px] min-w-[44px] -mr-2 -mt-1.5 rounded-full flex items-center justify-center text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)] hover:bg-[var(--tm-bg-control-hover)] active:scale-95 transition-all shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -172,7 +182,7 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                 <button
                   type="button"
                   onClick={() => choose('')}
-                  className="min-h-[36px] px-3 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/35 text-xs font-semibold text-amber-100 active:scale-[0.97] transition-all shrink-0 whitespace-nowrap"
+                  className="min-h-[40px] px-3 rounded-xl bg-[var(--tm-warning-soft-bg)] border border-[var(--tm-warning-soft-border)] text-xs font-semibold text-[var(--tm-warning-text)] active:scale-[0.97] transition-all shrink-0 whitespace-nowrap"
                 >
                   切回全部
                 </button>
@@ -193,35 +203,35 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
               onClick={() => choose('')}
               className={`w-full text-left rounded-2xl p-3.5 border transition-all active:scale-[0.99] ${
                 selectedDeviceId === ''
-                  ? 'bg-sky-500/12 border-sky-400/45 shadow-[0_0_20px_rgba(56,189,248,0.12)]'
-                  : 'bg-white/[0.025] hover:bg-white/[0.055] border-white/[0.08]'
+                  ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)]'
+                  : 'bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border-[var(--tm-border-subtle)]'
               }`}
             >
               <div className="flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] flex items-center justify-center text-[var(--tm-accent-text)] shrink-0">
                     <Server className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white flex items-center gap-2 flex-wrap">
+                    <div className="text-sm font-semibold text-[var(--tm-text-primary)] flex items-center gap-2 flex-wrap">
                       <span>全部设备</span>
-                      <span className="px-2 py-0.5 rounded-full bg-white/[0.07] text-[11px] tabular-nums text-slate-300">
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] text-[11px] tabular-nums text-[var(--tm-text-secondary)]">
                         {devices.length} 台汇总
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                    <p className="text-[11.5px] text-[var(--tm-text-muted)] mt-0.5 tabular-nums">
                       {page === 'limits'
                         ? fleetSummary
                           ? `共 ${fleetSummary.providersCount} 个账户 · ${fleetSummary.collectedLimits} 项有采集`
                           : '汇总所有来源设备额度'
                         : fleetSummary?.periodData
-                        ? `${PERIOD_LABELS[period]} ${MonitorModel.compact(fleetSummary.periodData.totalTokens)} · ${MonitorModel.money(fleetSummary.periodData.costUsd)}`
-                        : `${PERIOD_LABELS[period]}暂无汇总数据`}
+                          ? `${PERIOD_LABELS[period]} ${MonitorModel.compact(fleetSummary.periodData.totalTokens)} · ${MonitorModel.money(fleetSummary.periodData.costUsd)}`
+                          : `${PERIOD_LABELS[period]}暂无汇总数据`}
                     </p>
                   </div>
                 </div>
                 {selectedDeviceId === '' && (
-                  <span className="w-6 h-6 rounded-full bg-sky-400/20 border border-sky-400/40 flex items-center justify-center text-sky-300 shrink-0">
+                  <span className="w-6 h-6 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] flex items-center justify-center text-[var(--tm-accent-text)] shrink-0">
                     <Check className="w-3.5 h-3.5" />
                   </span>
                 )}
@@ -258,22 +268,22 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                       onClick={() => choose(dev.deviceId)}
                       className={`w-full text-left rounded-2xl p-3.5 border transition-all active:scale-[0.99] ${
                         isSelected
-                          ? 'bg-sky-500/12 border-sky-400/45 shadow-[0_0_20px_rgba(56,189,248,0.12)]'
-                          : 'bg-white/[0.025] hover:bg-white/[0.055] border-white/[0.08]'
+                          ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)]'
+                          : 'bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border-[var(--tm-border-subtle)]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sky-300 shrink-0 mt-0.5">
+                          <div className="w-9 h-9 rounded-xl bg-[var(--tm-bg-control)] border border-[var(--tm-border-subtle)] flex items-center justify-center text-[var(--tm-accent-text)] shrink-0 mt-0.5">
                             <DeviceIcon kind={dev.deviceKind} className="w-4 h-4" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-sm font-semibold text-slate-100 truncate">
+                              <span className="text-sm font-semibold text-[var(--tm-text-primary)] truncate">
                                 {dev.hostname || dev.deviceId}
                               </span>
                             </div>
-                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            <p className="text-[11.5px] text-[var(--tm-text-muted)] truncate mt-0.5">
                               <span className="font-mono-tabular">{dev.deviceId}</span>
                               {meta ? ` · ${meta}` : ''}
                             </p>
@@ -284,56 +294,56 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${
                               dev.stale
-                                ? 'bg-amber-500/12 border-amber-400/25 text-amber-300'
-                                : 'bg-emerald-500/12 border-emerald-400/25 text-emerald-300'
+                                ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]'
+                                : 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
                             }`}
                           >
                             <i
                               aria-hidden="true"
                               className={`w-1.5 h-1.5 rounded-full ${
-                                dev.stale ? 'bg-amber-400' : 'bg-emerald-400'
+                                dev.stale ? 'bg-[var(--tm-warning)]' : 'bg-[var(--tm-success)]'
                               }`}
                             />
                             <span>{dev.stale ? '过期' : '在线'}</span>
                           </span>
                           {isSelected && (
-                            <span className="w-5 h-5 rounded-full bg-sky-400/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
+                            <span className="w-5 h-5 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] flex items-center justify-center text-[var(--tm-accent-text)]">
                               <Check className="w-3 h-3" />
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2 text-[11px] tabular-nums">
-                        <span className="text-slate-300">
+                      <div className="mt-2.5 pt-2 border-t border-[var(--tm-border-subtle)] flex items-center justify-between gap-2 text-[11.5px] tabular-nums">
+                        <span className="text-[var(--tm-text-secondary)]">
                           {page === 'limits' ? (
                             providersCount > 0 ? (
                               <>
                                 额度账户 {providersCount}
-                                <span className="text-slate-400"> · 已采集 {collectedLimits}</span>
+                                <span className="text-[var(--tm-text-muted)]"> · 已采集 {collectedLimits}</span>
                               </>
                             ) : (
-                              <span className="text-slate-400">暂无额度上报</span>
+                              <span className="text-[var(--tm-text-muted)]">暂无额度上报</span>
                             )
                           ) : tokens !== null ? (
                             <>
                               {PERIOD_LABELS[period]}{' '}
-                              <strong className="font-mono-tabular text-white">
+                              <strong className="font-mono-tabular text-[var(--tm-text-primary)]">
                                 {MonitorModel.compact(tokens)}
                               </strong>
                               {cost !== null && (
-                                <span className="font-mono-tabular text-emerald-300 ml-2">
+                                <span className="font-mono-tabular text-[var(--tm-success-text)] ml-2">
                                   {MonitorModel.money(cost)}
                                 </span>
                               )}
                             </>
                           ) : (
-                            <span className="text-slate-400">
+                            <span className="text-[var(--tm-text-muted)]">
                               {expired ? '周期已结束' : '暂无读数'}
                             </span>
                           )}
                         </span>
-                        <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0">
+                        <span className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] shrink-0">
                           {formatShortTime(dev.updatedAt)}
                         </span>
                       </div>
@@ -343,21 +353,21 @@ export const DevicePickerDialog: React.FC<DevicePickerDialogProps> = ({
               )}
             </div>
           ) : (
-            <p className="text-center text-xs text-slate-400 py-5">
+            <p className="text-center text-xs text-[var(--tm-text-muted)] py-5">
               {search.trim() ? '没有匹配的设备' : '暂无已上报的采集设备'}
             </p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-white/10 bg-black/20 shrink-0">
+        <div className="px-4 py-3 border-t border-[var(--tm-border-default)] bg-[var(--tm-bg-inset)] shrink-0">
           <button
             type="button"
             onClick={() => {
               onClose();
               onOpenDevicesPage();
             }}
-            className="w-full min-h-[44px] rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-xs font-semibold text-sky-300 flex items-center justify-center gap-1.5 active:scale-[0.985] transition-all"
+            className="w-full min-h-[44px] rounded-2xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-xs font-semibold text-[var(--tm-accent-text)] flex items-center justify-center gap-1.5 active:scale-[0.985] transition-all"
           >
             <span>查看全部设备详细状态</span>
             <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />

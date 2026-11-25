@@ -340,3 +340,57 @@ test('entering reports zone across granularities clears stale report detail and 
   assert.match(zoneMatch[0], /markdown:\s*sameTarget\s*\?\s*previous\.reports\.markdown\s*:\s*''/);
   assert.match(zoneMatch[0], /detailError:\s*''/);
 });
+
+test('sanitizeUsageReport deduplicates repeated projects, clients, models, devices, and timeline entries', async () => {
+  const { sanitizeUsageReport } = await reportsModule;
+
+  const report = sanitizeUsageReport({
+    granularity: 'daily',
+    period: { key: '2026-11-25' },
+    projects: [
+      {
+        key: 'proj-a',
+        label: 'Project A',
+        tokens: 1000,
+        clients: [
+          { client: 'codex', tokens: 600, sharePct: 60 },
+          { client: 'codex', tokens: 999, sharePct: 99 },
+          { client: '', tokens: 100, sharePct: 10 },
+        ],
+        models: [
+          { model: 'gpt-5', tokens: 600, sharePct: 60 },
+          { model: 'gpt-5', tokens: 100, sharePct: 10 },
+        ],
+      },
+      { key: 'proj-a', label: 'Duplicate A', tokens: 500 },
+      { key: '', label: '', tokens: 500 },
+    ],
+    clients: [
+      { client: 'codex', tokens: 1000 },
+      { client: 'codex', tokens: 2000 },
+      { client: '', tokens: 100 },
+    ],
+    models: [
+      { model: 'gpt-5', tokens: 1000 },
+      { model: 'gpt-5', tokens: 2000 },
+    ],
+    devices: [
+      { deviceId: 'dev-1', hostname: 'Mac', tokens: 1000 },
+      { deviceId: 'dev-1', hostname: 'Mac Dup', tokens: 2000 },
+    ],
+    timeline: [
+      { date: '2026-11-25', tokens: 1000 },
+      { date: '2026-11-25', tokens: 2000 },
+    ],
+  });
+
+  assert.ok(report);
+  assert.equal(report.projects.length, 1);
+  assert.equal(report.projects[0].label, 'Project A');
+  assert.equal(report.projects[0].clients.length, 1);
+  assert.equal(report.projects[0].models.length, 1);
+  assert.equal(report.clients.length, 1);
+  assert.equal(report.models.length, 1);
+  assert.equal(report.devices.length, 1);
+  assert.equal(report.timeline.length, 1);
+});

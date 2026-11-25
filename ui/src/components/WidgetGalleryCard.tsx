@@ -23,6 +23,7 @@ interface WidgetGalleryCardProps {
   separateQoderClients?: boolean;
 }
 
+/* Native Android launcher RemoteViews always render with the fixed dark widget palette. */
 const WIDGET_INSET_CLASS = 'rounded-[12px] bg-[#0A1018] border border-[#1D2B3D]';
 
 const WidgetFrame: React.FC<{
@@ -159,10 +160,13 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
   }, [activeMeta, size]);
 
   const preview = useMemo(() => {
-    const hasData = Boolean(stats?.periods?.today) && fetchedAt > 0;
     const today = stats?.periods?.today || null;
     const month = stats?.periods?.month || null;
     const allTime = stats?.periods?.allTime || null;
+    const providers = stats?.limits?.providers || [];
+    const hasData =
+      fetchedAt > 0 &&
+      Boolean(today || month || allTime || providers.length > 0);
     const devices = stats?.devices || [];
     const activeDevices = devices.filter((d) => !d.stale).length;
 
@@ -212,7 +216,6 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
         ? clientRows.map((r) => `${clientName(r.id)} ${MonitorModel.compact(r.tokens)}`).join(' · ')
         : '—';
 
-    const providers = stats?.limits?.providers || [];
     let healthyAccounts = 0;
     let alertAccounts = 0;
     const quotaRows: Array<{ label: string; pct: number; warn: boolean }> = [];
@@ -224,7 +227,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
         let high = false;
         const pLabel =
           MonitorModel.limitAccount(prov, stats, '').productLabel || providerName(prov.provider);
-        for (const win of prov.windows || []) {
+        for (const win of MonitorModel.limitWindows(prov)) {
           const q = MonitorModel.quota(prov, win);
           if (q.percent === null) continue;
           const usedPct = Math.round(q.remaining ? 100 - q.percent : q.percent);
@@ -302,15 +305,16 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
   return (
     <section id="widget-gallery" className="glass-panel rounded-3xl p-4 sm:p-5 space-y-3.5">
       <SectionHeader
+        headingLevel="h2"
         icon={
-          <span className="w-9 h-9 rounded-xl bg-sky-500/12 border border-sky-400/25 flex items-center justify-center text-sky-300">
+          <span className="w-9 h-9 rounded-xl bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] flex items-center justify-center text-[var(--tm-accent-text)]">
             <LayoutGrid className="w-4 h-4" />
           </span>
         }
         title="桌面微件卡片"
-        subtitle="4 种卡片主题 · 支持 2×1 至 4×3 自由缩放"
+        subtitle="4 种卡片样式 · 支持 2×1 至 4×3 自由缩放"
         action={
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-400/25 text-[11px] font-semibold text-sky-300 shrink-0 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--tm-accent-soft-bg)] border border-[var(--tm-accent-soft-border)] text-[11px] font-semibold text-[var(--tm-accent-text)] shrink-0 whitespace-nowrap">
             <Maximize2 className="w-3 h-3" aria-hidden="true" />
             <span>自适应</span>
           </span>
@@ -335,12 +339,12 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
               }}
               className={`min-h-[50px] px-3 py-2 rounded-2xl border text-left transition-all active:scale-[0.98] flex flex-col justify-center gap-0.5 min-w-0 ${
                 active
-                  ? 'bg-sky-500/14 border-sky-400/40 text-white shadow-[0_0_16px_rgba(56,189,248,0.12)]'
-                  : 'glass-inset text-slate-200 hover:border-white/15'
+                  ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-text-primary)]'
+                  : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
               }`}
             >
               <span className="text-xs font-semibold truncate w-full">{item.title}</span>
-              <span className="text-[11px] font-mono-tabular text-sky-300 truncate w-full">
+              <span className="text-[11px] font-mono-tabular text-[var(--tm-accent-text)] truncate w-full">
                 {item.badge}
               </span>
             </button>
@@ -349,7 +353,7 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
       </div>
 
       <div className="space-y-2.5">
-        <p className="text-xs text-slate-400 leading-relaxed">{activeMeta.desc}</p>
+        <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed">{activeMeta.desc}</p>
         <SegmentedControl<WidgetSizeId>
           ariaLabel="切换微件尺寸"
           size="md"
@@ -364,328 +368,334 @@ export const WidgetGalleryCard: React.FC<WidgetGalleryCardProps> = ({
         />
       </div>
 
-      {/* Simulated Launcher Canvas — 100% synced with Android RemoteViews palette & layouts */}
-      <div className="rounded-2xl bg-[#06090D] border border-white/[0.06] p-3.5 flex justify-center">
-        {kind === 'compact' && size === '2x1' && (
-          <WidgetFrame compactBar className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">
-                {preview.hasData ? `${preview.dateTag} · 今日` : '今日用量'}
+      {/* Simulated Launcher Canvas — 100% synced with Android RemoteViews dark palette & layouts */}
+      <div className="rounded-2xl bg-[#090E16] border border-[var(--tm-border-default)] p-3.5 space-y-2.5">
+        <div className="flex justify-center">
+          {kind === 'compact' && size === '2x1' && (
+            <WidgetFrame compactBar className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">
+                  {preview.hasData ? `${preview.dateTag} · 今日` : '今日用量'}
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-lg font-bold font-mono-tabular text-[#F8FAFC] leading-none shrink-0">
+                    {preview.todayTokens}
+                  </span>
+                  <span
+                    className={`text-[11px] font-medium tabular-nums truncate ${compact2x1CostClass}`}
+                  >
+                    {compact2x1CostText}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-lg font-bold font-mono-tabular text-[#F8FAFC] leading-none shrink-0">
+              <WidgetRefreshBadge variant="icon" size="md" />
+            </WidgetFrame>
+          )}
+
+          {(kind === 'compact' || kind === 'today' || kind === 'periods') && size === '2x2' && (
+            <WidgetFrame narrow className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-[#BAE6FD] truncate tabular-nums">
+                  {preview.hasData ? `${preview.dateTag} · 今日` : '今日用量'}
+                </span>
+                <WidgetRefreshBadge variant="icon" size="sm" />
+              </div>
+              <div className="flex items-baseline gap-1.5 py-1">
+                <span className="text-2xl font-bold font-mono-tabular text-[#F8FAFC] leading-none">
                   {preview.todayTokens}
                 </span>
-                <span
-                  className={`text-[11px] font-medium tabular-nums truncate ${compact2x1CostClass}`}
-                >
-                  {compact2x1CostText}
-                </span>
+                <span className="text-[11px] text-[#94A3B8]">tokens</span>
               </div>
-            </div>
-            <WidgetRefreshBadge variant="icon" size="md" />
-          </WidgetFrame>
-        )}
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#94A3B8] truncate">
+                    {preview.partialCost ? '费用小计' : '今日费用'}
+                  </div>
+                  <div className="text-[#6EE7B7] font-semibold font-mono-tabular mt-0.5 truncate">
+                    {preview.todayCost}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#94A3B8] truncate">本月</div>
+                  <div className="text-[#7DD3FC] font-semibold font-mono-tabular mt-0.5 truncate">
+                    {preview.monthTokens}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[11px] text-[#94A3B8] truncate pt-0.5 tabular-nums">
+                {preview.footer}
+              </div>
+            </WidgetFrame>
+          )}
 
-        {(kind === 'compact' || kind === 'today' || kind === 'periods') && size === '2x2' && (
-          <WidgetFrame narrow className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold text-[#BAE6FD] truncate tabular-nums">
-                {preview.hasData ? `${preview.dateTag} · 今日` : '今日用量'}
-              </span>
-              <WidgetRefreshBadge variant="icon" size="sm" />
-            </div>
-            <div className="flex items-baseline gap-1.5 py-1">
-              <span className="text-2xl font-bold font-mono-tabular text-[#F8FAFC] leading-none">
-                {preview.todayTokens}
-              </span>
-              <span className="text-[11px] text-[#94A3B8]">tokens</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="min-w-0">
-                <div className="text-[11px] text-[#94A3B8] truncate">
-                  {preview.partialCost ? '费用小计' : '今日费用'}
-                </div>
-                <div className="text-[#6EE7B7] font-semibold font-mono-tabular mt-0.5 truncate">
-                  {preview.todayCost}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] text-[#94A3B8] truncate">本月</div>
-                <div className="text-[#7DD3FC] font-semibold font-mono-tabular mt-0.5 truncate">
-                  {preview.monthTokens}
-                </div>
-              </div>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] truncate pt-0.5 tabular-nums">
-              {preview.footer}
-            </div>
-          </WidgetFrame>
-        )}
-
-        {(kind === 'today' || kind === 'compact') && (size === '4x2' || size === '4x3') && (
-          <WidgetFrame className="space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold tracking-widest text-[#BAE6FD] truncate">
-                TOKEN MONITOR
-              </span>
-              <WidgetRefreshBadge variant="pill" />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-[#94A3B8] tabular-nums">
-              <span>{preview.hasData ? `${preview.dateTag} · 今日用量` : '今日用量'}</span>
-              {size === '4x3' && preview.inStr !== '—' && (
-                <span>
-                  输入 {preview.inStr} · 输出 {preview.outStr}
+          {(kind === 'today' || kind === 'compact') && (size === '4x2' || size === '4x3') && (
+            <WidgetFrame className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold tracking-widest text-[#BAE6FD] truncate">
+                  TOKEN MONITOR
                 </span>
+                <WidgetRefreshBadge variant="pill" />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-[#94A3B8] tabular-nums">
+                <span>{preview.hasData ? `${preview.dateTag} · 今日用量` : '今日用量'}</span>
+                {size === '4x3' && preview.inStr !== '—' && (
+                  <span>
+                    输入 {preview.inStr} · 输出 {preview.outStr}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2 py-0.5">
+                <span className="text-3xl font-bold font-mono-tabular text-[#F8FAFC] leading-none">
+                  {preview.todayTokens}
+                </span>
+                <span className="text-[11px] text-[#94A3B8]">tokens</span>
+              </div>
+              {size === '4x3' && preview.cachePct !== null && (
+                <WidgetProgressBar percent={preview.cachePct} />
               )}
-            </div>
-            <div className="flex items-baseline gap-2 py-0.5">
-              <span className="text-3xl font-bold font-mono-tabular text-[#F8FAFC] leading-none">
-                {preview.todayTokens}
-              </span>
-              <span className="text-[11px] text-[#94A3B8]">tokens</span>
-            </div>
-            {size === '4x3' && preview.cachePct !== null && (
-              <WidgetProgressBar percent={preview.cachePct} />
-            )}
-            <div className={`grid grid-cols-3 gap-2 px-2.5 py-2 ${WIDGET_INSET_CLASS}`}>
-              <div className="min-w-0">
-                <div className="text-[11px] text-[#94A3B8] truncate">
-                  {preview.partialCost ? '费用小计' : '费用 · USD'}
-                </div>
-                <div className="text-xs font-semibold font-mono-tabular text-[#F1F5F9] mt-0.5 truncate">
-                  {preview.todayCost}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] text-[#94A3B8] truncate">缓存占比</div>
-                <div className="text-xs font-semibold font-mono-tabular text-[#6EE7B7] mt-0.5 truncate">
-                  {preview.cacheStr}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] text-[#94A3B8] truncate">近期设备</div>
-                <div className="text-xs font-semibold font-mono-tabular text-[#7DD3FC] mt-0.5 truncate">
-                  {preview.devicesStr}
-                </div>
-              </div>
-            </div>
-            {size === '4x3' && (
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-[#94A3B8] shrink-0">主要工具</span>
-                <span className="text-[#E2E8F0] tabular-nums truncate">
-                  {preview.topToolsStr}
-                </span>
-              </div>
-            )}
-            <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">{preview.footer}</div>
-          </WidgetFrame>
-        )}
-
-        {kind === 'periods' && (size === '4x2' || size === '4x3') && (
-          <WidgetFrame className="space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold tracking-wider text-[#BAE6FD] flex items-center gap-1.5 min-w-0 truncate">
-                <Layers className="w-3.5 h-3.5 text-[#7DD3FC] shrink-0" aria-hidden="true" />
-                <span className="truncate">TOKEN MONITOR · 多周期</span>
-              </span>
-              <WidgetRefreshBadge variant="pill" />
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5">
-              <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
-                <div className="text-[11px] text-[#BAE6FD] truncate tabular-nums">
-                  {preview.hasData ? `今日 · ${preview.dateTag}` : '今日'}
-                </div>
-                <div className="text-base font-bold font-mono-tabular text-[#F8FAFC] mt-1 truncate">
-                  {preview.todayTokens}
-                </div>
-                <div className="text-[11px] font-mono-tabular text-[#6EE7B7] mt-0.5 truncate">
-                  {preview.todayCost}
-                </div>
-              </div>
-              <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
-                <div className="text-[11px] text-[#94A3B8] truncate">本月</div>
-                <div className="text-base font-bold font-mono-tabular text-[#7DD3FC] mt-1 truncate">
-                  {preview.monthTokens}
-                </div>
-                <div className="text-[11px] font-mono-tabular text-[#CBD5E1] mt-0.5 truncate">
-                  {preview.monthCost}
-                </div>
-              </div>
-              <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
-                <div className="text-[11px] text-[#94A3B8] truncate">累计</div>
-                <div className="text-base font-bold font-mono-tabular text-[#C4B5FD] mt-1 truncate">
-                  {preview.allTokens}
-                </div>
-                <div className="text-[11px] font-mono-tabular text-[#CBD5E1] mt-0.5 truncate">
-                  {preview.allCost}
-                </div>
-              </div>
-            </div>
-
-            {size === '4x3' && (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5 text-xs">
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-[#94A3B8] truncate">
-                      {preview.sevenDayDays > 0 && preview.sevenDayDays < 7
-                        ? '7日小计'
-                        : '近 7 日总量'}
-                    </div>
-                    <div
-                      className="text-[#F1F5F9] font-semibold font-mono-tabular mt-0.5 truncate"
-                      aria-label={`近7日有${preview.sevenDayDays}天读数，缺失日期不补零：${preview.sevenDayStr}`}
-                    >
-                      {preview.sevenDayStr}
-                    </div>
+              <div className={`grid grid-cols-3 gap-2 px-2.5 py-2 ${WIDGET_INSET_CLASS}`}>
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#94A3B8] truncate">
+                    {preview.partialCost ? '费用小计' : '费用 · USD'}
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-[#94A3B8] truncate">14日峰值</div>
-                    <div className="text-[#7DD3FC] font-semibold font-mono-tabular mt-0.5 truncate">
-                      {preview.peakDayStr}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-[#94A3B8] truncate">缓存占比</div>
-                    <div className="text-[#6EE7B7] font-semibold font-mono-tabular mt-0.5 truncate">
-                      {preview.cacheStr}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-[#94A3B8] truncate">近期设备</div>
-                    <div className="text-[#BAE6FD] font-semibold font-mono-tabular mt-0.5 truncate">
-                      {preview.devicesStr}
-                    </div>
+                  <div className="text-xs font-semibold font-mono-tabular text-[#F1F5F9] mt-0.5 truncate">
+                    {preview.todayCost}
                   </div>
                 </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#94A3B8] truncate">缓存占比</div>
+                  <div className="text-xs font-semibold font-mono-tabular text-[#6EE7B7] mt-0.5 truncate">
+                    {preview.cacheStr}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#94A3B8] truncate">近期设备</div>
+                  <div className="text-xs font-semibold font-mono-tabular text-[#7DD3FC] mt-0.5 truncate">
+                    {preview.devicesStr}
+                  </div>
+                </div>
+              </div>
+              {size === '4x3' && (
                 <div className="flex items-center gap-2 text-[11px]">
                   <span className="text-[#94A3B8] shrink-0">主要工具</span>
                   <span className="text-[#E2E8F0] tabular-nums truncate">
                     {preview.topToolsStr}
                   </span>
                 </div>
-              </>
-            )}
+              )}
+              <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">{preview.footer}</div>
+            </WidgetFrame>
+          )}
 
-            <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">{preview.footer}</div>
-          </WidgetFrame>
-        )}
-
-        {kind === 'quota' && (
-          <WidgetFrame narrow={size === '2x2'} className="space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-[11px] font-bold tracking-wider text-[#BAE6FD] inline-flex items-center gap-1.5 shrink-0">
-                  <Gauge className="w-3.5 h-3.5 text-[#7DD3FC] shrink-0" aria-hidden="true" />
-                  <span>{size === '2x2' ? '额度监控' : 'TOKEN MONITOR · 额度'}</span>
+          {kind === 'periods' && (size === '4x2' || size === '4x3') && (
+            <WidgetFrame className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold tracking-wider text-[#BAE6FD] flex items-center gap-1.5 min-w-0 truncate">
+                  <Layers className="w-3.5 h-3.5 text-[#7DD3FC] shrink-0" aria-hidden="true" />
+                  <span className="truncate">TOKEN MONITOR · 多周期</span>
                 </span>
+                <WidgetRefreshBadge variant="pill" />
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
+                  <div className="text-[11px] text-[#BAE6FD] truncate tabular-nums">
+                    {preview.hasData ? `今日 · ${preview.dateTag}` : '今日'}
+                  </div>
+                  <div className="text-base font-bold font-mono-tabular text-[#F8FAFC] mt-1 truncate">
+                    {preview.todayTokens}
+                  </div>
+                  <div className="text-[11px] font-mono-tabular text-[#6EE7B7] mt-0.5 truncate">
+                    {preview.todayCost}
+                  </div>
+                </div>
+                <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
+                  <div className="text-[11px] text-[#94A3B8] truncate">本月</div>
+                  <div className="text-base font-bold font-mono-tabular text-[#7DD3FC] mt-1 truncate">
+                    {preview.monthTokens}
+                  </div>
+                  <div className="text-[11px] font-mono-tabular text-[#CBD5E1] mt-0.5 truncate">
+                    {preview.monthCost}
+                  </div>
+                </div>
+                <div className={`${WIDGET_INSET_CLASS} p-2.5 min-w-0`}>
+                  <div className="text-[11px] text-[#94A3B8] truncate">累计</div>
+                  <div className="text-base font-bold font-mono-tabular text-[#C4B5FD] mt-1 truncate">
+                    {preview.allTokens}
+                  </div>
+                  <div className="text-[11px] font-mono-tabular text-[#CBD5E1] mt-0.5 truncate">
+                    {preview.allCost}
+                  </div>
+                </div>
+              </div>
+
+              {size === '4x3' && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5 text-xs">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[#94A3B8] truncate">
+                        {preview.sevenDayDays > 0 && preview.sevenDayDays < 7
+                          ? '7日小计'
+                          : '近 7 日总量'}
+                      </div>
+                      <div
+                        className="text-[#F1F5F9] font-semibold font-mono-tabular mt-0.5 truncate"
+                        aria-label={`近7日有${preview.sevenDayDays}天读数，缺失日期不补零：${preview.sevenDayStr}`}
+                      >
+                        {preview.sevenDayStr}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[#94A3B8] truncate">14日峰值</div>
+                      <div className="text-[#7DD3FC] font-semibold font-mono-tabular mt-0.5 truncate">
+                        {preview.peakDayStr}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[#94A3B8] truncate">缓存占比</div>
+                      <div className="text-[#6EE7B7] font-semibold font-mono-tabular mt-0.5 truncate">
+                        {preview.cacheStr}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[#94A3B8] truncate">近期设备</div>
+                      <div className="text-[#BAE6FD] font-semibold font-mono-tabular mt-0.5 truncate">
+                        {preview.devicesStr}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="text-[#94A3B8] shrink-0">主要工具</span>
+                    <span className="text-[#E2E8F0] tabular-nums truncate">
+                      {preview.topToolsStr}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="text-[11px] text-[#94A3B8] truncate tabular-nums">{preview.footer}</div>
+            </WidgetFrame>
+          )}
+
+          {kind === 'quota' && (
+            <WidgetFrame narrow={size === '2x2'} className="space-y-2.5">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold tracking-wider text-[#BAE6FD] inline-flex items-center gap-1.5 min-w-0 truncate">
+                    <Gauge className="w-3.5 h-3.5 text-[#7DD3FC] shrink-0" aria-hidden="true" />
+                    <span className="truncate">{size === '2x2' ? '额度监控' : 'TOKEN MONITOR · 额度'}</span>
+                  </span>
+                  <WidgetRefreshBadge variant={size === '2x2' ? 'icon' : 'pill'} size="sm" />
+                </div>
                 {size !== '2x2' && preview.hasData && preview.totalAccounts > 0 && (
-                  <span
+                  <div
                     className={`text-[11px] tabular-nums truncate ${
                       preview.alertAccounts > 0 ? 'text-[#FBBF24]' : 'text-[#6EE7B7]'
                     }`}
                   >
                     正常 {preview.healthyAccounts}/{preview.totalAccounts}
                     {preview.alertAccounts > 0 ? ` · 关注 ${preview.alertAccounts}` : ''}
+                  </div>
+                )}
+              </div>
+
+              {size === '2x2' && (
+                <div
+                  className={`text-lg font-bold tabular-nums ${
+                    preview.hasData && preview.alertAccounts > 0 ? 'text-[#FBBF24]' : 'text-[#F8FAFC]'
+                  }`}
+                >
+                  {!preview.hasData
+                    ? '—'
+                    : preview.totalAccounts === 0
+                      ? '未配置账户'
+                      : preview.alertAccounts > 0
+                        ? `${preview.alertAccounts} 项需关注`
+                        : `${preview.healthyAccounts} 账户正常`}
+                </div>
+              )}
+
+              {!preview.hasData || preview.quotaRows.length === 0 ? (
+                <div className="text-xs text-[#94A3B8] py-2">暂无可量化的配额窗口读数</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {preview.quotaRows
+                    .slice(0, size === '2x2' ? 1 : size === '4x2' ? 2 : 3)
+                    .map((qRow, idx) => (
+                      <div
+                        key={`${qRow.label}-${idx}`}
+                        className={
+                          size === '2x2'
+                            ? 'space-y-1.5 pt-0.5'
+                            : `${WIDGET_INSET_CLASS} px-2.5 py-2 space-y-1.5`
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span
+                            className={`truncate ${
+                              size === '2x2' ? 'text-[#CBD5E1]' : 'text-[#F1F5F9]'
+                            }`}
+                          >
+                            {qRow.label}
+                          </span>
+                          <span
+                            className={`tabular-nums font-semibold shrink-0 ${
+                              qRow.warn ? 'text-[#FBBF24]' : 'text-[#7DD3FC]'
+                            }`}
+                          >
+                            {qRow.pct}% 已用
+                          </span>
+                        </div>
+                        <WidgetProgressBar percent={qRow.pct} warn={qRow.warn} />
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 text-[11px] text-[#94A3B8]">
+                <span className="truncate tabular-nums">{preview.footer}</span>
+                {size === '4x3' && (
+                  <span className="tabular-nums text-[#7DD3FC] shrink-0">
+                    设备 {preview.devicesStr}
                   </span>
                 )}
               </div>
-              <WidgetRefreshBadge variant={size === '2x2' ? 'icon' : 'pill'} size="sm" />
-            </div>
-
-            {size === '2x2' && (
-              <div
-                className={`text-lg font-bold tabular-nums ${
-                  preview.hasData && preview.alertAccounts > 0 ? 'text-[#FBBF24]' : 'text-[#F8FAFC]'
-                }`}
-              >
-                {!preview.hasData
-                  ? '—'
-                  : preview.totalAccounts === 0
-                    ? '未配置账户'
-                    : preview.alertAccounts > 0
-                      ? `${preview.alertAccounts} 项需关注`
-                      : `${preview.healthyAccounts} 账户正常`}
-              </div>
-            )}
-
-            {!preview.hasData || preview.quotaRows.length === 0 ? (
-              <div className="text-xs text-[#94A3B8] py-2">暂无可量化的配额窗口读数</div>
-            ) : (
-              <div className="space-y-1.5">
-                {preview.quotaRows
-                  .slice(0, size === '2x2' ? 1 : size === '4x2' ? 2 : 3)
-                  .map((qRow, idx) => (
-                    <div
-                      key={`${qRow.label}-${idx}`}
-                      className={
-                        size === '2x2'
-                          ? 'space-y-1.5 pt-0.5'
-                          : `${WIDGET_INSET_CLASS} px-2.5 py-2 space-y-1.5`
-                      }
-                    >
-                      <div className="flex items-center justify-between gap-2 text-[11px]">
-                        <span
-                          className={`truncate ${
-                            size === '2x2' ? 'text-[#CBD5E1]' : 'text-[#F1F5F9]'
-                          }`}
-                        >
-                          {qRow.label}
-                        </span>
-                        <span
-                          className={`tabular-nums font-semibold shrink-0 ${
-                            qRow.warn ? 'text-[#FBBF24]' : 'text-[#7DD3FC]'
-                          }`}
-                        >
-                          {qRow.pct}% 已用
-                        </span>
-                      </div>
-                      <WidgetProgressBar percent={qRow.pct} warn={qRow.warn} />
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-2 text-[11px] text-[#94A3B8]">
-              <span className="truncate tabular-nums">{preview.footer}</span>
-              {size === '4x3' && (
-                <span className="tabular-nums text-[#7DD3FC] shrink-0">
-                  设备 {preview.devicesStr}
-                </span>
-              )}
-            </div>
-          </WidgetFrame>
-        )}
+            </WidgetFrame>
+          )}
+        </div>
+        <p className="text-[11px] text-[#8B9BB4] text-center">
+          预览样式对应安卓桌面暗色微件
+        </p>
       </div>
 
-      <div className="pt-1 border-t border-white/6">
+      <div className="pt-1 border-t border-[var(--tm-border-subtle)]">
         <button
           type="button"
           onClick={() => setShowGuide((prev) => !prev)}
           aria-expanded={showGuide}
-          className="w-full min-h-[44px] flex items-center justify-between text-xs text-slate-300 hover:text-white transition-colors"
+          className="w-full min-h-[44px] flex items-center justify-between text-xs text-[var(--tm-text-secondary)] hover:text-[var(--tm-text-primary)] transition-colors"
         >
           <span className="inline-flex items-center gap-1.5">
-            <Smartphone className="w-4 h-4 text-sky-400 shrink-0" />
+            <Smartphone className="w-4 h-4 text-[var(--tm-accent-text)] shrink-0" aria-hidden="true" />
             <span>如何在手机桌面添加并调整尺寸？</span>
           </span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform duration-150 shrink-0 ${
-              showGuide ? 'rotate-180 text-sky-400' : ''
+            aria-hidden="true"
+            className={`w-4 h-4 text-[var(--tm-text-muted)] transition-transform duration-150 shrink-0 ${
+              showGuide ? 'rotate-180 text-[var(--tm-accent-text)]' : ''
             }`}
           />
         </button>
         {showGuide && (
-          <div className="text-xs text-slate-400 leading-relaxed mt-1.5 space-y-1.5">
+          <div className="text-xs text-[var(--tm-text-muted)] leading-relaxed mt-1.5 space-y-1.5">
             <p>
               1. 长按 Android 手机主屏幕空白处，轻触「微件 / 小组件」，搜索{' '}
-              <strong className="text-slate-200">Token Monitor</strong>。
+              <strong className="text-[var(--tm-text-primary)]">Token Monitor</strong>。
             </p>
             <p>
               2. 选择「紧凑速览」「今日用量」「多周期总览」或「额度监控」拖到桌面，长按卡片拖动边框即可切换小、中、大布局。
             </p>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11.5px] text-[var(--tm-text-muted)]">
               微件共用系统每 30 分钟后台调度与前台刷新，仅缓存在本机的有界日期摘要，不保存会话标题、设备名或账户邮箱。
             </p>
           </div>

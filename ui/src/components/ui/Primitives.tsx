@@ -59,18 +59,22 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
     />
     <span
       aria-hidden="true"
-      className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block shrink-0 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#090C10] ${
-        checked ? 'bg-gradient-to-r from-sky-400 to-emerald-400' : 'bg-white/15'
+      className={`w-11 h-6 rounded-full transition-colors duration-200 relative inline-block shrink-0 border peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--tm-focus-ring)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--tm-bg-surface)] ${
+        checked
+          ? '[background-image:var(--tm-accent-gradient)] border-transparent'
+          : 'bg-[var(--tm-track-bg)] border-[var(--tm-border-default)]'
       } ${disabled ? 'opacity-45' : ''}`}
     >
       <span
-        className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-0.5 left-0.5 transition-transform duration-200 ${
+        className={`w-[18px] h-[18px] rounded-full bg-white border border-black/10 shadow-sm absolute top-[2px] left-[2px] transition-transform duration-200 ${
           checked ? 'translate-x-5' : 'translate-x-0'
         }`}
       />
     </span>
     {label !== undefined && (
-      <span className="text-xs font-medium text-slate-200 whitespace-nowrap">{label}</span>
+      <span className="text-xs font-medium text-[var(--tm-text-primary)] whitespace-nowrap">
+        {label}
+      </span>
     )}
   </label>
 );
@@ -109,7 +113,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({
   <div className={`relative flex items-center ${className}`}>
     <Search
       aria-hidden="true"
-      className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none"
+      className="w-4 h-4 text-[var(--tm-text-muted)] absolute left-3.5 pointer-events-none"
     />
     <input
       {...inputProps}
@@ -120,14 +124,14 @@ export const SearchField: React.FC<SearchFieldProps> = ({
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       autoComplete="off"
-      className={`w-full min-h-[44px] pl-10 pr-11 py-2 rounded-2xl glass-inset text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-sky-400/60 transition-colors ${inputClassName}`}
+      className={`w-full min-h-[44px] pl-10 pr-11 py-2 rounded-2xl glass-inset text-sm text-[var(--tm-text-primary)] placeholder:text-[var(--tm-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-focus-ring)] focus-visible:border-[var(--tm-border-accent)] transition-colors ${inputClassName}`}
     />
     {value && (
       <button
         type="button"
         onClick={() => onChange('')}
         aria-label={clearAriaLabel}
-        className="w-11 h-11 flex items-center justify-center absolute right-0 text-slate-400 hover:text-slate-100 active:scale-95 rounded-xl transition-all"
+        className="w-11 h-11 flex items-center justify-center absolute right-0 text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)] active:scale-95 rounded-xl transition-all"
       >
         <X className="w-4 h-4" />
       </button>
@@ -189,8 +193,8 @@ export function SegmentedControl<T extends string>({
         const active = option.value === value;
         const activeClasses =
           tone === 'accent'
-            ? 'bg-sky-400/20 text-sky-100 border border-sky-400/35 shadow-sm'
-            : 'bg-slate-800/95 text-white border border-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.35)]';
+            ? 'bg-[var(--tm-accent-soft-bg)] text-[var(--tm-accent-text)] border border-[var(--tm-accent-soft-border)] shadow-xs'
+            : 'bg-[var(--tm-selection-bg)] text-[var(--tm-selection-text)] border border-[var(--tm-selection-border)] shadow-xs';
         return (
           <button
             key={option.value}
@@ -202,12 +206,12 @@ export function SegmentedControl<T extends string>({
             {...option.dataAttrs}
             className={`${isFullWidth ? 'flex-1 min-w-0' : 'shrink-0'} ${
               isSm
-                ? 'min-h-[36px] px-2.5 rounded-lg text-[11px]'
-                : 'min-h-[40px] px-2 rounded-xl text-xs'
+                ? 'min-h-[40px] px-2.5 rounded-lg text-[11.5px]'
+                : 'min-h-[42px] px-2.5 rounded-xl text-xs'
             } font-semibold transition-all duration-150 whitespace-nowrap inline-flex items-center justify-center gap-1 active:scale-[0.98] disabled:opacity-45 ${
               active
                 ? activeClasses
-                : 'border border-transparent text-slate-400 hover:text-slate-200'
+                : 'border border-transparent text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
             }`}
           >
             <span className="truncate">{option.label}</span>
@@ -291,20 +295,20 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
         const ok = await copy(text, 'btn');
         if (ok) onCopied?.();
       }}
-      className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-all active:scale-[0.97] disabled:opacity-40 shrink-0 whitespace-nowrap ${
+      className={`inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-[0.97] disabled:opacity-40 shrink-0 whitespace-nowrap ${
         copied
-          ? 'bg-emerald-500/14 border-emerald-400/30 text-emerald-200'
-          : 'bg-white/[0.05] hover:bg-sky-500/15 border-white/10 text-slate-200 hover:text-sky-200'
+          ? 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]'
+          : 'bg-[var(--tm-bg-control)] hover:bg-[var(--tm-accent-soft-bg)] border-[var(--tm-border-default)] hover:border-[var(--tm-accent-soft-border)] text-[var(--tm-text-secondary)] hover:text-[var(--tm-accent-text)]'
       } ${className}`}
     >
       {copied ? (
         <>
-          <Check className="w-3.5 h-3.5 text-emerald-300 shrink-0" aria-hidden="true" />
+          <Check className="w-3.5 h-3.5 text-[var(--tm-success)] shrink-0" aria-hidden="true" />
           <span>{copiedLabel}</span>
         </>
       ) : (
         <>
-          <Copy className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+          <Copy className="w-3.5 h-3.5 text-[var(--tm-accent-text)] shrink-0" aria-hidden="true" />
           <span>{label}</span>
         </>
       )}
@@ -323,23 +327,27 @@ const ALERT_TONES: Record<
   { container: string; icon: string; DefaultIcon: React.ComponentType<{ className?: string }> }
 > = {
   amber: {
-    container: 'bg-amber-500/12 border-amber-400/30 text-amber-100',
-    icon: 'text-amber-300',
+    container:
+      'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning-text)]',
+    icon: 'text-[var(--tm-warning)]',
     DefaultIcon: AlertTriangle,
   },
   rose: {
-    container: 'bg-rose-500/12 border-rose-400/30 text-rose-100',
-    icon: 'text-rose-300',
+    container:
+      'bg-[var(--tm-danger-soft-bg)] border-[var(--tm-danger-soft-border)] text-[var(--tm-danger-text)]',
+    icon: 'text-[var(--tm-danger)]',
     DefaultIcon: AlertTriangle,
   },
   sky: {
-    container: 'bg-sky-400/10 border-sky-400/30 text-sky-100',
-    icon: 'text-sky-300',
+    container:
+      'bg-[var(--tm-info-soft-bg)] border-[var(--tm-info-soft-border)] text-[var(--tm-info-text)]',
+    icon: 'text-[var(--tm-info)]',
     DefaultIcon: Info,
   },
   emerald: {
-    container: 'bg-emerald-500/12 border-emerald-400/30 text-emerald-100',
-    icon: 'text-emerald-300',
+    container:
+      'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success-text)]',
+    icon: 'text-[var(--tm-success)]',
     DefaultIcon: CheckCircle2,
   },
 };
@@ -391,9 +399,11 @@ export const InlineAlert: React.FC<InlineAlertProps> = ({
 /* -------------------------------------------------------------------------- */
 
 const EMPTY_ICON_TONES = {
-  sky: 'bg-sky-500/12 border-sky-400/25 text-sky-300',
-  violet: 'bg-violet-500/14 border-violet-400/30 text-violet-300',
-  slate: 'bg-white/[0.06] border-white/12 text-slate-300',
+  sky: 'bg-[var(--tm-info-soft-bg)] border-[var(--tm-info-soft-border)] text-[var(--tm-info-text)]',
+  violet:
+    'bg-[var(--tm-violet-soft-bg)] border-[var(--tm-violet-soft-border)] text-[var(--tm-violet-text)]',
+  slate:
+    'bg-[var(--tm-bg-control)] border-[var(--tm-border-default)] text-[var(--tm-text-secondary)]',
 };
 
 export interface EmptyStateProps {
@@ -432,9 +442,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </div>
     )}
     <div className="space-y-1">
-      <p className="text-base font-semibold text-slate-100">{title}</p>
+      <p className="text-base font-semibold text-[var(--tm-text-primary)]">{title}</p>
       {description && (
-        <p className="text-xs text-slate-400 leading-relaxed">{description}</p>
+        <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed">{description}</p>
       )}
     </div>
     {action && <div className="pt-1">{action}</div>}
@@ -467,21 +477,23 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   const HeadingTag = headingLevel;
   return (
     <div className={`flex items-start justify-between gap-2.5 ${className}`}>
-      <div className="flex items-start gap-2 min-w-0 flex-1">
+      <div className="flex items-start gap-2.5 min-w-0 flex-1">
         {icon && (
-          <span className="shrink-0 mt-0.5 text-sky-400" aria-hidden="true">
+          <span className="shrink-0 mt-0.5 text-[var(--tm-accent-text)]" aria-hidden="true">
             {icon}
           </span>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <HeadingTag className="text-sm font-semibold text-slate-100 tracking-tight min-w-0 break-words">
+            <HeadingTag className="text-sm font-semibold text-[var(--tm-text-primary)] tracking-tight min-w-0 break-words">
               {title}
             </HeadingTag>
             {badge}
           </div>
           {subtitle && (
-            <p className="text-[11px] text-slate-400 leading-snug mt-0.5 break-words">{subtitle}</p>
+            <p className="text-[11.5px] text-[var(--tm-text-muted)] leading-snug mt-0.5 break-words">
+              {subtitle}
+            </p>
           )}
         </div>
       </div>
@@ -497,10 +509,10 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 export type MeterTone = 'sky' | 'emerald' | 'amber' | 'danger' | 'custom';
 
 const METER_TONES: Record<Exclude<MeterTone, 'custom'>, string> = {
-  sky: 'bg-gradient-to-r from-sky-400 to-cyan-300',
-  emerald: 'bg-gradient-to-r from-emerald-400 to-teal-300',
-  amber: 'bg-gradient-to-r from-amber-400 to-amber-300',
-  danger: 'bg-gradient-to-r from-amber-400 to-rose-400',
+  sky: 'bg-gradient-to-r from-sky-500 to-cyan-400',
+  emerald: 'bg-gradient-to-r from-emerald-500 to-teal-400',
+  amber: 'bg-gradient-to-r from-amber-500 to-amber-400',
+  danger: 'bg-gradient-to-r from-amber-500 to-rose-500',
 };
 
 export interface ProgressMeterProps {
@@ -540,7 +552,7 @@ export const ProgressMeter: React.FC<ProgressMeterProps> = ({
       aria-valuemin={ariaLabel ? 0 : undefined}
       aria-valuemax={ariaLabel ? 100 : undefined}
       aria-hidden={ariaLabel ? undefined : true}
-      className={`${heightClass} w-full rounded-full bg-white/[0.07] overflow-hidden ${className}`}
+      className={`${heightClass} w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden ${className}`}
     >
       <div
         style={{ width: `${clamped}%` }}
@@ -575,14 +587,14 @@ export const DetailsDisclosure: React.FC<DetailsDisclosureProps> = ({
 }) => (
   <details {...rest} className={`group ${className}`}>
     <summary
-      className={`list-none [&::-webkit-details-marker]:hidden min-h-[44px] py-2.5 flex items-center justify-between gap-2 text-xs font-medium text-slate-200 select-none ${summaryClassName}`}
+      className={`list-none [&::-webkit-details-marker]:hidden min-h-[44px] py-2.5 flex items-center justify-between gap-2 text-xs font-medium text-[var(--tm-text-primary)] select-none ${summaryClassName}`}
     >
       <span className="min-w-0 flex-1 flex items-center gap-2">{summary}</span>
-      <span className="inline-flex items-center gap-1.5 shrink-0 text-[11px] text-slate-400">
+      <span className="inline-flex items-center gap-1.5 shrink-0 text-[11.5px] text-[var(--tm-text-muted)]">
         {summaryMeta}
         <ChevronDown
           aria-hidden="true"
-          className="w-4 h-4 text-slate-400 transition-transform duration-150 group-open:rotate-180 group-open:text-sky-300 shrink-0"
+          className="w-4 h-4 text-[var(--tm-text-muted)] transition-transform duration-150 group-open:rotate-180 group-open:text-[var(--tm-accent-text)] shrink-0"
         />
       </span>
     </summary>

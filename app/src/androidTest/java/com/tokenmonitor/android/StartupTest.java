@@ -63,6 +63,7 @@ public final class StartupTest {
         android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         context.getSharedPreferences("hub-connection", 0).edit().clear().commit();
         context.getSharedPreferences("limits-prefs", 0).edit().clear().commit();
+        context.getSharedPreferences("display-prefs", 0).edit().clear().commit();
     }
 
     private static WebView web(View view) {
@@ -2030,6 +2031,119 @@ public final class StartupTest {
                 responder.join(5000);
             }
         }
+    }
+
+    private void awaitPersistedTheme(String expectedTheme) throws Exception {
+        android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        long deadline = android.os.SystemClock.elapsedRealtime() + WEBVIEW_TIMEOUT_MS;
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            if (expectedTheme.equals(DisplayPrefs.theme(context))) return;
+            Thread.sleep(50);
+        }
+        assertEquals("Expected persisted display-prefs theme", expectedTheme, DisplayPrefs.theme(context));
+    }
+
+    private int currentViewportBackgroundColor() {
+        AtomicInteger color = new AtomicInteger(0);
+        scenario.onActivity(activity -> {
+            WebView view = web(activity.getWindow().getDecorView());
+            assertNotNull("Activity must contain its WebView", view);
+            View parent = (View) view.getParent();
+            assertNotNull("WebView must have a viewport container", parent);
+            assertTrue("Viewport background must be a ColorDrawable",
+                    parent.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+            color.set(((android.graphics.drawable.ColorDrawable) parent.getBackground()).getColor());
+        });
+        return color.get();
+    }
+
+    @Test public void themeSelectionUpdatesDocumentChromeAndPersistsAcrossColdRestart() throws Exception {
+        awaitConnectionPage();
+        android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+
+        // 1. Default startup uses obsidian dark chrome and document tokens.
+        awaitScript("document.documentElement.dataset.theme === 'obsidian' && document.documentElement.dataset.colorMode === 'dark'");
+        assertEquals("true", evaluate("getComputedStyle(document.body).backgroundColor === 'rgb(9, 12, 16)'"));
+        assertEquals("true", evaluate("JSON.parse(window.HubNative.initialDisplayPrefs()).theme === 'obsidian'"));
+        assertEquals(ThemePolicy.OBSIDIAN.canvasColor, currentViewportBackgroundColor());
+
+        // 2. Switch to daylight light theme and verify live document + native chrome + persistence across cold restart.
+        evaluate("(() => {"
+                + " const btn = document.querySelector('[data-theme-option=\"daylight\"], [data-theme-card=\"daylight\"], button[data-theme=\"daylight\"]');"
+                + " if (btn) { btn.click(); return; }"
+                + " window.HubNative.saveDisplayPrefs(JSON.stringify({ separateQoderClients: false, exactTrendTokens: false, theme: 'daylight' }));"
+                + " window.receiveNative({ type: 'displayPrefs', separateQoderClients: false, exactTrendTokens: false, theme: 'daylight', systemDark: false });"
+                + "})()");
+        awaitScript("document.documentElement.dataset.theme === 'daylight' && document.documentElement.dataset.colorMode === 'light'"
+                + " && getComputedStyle(document.body).backgroundColor === 'rgb(244, 246, 249)'");
+        awaitPersistedTheme(ThemePolicy.THEME_DAYLIGHT);
+        assertEquals(ThemePolicy.DAYLIGHT.canvasColor, currentViewportBackgroundColor());
+
+        scenario.close();
+        scenario = ActivityScenario.launch(MainActivity.class);
+        awaitConnectionPage();
+        awaitScript("document.documentElement.dataset.theme === 'daylight' && document.documentElement.dataset.colorMode === 'light'");
+        assertEquals("true", evaluate("getComputedStyle(document.body).backgroundColor === 'rgb(244, 246, 249)'"));
+        assertEquals("true", evaluate("JSON.parse(window.HubNative.initialDisplayPrefs()).theme === 'daylight'"));
+        assertEquals(ThemePolicy.DAYLIGHT.canvasColor, currentViewportBackgroundColor());
+
+        // 3. Switch to amber dark theme and verify live update + persistence across cold restart.
+        evaluate("(() => {"
+                + " const btn = document.querySelector('[data-theme-option=\"amber\"], [data-theme-card=\"amber\"], button[data-theme=\"amber\"]');"
+                + " if (btn) { btn.click(); return; }"
+                + " window.HubNative.saveDisplayPrefs(JSON.stringify({ separateQoderClients: false, exactTrendTokens: false, theme: 'amber' }));"
+                + " window.receiveNative({ type: 'displayPrefs', separateQoderClients: false, exactTrendTokens: false, theme: 'amber', systemDark: true });"
+                + "})()");
+        awaitScript("document.documentElement.dataset.theme === 'amber' && document.documentElement.dataset.colorMode === 'dark'"
+                + " && getComputedStyle(document.body).backgroundColor === 'rgb(13, 11, 9)'");
+        awaitPersistedTheme(ThemePolicy.THEME_AMBER);
+        assertEquals(ThemePolicy.AMBER.canvasColor, currentViewportBackgroundColor());
+
+        scenario.close();
+        scenario = ActivityScenario.launch(MainActivity.class);
+        awaitConnectionPage();
+        awaitScript("document.documentElement.dataset.theme === 'amber' && document.documentElement.dataset.colorMode === 'dark'");
+        assertEquals("true", evaluate("getComputedStyle(document.body).backgroundColor === 'rgb(13, 11, 9)'"));
+        assertEquals(ThemePolicy.AMBER.canvasColor, currentViewportBackgroundColor());
+
+        // 4. Switch to auto mode and verify systemDark resolution persists across cold restart.
+        evaluate("(() => {"
+                + " const toggle = document.getElementById('theme-auto');"
+                + " if (toggle && !toggle.checked) { toggle.click(); return; }"
+                + " const initial = JSON.parse(window.HubNative.initialDisplayPrefs());"
+                + " window.HubNative.saveDisplayPrefs(JSON.stringify({ separateQoderClients: false, exactTrendTokens: false, theme: 'auto' }));"
+                + " window.receiveNative({ type: 'displayPrefs', separateQoderClients: false, exactTrendTokens: false, theme: 'auto', systemDark: Boolean(initial.systemDark) });"
+                + "})()");
+        awaitPersistedTheme(ThemePolicy.THEME_AUTO);
+
+        scenario.close();
+        scenario = ActivityScenario.launch(MainActivity.class);
+        awaitConnectionPage();
+        boolean systemDark = (context.getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        ThemePolicy.Spec expectedAuto = ThemePolicy.resolve(ThemePolicy.THEME_AUTO, systemDark);
+        String expectedRgb = expectedAuto.isLight ? "rgb(244, 246, 249)" : "rgb(9, 12, 16)";
+        awaitScript("document.documentElement.dataset.theme === '" + expectedAuto.id
+                + "' && document.documentElement.dataset.colorMode === '" + (expectedAuto.isLight ? "light" : "dark") + "'");
+        assertEquals("true", evaluate("getComputedStyle(document.body).backgroundColor === '" + expectedRgb + "'"));
+        assertEquals("true", evaluate("JSON.parse(window.HubNative.initialDisplayPrefs()).theme === 'auto'"
+                + " && JSON.parse(window.HubNative.initialDisplayPrefs()).systemDark === " + systemDark));
+        assertEquals(expectedAuto.canvasColor, currentViewportBackgroundColor());
+
+        // 5. Legacy DisplayPrefs JSON lacking theme falls back safely to obsidian without dropping other flags.
+        scenario.close();
+        context.getSharedPreferences("display-prefs", 0).edit()
+                .putString("prefs", "{\"separateQoderClients\":true,\"exactTrendTokens\":true}")
+                .commit();
+        scenario = ActivityScenario.launch(MainActivity.class);
+        awaitConnectionPage();
+        awaitScript("document.documentElement.dataset.theme === 'obsidian' && document.documentElement.dataset.colorMode === 'dark'");
+        assertEquals("true", evaluate("(() => {"
+                + " const init = JSON.parse(window.HubNative.initialDisplayPrefs());"
+                + " return init.theme === 'obsidian' && init.separateQoderClients === true && init.exactTrendTokens === true;"
+                + "})()"));
+        assertEquals(ThemePolicy.OBSIDIAN.canvasColor, currentViewportBackgroundColor());
     }
 
     private static String testStats(boolean completed) throws Exception {

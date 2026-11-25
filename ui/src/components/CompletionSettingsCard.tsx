@@ -33,6 +33,7 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
   const [expanded, setExpanded] = useState(!compact);
 
   const permissionMissing = notifications.permission === false;
+  const approvalsActiveCompact = Boolean(compact && !expanded && approvals?.enabled);
 
   const statusText = monitorPending
     ? '正在处理通知权限与监控状态…'
@@ -52,21 +53,32 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
       <div
         className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
           permissionMissing
-            ? 'bg-amber-500/14 border-amber-400/35 text-amber-300'
-            : 'bg-sky-500/14 border-sky-400/25 text-sky-300'
+            ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning)]'
+            : 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
         }`}
         aria-hidden="true"
       >
         <Bell className="w-4 h-4" />
       </div>
       <div className="min-w-0 flex-1 text-left">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <h3 className="text-sm font-semibold text-slate-100 truncate">会话完成提醒</h3>
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+          <h2 className="text-sm font-semibold text-[var(--tm-text-primary)] truncate">
+            会话完成提醒
+          </h2>
+          {approvalsActiveCompact && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--tm-success-soft-bg)] border border-[var(--tm-success-soft-border)] text-[11px] font-medium text-[var(--tm-success-text)] shrink-0 whitespace-nowrap">
+              <i aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[var(--tm-success)]" />
+              <span>
+                审批提醒
+                {approvals && approvals.items.length > 0 ? ` ${approvals.items.length}` : ''}
+              </span>
+            </span>
+          )}
           {compact && (
             <ChevronDown
               aria-hidden="true"
-              className={`w-4 h-4 text-slate-400 transition-transform duration-150 shrink-0 ${
-                expanded ? 'rotate-180 text-sky-300' : ''
+              className={`w-4 h-4 text-[var(--tm-text-muted)] transition-transform duration-150 shrink-0 ${
+                expanded ? 'rotate-180 text-[var(--tm-accent-text)]' : ''
               }`}
             />
           )}
@@ -74,8 +86,8 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
         <p
           id="monitor-state"
           role="status"
-          className={`text-[11px] mt-0.5 truncate tabular-nums ${
-            permissionMissing ? 'text-amber-300/90' : 'text-slate-400'
+          className={`text-[11.5px] mt-0.5 truncate tabular-nums ${
+            permissionMissing ? 'text-[var(--tm-warning-text)]' : 'text-[var(--tm-text-muted)]'
           }`}
         >
           {statusText}
@@ -88,7 +100,9 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
     <section
       id="completion-settings"
       className={`glass-panel rounded-3xl ${compact ? 'mb-3' : ''} ${
-        permissionMissing ? 'border-amber-400/35' : 'border-sky-400/20'
+        permissionMissing
+          ? 'border-[var(--tm-warning-soft-border)]'
+          : 'border-[var(--tm-border-default)]'
       } ${compact && !expanded ? 'px-4 py-2.5' : 'p-4 sm:p-5'}`}
     >
       <div className="flex items-center justify-between gap-2.5">
@@ -126,7 +140,7 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
                 <button
                   type="button"
                   onClick={onOpenSystemSettings}
-                  className="min-h-[36px] px-3 rounded-xl bg-amber-400/18 hover:bg-amber-400/28 active:scale-[0.98] border border-amber-400/35 text-xs font-semibold text-amber-100 transition-all whitespace-nowrap"
+                  className="min-h-[40px] px-3 rounded-xl bg-[var(--tm-warning-soft-bg)] hover:brightness-105 active:scale-[0.98] border border-[var(--tm-warning-soft-border)] text-xs font-semibold text-[var(--tm-warning-text)] transition-all whitespace-nowrap"
                 >
                   去开启
                 </button>
@@ -136,30 +150,32 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
             </InlineAlert>
           )}
 
-          <p className="text-xs text-slate-400 leading-relaxed mt-2.5">
+          <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed mt-2.5">
             开启后台监控后显示常驻通知；检测到已观察会话的明确本轮结束信号时提醒。首次连接不补发历史通知。
           </p>
 
           {approvals && onToggleApprovalAlerts && (
-            <div className="mt-3.5 pt-3.5 border-t border-white/8">
+            <div className="mt-3.5 pt-3.5 border-t border-[var(--tm-border-subtle)]">
               <div className="flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div
                     className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
                       approvals.permission === false
-                        ? 'bg-amber-500/14 border-amber-400/35 text-amber-300'
-                        : 'bg-emerald-500/14 border-emerald-400/25 text-emerald-300'
+                        ? 'bg-[var(--tm-warning-soft-bg)] border-[var(--tm-warning-soft-border)] text-[var(--tm-warning)]'
+                        : 'bg-[var(--tm-success-soft-bg)] border-[var(--tm-success-soft-border)] text-[var(--tm-success)]'
                     }`}
                     aria-hidden="true"
                   >
                     <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-semibold text-slate-100 truncate">只读审批提醒</h4>
+                    <h3 className="text-sm font-semibold text-[var(--tm-text-primary)] truncate">
+                      只读审批提醒
+                    </h3>
                     <p
                       id="approval-alerts-state"
                       role="status"
-                      className="text-[11px] text-slate-400 mt-0.5 truncate tabular-nums"
+                      className="text-[11.5px] text-[var(--tm-text-muted)] mt-0.5 truncate tabular-nums"
                     >
                       {approvalsStatusText}
                     </p>
@@ -175,7 +191,7 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
                   className="notification-toggle"
                 />
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed mt-2">
+              <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed mt-2">
                 仅在手机端开启时通过通知栏和首页卡片提醒 Codex 与 Antigravity 需要确认的操作；实际允许或拒绝仍在电脑端完成，不阻塞电脑端流程。
               </p>
             </div>
@@ -186,9 +202,9 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
               id="notification-test"
               type="button"
               onClick={onTestNotification}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold text-sky-200 bg-sky-500/12 hover:bg-sky-500/20 active:scale-[0.98] border border-sky-400/25 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold text-[var(--tm-accent-text)] bg-[var(--tm-accent-soft-bg)] hover:brightness-105 active:scale-[0.98] border border-[var(--tm-accent-soft-border)] transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
-              <Bell className="w-3.5 h-3.5" />
+              <Bell className="w-3.5 h-3.5" aria-hidden="true" />
               <span>发送测试通知</span>
             </button>
 
@@ -196,29 +212,30 @@ export const CompletionSettingsCard: React.FC<CompletionSettingsCardProps> = ({
               id="notification-settings"
               type="button"
               onClick={onOpenSystemSettings}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-medium text-slate-200 bg-white/[0.05] hover:bg-white/[0.1] active:scale-[0.98] border border-white/10 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-medium text-[var(--tm-text-primary)] bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] active:scale-[0.98] border border-[var(--tm-border-default)] transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
-              <Settings2 className="w-3.5 h-3.5" />
+              <Settings2 className="w-3.5 h-3.5" aria-hidden="true" />
               <span>系统通知设置</span>
             </button>
           </div>
 
-          <div className="mt-3 pt-2.5 border-t border-white/6">
+          <div className="mt-3 pt-2.5 border-t border-[var(--tm-border-subtle)]">
             <button
               type="button"
               onClick={() => setShowDetails((prev) => !prev)}
               aria-expanded={showDetails}
-              className="w-full min-h-[44px] flex items-center justify-between text-xs text-slate-300 hover:text-white transition-colors"
+              className="w-full min-h-[44px] flex items-center justify-between text-xs text-[var(--tm-text-secondary)] hover:text-[var(--tm-text-primary)] transition-colors"
             >
               <span>后台运行说明</span>
               <ChevronDown
-                className={`w-4 h-4 text-slate-400 transition-transform duration-150 ${
-                  showDetails ? 'rotate-180 text-sky-400' : ''
+                aria-hidden="true"
+                className={`w-4 h-4 text-[var(--tm-text-muted)] transition-transform duration-150 ${
+                  showDetails ? 'rotate-180 text-[var(--tm-accent-text)]' : ''
                 }`}
               />
             </button>
             {showDetails && (
-              <p className="text-xs text-slate-400 leading-relaxed mt-1.5">
+              <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed mt-1.5">
                 Android 15 及以上对后台数据同步有约 6 小时运行预算，系统可能暂停监控，打开应用后可重新开启。省电模式、网络中断、强行停止也可能延迟或中断提醒。常驻通知提供停止按钮。
               </p>
             )}

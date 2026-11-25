@@ -113,3 +113,77 @@ test('conversation blocks separate dialogue from grouped events, merge continuat
   assert.equal(filtered.blocks[0].type, 'events');
   assert.equal(filtered.blocks[0].events[0].item.kind, 'exec_command');
 });
+
+test('conversation pagination distinguishes retryable transient errors from terminal ones and deduplicates item IDs', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const {
+    beginConversation,
+    receiveConversation,
+    isTerminalConversationError,
+  } = await stateModule;
+
+  // Terminal errors require refresh; transient errors remain retryable
+  for (const terminal of ['source_changed', 'invalid_cursor', 'not_found', 'file_too_large', 'unsupported_hub', 'unsupported_app', 'disabled', 'unauthorized', 'preview_unavailable']) {
+    assert.equal(isTerminalConversationError(terminal), true, `${terminal} should be terminal`);
+  }
+  for (const transient of ['', 'device_offline', 'reader_busy', 'query_timeout', 'network_error', 'HTTP 503']) {
+    assert.equal(isTerminalConversationError(transient), false, `${transient} should be retryable`);
+  }
+
+  // Blank/whitespace item.id must be rejected instead of colliding on empty React keys
+  const blankId = receiveConversation(beginConversation(null, query), {
+    ...query,
+    page: { ...page, messages: [{ ...message, id: '   ' }] },
+  });
+  assert.equal(blankId.error, 'invalid_response');
+  assert.equal(blankId.messages.length, 0);
+
+  // Duplicate item.ids within a page and across cursor pages must be deduplicated cleanly
+  const first = receiveConversation(beginConversation(null, query), {
+    ...query,
+    page: {
+      ...page,
+      messages: [
+        { ...message, id: 'm1', text: 'first' },
+        { ...message, id: 'm1', text: 'duplicate-in-page' },
+      ],
+    },
+  });
+  assert.deepEqual(first.messages.map((m) => m.id), ['m1']);
+  assert.equal(first.messages[0].text, 'first');
+
+  const nextQuery = { ...query, cursor: first.nextCursor, requestId: 'request-2' };
+  const second = receiveConversation(beginConversation(first, nextQuery), {
+    ...nextQuery,
+    page: {
+      revision,
+      nextCursor: '',
+      messages: [
+        { ...message, id: 'm1', text: 'duplicate-across-pages' },
+        { ...message, id: 'm2', text: 'second' },
+      ],
+    },
+  });
+  assert.deepEqual(second.messages.map((m) => m.id), ['m1', 'm2']);
+
+  // Transient page error keeps nextCursor and allows retrying pagination
+  const retryQuery = { ...query, cursor: first.nextCursor, requestId: 'request-retry-1' };
+  const failed = receiveConversation(beginConversation(first, retryQuery), {
+    ...retryQuery,
+    page: { error: 'reader_busy' },
+  });
+  assert.equal(failed.error, 'reader_busy');
+  assert.equal(isTerminalConversationError(failed.error), false);
+  assert.equal(failed.nextCursor, first.nextCursor);
+
+  // Source-level invariants on SessionConversation.tsx
+  const src = fs.readFileSync(
+    path.resolve(__dirname, '../../ui/src/components/SessionConversation.tsx'),
+    'utf8',
+  );
+  assert.ok(src.includes('isTerminalConversationError(current.error)'));
+  assert.ok(src.includes('contain-intrinsic-size:auto_120px'));
+  assert.ok(src.includes('loadedOwner'));
+  assert.equal(/const groupOpen\s*=\s*[^\n]*hasSearch/.test(src), false);
+});
