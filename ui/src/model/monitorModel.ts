@@ -51,12 +51,31 @@ interface SessionDetail {
   promptCache: { minutes: number; expiresAt: number } | null;
   tokensPerSecond: number | null;
 }
+export interface FixedRangeResolution {
+  status: 'native' | 'ready' | 'partial' | 'loading' | 'unavailable';
+  period: PeriodId;
+  range: { start: string; end: string } | null;
+  detailsAvailable: boolean;
+  deviceDetailsAvailable: Record<string, boolean>;
+  projectedStats: MonitorStats | null;
+  reason: string;
+}
+export interface SessionListPresentation {
+  heading: string;
+  detailHeading: string;
+  titled: boolean;
+  usesProjectHeading: boolean;
+  showInlineSessionId: boolean;
+}
 export interface MonitorModelApi {
   numeric(value: unknown): number | null;
   count(value: unknown): number;
   clientLabel(id?: string): string;
   compact(value: unknown): string;
   money(value: unknown, currency?: string): string;
+  isDerivedPeriod(value?: string): boolean;
+  normalizePeriodTabOrder(value: unknown): PeriodId[];
+  resolveFixedRange(stats: MonitorStats | null, period: PeriodId, payload?: unknown, now?: number): FixedRangeResolution;
   select(stats: MonitorStats | null, deviceId: string, period: PeriodId, now?: number): Selection;
   breakdown(period: PeriodData | null, kind: Exclude<BreakdownKind, 'devices'>, options?: { separateQoderClients?: boolean }): BreakdownRow[];
   deviceBreakdown(stats: MonitorStats | null, period: PeriodId, now?: number, options?: { separateQoderClients?: boolean }): DeviceBreakdownRow[];
@@ -66,6 +85,9 @@ export interface MonitorModelApi {
     tokensText: string;
     costText: string;
   };
+  sessionListPresentation(row: SessionRow): SessionListPresentation;
+  sessionAgeShort(value?: string | number | null, now?: number): string;
+  sessionAgeText(value?: string | number | null, now?: number): string;
   filterSessionTools(rows: SessionRow[], tool?: string): { rows: SessionRow[]; tools: string[]; tool: string };
   filterSessionStatuses(statuses: SessionStatusResult[], filter?: 'all' | 'running' | 'waiting' | 'ended'): {
     counts: { running: number; waiting: number; ended: number }; indices: number[];

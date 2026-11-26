@@ -1,3 +1,4 @@
+import { sanitizePeriodTabOrder } from '../fixedRangeState';
 import type { DisplayPrefs } from '../types/monitor';
 import { sanitizeThemePreference } from './themes';
 
@@ -9,6 +10,7 @@ export function sanitizeDisplayPrefs(raw: unknown): DisplayPrefs {
     separateQoderClients: input.separateQoderClients === true,
     exactTrendTokens: input.exactTrendTokens === true,
     theme: sanitizeThemePreference(input.theme),
+    periodTabOrder: sanitizePeriodTabOrder(input.periodTabOrder),
   };
 }
 

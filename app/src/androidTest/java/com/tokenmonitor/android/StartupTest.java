@@ -298,6 +298,11 @@ public final class StartupTest {
         assertTrue("Client catalog must be packaged", catalog.getData().read() >= 0);
         assertNotEquals(403, catalog.getStatusCode());
         catalog.getData().close();
+        WebResourceResponse fixedRanges = client.shouldInterceptRequest(null,
+                request(LocalContentClient.ORIGIN + "/assets/shared/fixedPeriodRanges.js"));
+        assertTrue("Fixed-period range helpers must be packaged and allowlisted", fixedRanges.getData().read() >= 0);
+        assertNotEquals(403, fixedRanges.getStatusCode());
+        fixedRanges.getData().close();
         for (String file : new String[]{"windowLabels.js", "windowText.js", "historyModel.js"}) {
             WebResourceResponse history = client.shouldInterceptRequest(null,
                     request(LocalContentClient.ORIGIN + "/assets/shared/limits/" + file));
@@ -2144,6 +2149,271 @@ public final class StartupTest {
                 + " return init.theme === 'obsidian' && init.separateQoderClients === true && init.exactTrendTokens === true;"
                 + "})()"));
         assertEquals(ThemePolicy.OBSIDIAN.canvasColor, currentViewportBackgroundColor());
+    }
+
+    @Test public void fixedRangesSyncPagedSessionsHistoryFallbackAndCustomPeriodTabs() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        List<String> authorizations = Collections.synchronizedList(new ArrayList<>());
+        java.time.LocalDate todayUtc = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate yesterdayUtc = todayUtc.minusDays(1);
+        String todayKey = todayUtc.toString();
+        String yesterdayKey = yesterdayUtc.toString();
+        String nowIso = java.time.Instant.now().toString();
+        String tomorrowIso = todayUtc.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toString();
+
+        org.json.JSONObject scanDevice = new org.json.JSONObject()
+                .put("deviceId", "scan-pc")
+                .put("hostname", "Scan-Studio")
+                .put("deviceKind", "desktop")
+                .put("updatedAt", nowIso)
+                .put("stale", false)
+                .put("periodWindows", new org.json.JSONObject()
+                        .put("timeZone", "UTC")
+                        .put("today", new org.json.JSONObject().put("key", todayKey).put("endsAt", tomorrowIso)))
+                .put("periods", new org.json.JSONObject()
+                        .put("today", new org.json.JSONObject().put("totalTokens", 1200).put("costUsd", 1.2)));
+
+        org.json.JSONObject legacyDevice = new org.json.JSONObject()
+                .put("deviceId", "legacy-pc")
+                .put("hostname", "Legacy-Node")
+                .put("deviceKind", "server")
+                .put("updatedAt", nowIso)
+                .put("stale", false)
+                .put("periodWindows", new org.json.JSONObject()
+                        .put("timeZone", "UTC")
+                        .put("today", new org.json.JSONObject().put("key", todayKey).put("endsAt", tomorrowIso)))
+                .put("periods", new org.json.JSONObject()
+                        .put("today", new org.json.JSONObject().put("totalTokens", 800).put("costUsd", 0.8)));
+
+        String statsPayload = new org.json.JSONObject()
+                .put("fixedRangeRevisions", new org.json.JSONObject().put("scan-pc", "rev-fr-1"))
+                .put("deviceHistoryRevision", "hist-rev-1")
+                .put("devices", new org.json.JSONArray().put(scanDevice).put(legacyDevice))
+                .put("periods", new org.json.JSONObject()
+                        .put("today", new org.json.JSONObject().put("totalTokens", 2000).put("costUsd", 2.0)))
+                .put("subscriptionsUpdatedAt", "")
+                .toString();
+
+        String indexPayload = new org.json.JSONObject()
+                .put("deviceId", "scan-pc")
+                .put("revision", "rev-fr-1")
+                .put("ranges", new org.json.JSONObject()
+                        .put("yesterday", new org.json.JSONObject()
+                                .put("start", yesterdayKey)
+                                .put("end", yesterdayKey)
+                                .put("firstPage", 0)
+                                .put("pageCount", 2)
+                                .put("sessions", 2)
+                                .put("projects", 1)
+                                .put("totals", new org.json.JSONObject()
+                                        .put("totalTokens", 3000)
+                                        .put("inputTokens", 800)
+                                        .put("outputTokens", 200)
+                                        .put("cacheReadTokens", 2000)
+                                        .put("costUsd", 3.5)
+                                        .put("capabilities", new org.json.JSONObject().put("tokenComponents", true))
+                                        .put("clients", new org.json.JSONObject().put("codex", 1800).put("claude", 1200))
+                                        .put("clientCosts", new org.json.JSONObject().put("codex", 2.1).put("claude", 1.4))
+                                        .put("models", new org.json.JSONObject().put("gpt-5", 1800).put("claude-sonnet-4", 1200))
+                                        .put("modelCosts", new org.json.JSONObject().put("gpt-5", 2.1).put("claude-sonnet-4", 1.4)))))
+                .toString();
+
+        String page0Payload = new org.json.JSONObject()
+                .put("deviceId", "scan-pc")
+                .put("revision", "rev-fr-1")
+                .put("page", 0)
+                .put("rows", new org.json.JSONArray()
+                        .put(new org.json.JSONArray()
+                                .put("yesterday")
+                                .put("projects")
+                                .put("alpha-repo")
+                                .put(new org.json.JSONObject().put("label", "alpha-repo").put("tokens", 3000).put("costUsd", 3.5)))
+                        .put(new org.json.JSONArray()
+                                .put("yesterday")
+                                .put("sessions")
+                                .put("codex:sess-untitled-fr")
+                                .put(new org.json.JSONObject()
+                                        .put("client", "codex")
+                                        .put("sessionId", "sess-untitled-fr")
+                                        .put("projectLabel", "alpha-repo")
+                                        .put("latestModel", "gpt-5")
+                                        .put("models", new org.json.JSONObject().put("gpt-5", 1800))
+                                        .put("totalTokens", 1800)
+                                        .put("costUsd", 2.1)
+                                        .put("turnEnded", true)
+                                        .put("lastUsedAt", yesterdayKey + "T18:00:00Z"))))
+                .toString();
+
+        String page1Payload = new org.json.JSONObject()
+                .put("deviceId", "scan-pc")
+                .put("revision", "rev-fr-1")
+                .put("page", 1)
+                .put("rows", new org.json.JSONArray()
+                        .put(new org.json.JSONArray()
+                                .put("yesterday")
+                                .put("sessions")
+                                .put("claude:sess-archived-fr")
+                                .put(new org.json.JSONObject()
+                                        .put("client", "claude")
+                                        .put("sessionId", "sess-archived-fr")
+                                        .put("title", "Archived yesterday task")
+                                        .put("projectLabel", "alpha-repo")
+                                        .put("archived", true)
+                                        .put("totalTokens", 1200)
+                                        .put("costUsd", 1.4)
+                                        .put("lastUsedAt", yesterdayKey + "T12:00:00Z"))))
+                .toString();
+
+        org.json.JSONObject utcWindows = new org.json.JSONObject()
+                .put("timeZone", "UTC")
+                .put("today", new org.json.JSONObject().put("key", todayKey).put("endsAt", tomorrowIso));
+
+        String devicesPayload = new org.json.JSONObject()
+                .put("devices", new org.json.JSONArray()
+                        .put(new org.json.JSONObject()
+                                .put("deviceId", "scan-pc")
+                                .put("updatedAt", nowIso)
+                                .put("periodWindows", utcWindows)
+                                .put("historyAvailable", true)
+                                .put("history", new org.json.JSONObject().put("daily", new org.json.JSONArray())))
+                        .put(new org.json.JSONObject()
+                                .put("deviceId", "legacy-pc")
+                                .put("updatedAt", nowIso)
+                                .put("periodWindows", utcWindows)
+                                .put("historyAvailable", true)
+                                .put("history", new org.json.JSONObject()
+                                        .put("daily", new org.json.JSONArray()
+                                                .put(new org.json.JSONObject().put("date", yesterdayKey).put("tokens", 500).put("cost", 0.5))))))
+                .toString();
+
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String header;
+                        while ((header = reader.readLine()) != null && !header.isEmpty()) {
+                            if (header.startsWith("Authorization:")) authorizations.add(header);
+                        }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=0 ")) {
+                            body = page0Payload;
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=1 ")) {
+                            body = page1Payload;
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc ")) {
+                            body = indexPayload;
+                        } else if (first.contains("/api/devices ")) {
+                            body = devicesPayload;
+                        } else {
+                            body = statsPayload;
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-fixed-ranges-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'fr-test-secret', true)");
+                awaitScript("document.querySelector('.token-total') && document.querySelector('.token-total').innerText.includes('2K')");
+
+                // Open inline range selector and switch to 昨日 (yesterday).
+                evaluate("document.getElementById('period-range-trigger').click()");
+                awaitScript("Boolean(document.querySelector('[data-fixed-period=\"yesterday\"]'))");
+                evaluate("document.querySelector('[data-fixed-period=\"yesterday\"]').click()");
+
+                // Fleet total combines scanned 3,000 + History fallback 500 = 3.5K tokens ($4.00).
+                awaitScript("document.querySelector('.token-total') && document.querySelector('.token-total').innerText.includes('3.5K')");
+                assertEquals("true", evaluate("Boolean(document.querySelector('[data-fixed-range-badge]'))"
+                        + " && document.querySelector('[data-fixed-range-badge]').innerText.includes('" + yesterdayKey + "')"));
+
+                // On fleet (mixed History fallback), SessionsView explains session details are unavailable across all devices.
+                evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+                awaitScript("document.getElementById('content').innerText.includes('当前范围暂无已同步的会话明细')");
+
+                // Selecting scan-pc unlocks paged fixed-range sessions (both page 0 untitled session & page 1 archived session).
+                evaluate("document.getElementById('device-picker-trigger').click()");
+                awaitScript("Boolean(document.querySelector('[data-device-option=\"scan-pc\"]'))");
+                evaluate("document.querySelector('[data-device-option=\"scan-pc\"]').click()");
+                awaitScript("document.querySelectorAll('section.session').length === 2");
+
+                // Untitled standalone session uses projectLabel ('alpha-repo') as heading and shows inline sessionId (#1678, #1680).
+                assertEquals("true", evaluate("(() => {"
+                        + " const card = document.querySelector('section[data-session=\"codex%3Asess-untitled-fr\"]');"
+                        + " const inlineId = card && card.querySelector('[data-session-inline-id=\"sess-untitled-fr\"]');"
+                        + " return Boolean(card) && card.innerText.includes('alpha-repo') && Boolean(inlineId) && card.innerText.includes('sess-untitled-fr');"
+                        + " })()"));
+                assertEquals("true", evaluate("document.body.innerText.includes('已归档')"));
+
+                // Opening untitled session detail shows 'Codex · gpt-5' heading instead of duplicating projectLabel (#1678).
+                evaluate("document.querySelector('[data-session-quick-detail=\"codex%3Asess-untitled-fr\"]').click()");
+                awaitScript("Boolean(document.querySelector('[data-back-sessions]'))");
+                assertEquals("true", evaluate("document.querySelector('.glass-hero h2').innerText.includes('Codex · gpt-5')"));
+
+                // Customize periodTabOrder in Settings and verify persistence across cold restart (#1668).
+                android.content.Context targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+                evaluate("document.querySelector('[data-page=\"settings\"]').click()");
+                awaitScript("Boolean(document.getElementById('period-tabs-customization'))");
+                evaluate("document.querySelector('[data-period-pref-toggle=\"yesterday\"]').click()");
+                awaitScript("document.getElementById('period-tabs-customization').innerText.includes('自定义 4 项')");
+                long prefsDeadline = android.os.SystemClock.elapsedRealtime() + WEBVIEW_TIMEOUT_MS;
+                while (android.os.SystemClock.elapsedRealtime() < prefsDeadline) {
+                    org.json.JSONArray savedOrder = DisplayPrefs.load(targetContext).optJSONArray("periodTabOrder");
+                    if (savedOrder != null && savedOrder.length() == 4) break;
+                    Thread.sleep(50);
+                }
+                assertEquals(4, DisplayPrefs.load(targetContext).optJSONArray("periodTabOrder").length());
+
+                scenario.close();
+                scenario = ActivityScenario.launch(MainActivity.class);
+                awaitScript("document.querySelectorAll('#periods [data-period]').length === 4"
+                        + " && Boolean(document.querySelector('#periods [data-period=\"yesterday\"]'))");
+
+                // Reset custom period tabs back to default 3-slot mode.
+                evaluate("document.querySelector('[data-page=\"settings\"]').click()");
+                awaitScript("Boolean(document.getElementById('reset-period-tabs'))");
+                evaluate("document.getElementById('reset-period-tabs').click()");
+                awaitScript("document.getElementById('period-tabs-customization').innerText.includes('默认三栏')");
+                prefsDeadline = android.os.SystemClock.elapsedRealtime() + WEBVIEW_TIMEOUT_MS;
+                while (android.os.SystemClock.elapsedRealtime() < prefsDeadline) {
+                    org.json.JSONArray savedOrder = DisplayPrefs.load(targetContext).optJSONArray("periodTabOrder");
+                    if (savedOrder != null && savedOrder.length() == 0) break;
+                    Thread.sleep(50);
+                }
+                assertEquals(0, DisplayPrefs.load(targetContext).optJSONArray("periodTabOrder").length());
+
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=0 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=1 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/devices HTTP/1.1"));
+                assertTrue(requests.stream().allMatch(line -> line.startsWith("GET ")));
+                assertFalse(authorizations.isEmpty());
+                assertTrue(authorizations.stream().allMatch(value -> value.equals("Authorization: Bearer fr-test-secret")));
+
+                evaluate("window.HubNative.disconnect()");
+                awaitConnectionPage();
+            } finally {
+                if (scenario != null) {
+                    scenario.close();
+                    scenario = null;
+                }
+                server.close();
+                responder.join(5000);
+            }
+        }
     }
 
     private static String testStats(boolean completed) throws Exception {

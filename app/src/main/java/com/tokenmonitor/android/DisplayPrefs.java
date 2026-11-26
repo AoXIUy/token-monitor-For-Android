@@ -2,16 +2,43 @@ package com.tokenmonitor.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 final class DisplayPrefs {
     private static final String PREFS = "display-prefs";
     private static final String KEY = "prefs";
+    private static final Set<String> ALLOWED_PERIOD_TABS = new HashSet<>(Arrays.asList(
+            "today", "yesterday", "week", "last7", "month", "last30", "allTime"));
+    private static final int MIN_PERIOD_TABS = 3;
+    private static final int MAX_PERIOD_TABS = 6;
 
     private DisplayPrefs() { }
 
     static SharedPreferences preferences(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    static JSONArray sanitizePeriodTabOrder(JSONArray raw) {
+        JSONArray clean = new JSONArray();
+        if (raw == null) return clean;
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (int i = 0; i < raw.length(); i++) {
+            Object item = raw.opt(i);
+            if (!(item instanceof String)) continue;
+            String id = ((String) item).trim();
+            if (ALLOWED_PERIOD_TABS.contains(id)) {
+                seen.add(id);
+                if (seen.size() >= MAX_PERIOD_TABS) break;
+            }
+        }
+        if (seen.size() < MIN_PERIOD_TABS) return clean;
+        for (String id : seen) clean.put(id);
+        return clean;
     }
 
     static JSONObject sanitize(JSONObject parsed) throws Exception {
@@ -23,7 +50,8 @@ final class DisplayPrefs {
         return new JSONObject()
                 .put("separateQoderClients", parsed != null && parsed.optBoolean("separateQoderClients", false))
                 .put("exactTrendTokens", parsed != null && parsed.optBoolean("exactTrendTokens", false))
-                .put("theme", ThemePolicy.sanitize(rawTheme));
+                .put("theme", ThemePolicy.sanitize(rawTheme))
+                .put("periodTabOrder", sanitizePeriodTabOrder(parsed == null ? null : parsed.optJSONArray("periodTabOrder")));
     }
 
     static JSONObject load(Context context) {

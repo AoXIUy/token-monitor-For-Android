@@ -40,6 +40,32 @@ public final class ConnectionSpecChecks {
             throw new AssertionError("Missing limitAccountPresentation endpoint");
         }
         checks++;
+        if (!prefixed.endpoint("/api/devices").equals("https://monitor.example.com/proxy/api/devices")) {
+            throw new AssertionError("Missing devices read endpoint");
+        }
+        checks++;
+        if (!prefixed.fixedRangesIndexEndpoint("PC & 移动")
+                .startsWith("https://monitor.example.com/proxy/api/fixed-ranges?deviceId=PC+%26+")) {
+            throw new AssertionError("Invalid fixedRangesIndexEndpoint");
+        }
+        checks++;
+        if (!local.fixedRangesPageEndpoint("pc-1", "rev-uuid-01", 0)
+                .equals("http://[::1]:17321/api/fixed-ranges?deviceId=pc-1&revision=rev-uuid-01&page=0")) {
+            throw new AssertionError("Invalid fixedRangesPageEndpoint");
+        }
+        checks++;
+        for (String badDevice : new String[] {"", "   ", "pc\n1"}) {
+            try { prefixed.fixedRangesIndexEndpoint(badDevice); throw new AssertionError("Accepted invalid fixed range deviceId"); }
+            catch (IllegalArgumentException expected) { checks++; }
+        }
+        for (int badPage : new int[] {-1, 32, 999}) {
+            try { prefixed.fixedRangesPageEndpoint("pc-1", "rev-1", badPage); throw new AssertionError("Accepted invalid fixed range page"); }
+            catch (IllegalArgumentException expected) { checks++; }
+        }
+        for (String badRevision : new String[] {"", "  ", "rev\r\n"}) {
+            try { prefixed.fixedRangesPageEndpoint("pc-1", badRevision, 0); throw new AssertionError("Accepted invalid fixed range revision"); }
+            catch (IllegalArgumentException expected) { checks++; }
+        }
         try { prefixed.endpoint("/api/sync/settings/other"); throw new AssertionError("Allowed arbitrary sync setting"); }
         catch (IllegalArgumentException expected) { checks++; }
         try { prefixed.endpoint("/api/ingest"); throw new AssertionError("Allowed ingest"); }

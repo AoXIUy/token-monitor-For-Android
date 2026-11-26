@@ -13,9 +13,33 @@ export const PAGE_LABELS: Record<PageId, string> = {
 
 export const PERIOD_LABELS: Record<PeriodId, string> = {
   today: '今日',
+  yesterday: '昨日',
+  week: '本周',
+  last7: '近7天',
   month: '本月',
+  last30: '近30天',
   allTime: '累计',
 };
+
+export const PERIOD_SHORT_LABELS: Record<PeriodId, string> = {
+  today: '今日',
+  yesterday: '昨日',
+  week: '本周',
+  last7: '7天',
+  month: '本月',
+  last30: '30天',
+  allTime: '累计',
+};
+
+export const ALL_PERIOD_OPTIONS: PeriodId[] = [
+  'today',
+  'yesterday',
+  'week',
+  'last7',
+  'month',
+  'last30',
+  'allTime',
+];
 
 export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',

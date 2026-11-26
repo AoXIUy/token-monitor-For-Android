@@ -1,5 +1,6 @@
 export type PageId = 'overview' | 'devices' | 'limits' | 'sessions' | 'sessionDetail' | 'reports' | 'settings';
-export type PeriodId = 'today' | 'month' | 'allTime';
+export type DerivedPeriodId = 'yesterday' | 'week' | 'last7' | 'last30';
+export type PeriodId = 'today' | DerivedPeriodId | 'month' | 'allTime';
 export type ReportGranularity = 'daily' | 'weekly' | 'monthly';
 export type BreakdownKind = 'clients' | 'devices' | 'models' | 'projects';
 export type QuotaTabId = 'limits' | 'subscriptions' | 'antigravityManager';
@@ -63,6 +64,12 @@ export interface SessionRow {
   modelTokenComponents?: Record<string, ModelTokenComponents>;
   providers?: Record<string, number>;
   liveActivity?: LiveActivity;
+  sourceDevice?: {
+    deviceId?: string;
+    name?: string;
+    deviceKind?: string;
+    ambiguous?: boolean;
+  };
 }
 
 export interface ModelTokenComponents {
@@ -85,6 +92,7 @@ export interface PeriodData {
   capabilities?: {
     tokenComponents?: boolean;
   };
+  derivedFixedRange?: boolean;
   clients?: Record<string, number>;
   clientCosts?: Record<string, number>;
   models?: Record<string, number>;
@@ -163,8 +171,8 @@ export interface DeviceData {
   stale?: boolean;
   updatedAt?: string;
   receivedAt?: string;
-  periodWindows?: Partial<Record<PeriodId, { endsAt?: string }>>;
-  periods?: Partial<Record<PeriodId, PeriodData>>;
+  periodWindows?: { timeZone?: string } & Partial<Record<PeriodId, { key?: string; endsAt?: string }>>;
+  periods?: Partial<Record<PeriodId, PeriodData | null>>;
   limits?: {
     providers?: LimitProvider[];
   };
@@ -193,7 +201,10 @@ export interface LimitAccountPresentationGroup {
 export type LimitAccountPresentationMap = Record<string, LimitAccountPresentationGroup>;
 
 export interface MonitorStats {
-  periods?: Partial<Record<PeriodId, PeriodData>>;
+  periods?: Partial<Record<PeriodId, PeriodData | null>>;
+  nativeRangeWindows?: Partial<Record<DerivedPeriodId, { start: string; end: string }>>;
+  fixedRangeRevisions?: Record<string, string>;
+  deviceHistoryRevision?: string;
   devices?: DeviceData[];
   limits?: {
     providers?: LimitProvider[];
@@ -344,6 +355,8 @@ export interface HubNativeBridge {
   cancelReports?: () => void;
   queryAntigravityManager?: (requestId: string) => void;
   cancelAntigravityManager?: () => void;
+  queryFixedRange?: (period: string, requestId: string) => void;
+  cancelFixedRange?: () => void;
   copyText?: (text: string) => boolean;
 }
 
@@ -351,6 +364,7 @@ export interface DisplayPrefs {
   separateQoderClients: boolean;
   exactTrendTokens: boolean;
   theme: ThemePreference;
+  periodTabOrder: PeriodId[];
 }
 
 export interface LimitsPrefs {
@@ -390,9 +404,28 @@ declare global {
     receiveNative?: (serialized: string | Record<string, unknown>) => void;
     handleBackNavigation?: () => boolean;
     MonitorModel?: unknown;
-
+    TokenMonitorFixedPeriodRanges?: unknown;
   }
 }
+
+export interface FixedRangeSlice {
+  revision?: string;
+  start: string;
+  end: string;
+  period: PeriodData;
+}
+
+export interface FixedRangePayloadEntry {
+  loading: boolean;
+  requestId: string;
+  signature: string;
+  scanned: Record<string, FixedRangeSlice> | null;
+  deviceHistories: Array<Record<string, unknown>> | null;
+  historyError: string;
+  error: string;
+}
+
+export type FixedRangeState = Partial<Record<DerivedPeriodId, FixedRangePayloadEntry>>;
 
 export interface MonitorState {
   conversation: SessionConversationState | null;
@@ -433,6 +466,7 @@ export interface MonitorState {
   limitAccountPresentation: LimitAccountPresentationMap;
   reports: ReportsState;
   agManager: AgManagerState;
+  fixedRange: FixedRangeState;
 }
 
 export interface AgManagerQuotaBucket {

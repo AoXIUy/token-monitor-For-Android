@@ -28,7 +28,9 @@ import {
   AppUpdateState,
   HubProfile,
   MonitorStats,
+  PeriodId,
 } from '../types/monitor';
+import { ALL_PERIOD_OPTIONS, PERIOD_LABELS } from '../utils/formatters';
 import { CompletionSettingsCard } from './CompletionSettingsCard';
 import { AppUpdateCard } from './AppUpdateCard';
 import { ThemeStudioCard } from './ThemeStudioCard';
@@ -138,7 +140,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   caDraft = null,
   connectPending,
   formError,
-  displayPrefs = { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian' },
+  displayPrefs = {
+    separateQoderClients: false,
+    exactTrendTokens: false,
+    theme: 'obsidian',
+    periodTabOrder: [],
+  },
   systemDark = true,
   onChangeDisplayPrefs,
   notifications,
@@ -1018,6 +1025,143 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               }
               ariaLabel="趋势详情显示精确 Token 数"
             />
+          </div>
+
+          <div
+            id="period-tabs-customization"
+            className="pt-3.5 border-t border-[var(--tm-border-subtle)] space-y-3"
+          >
+            {(() => {
+              const isCustomized = displayPrefs.periodTabOrder.length >= 3;
+              const activeTabs: PeriodId[] = isCustomized
+                ? displayPrefs.periodTabOrder
+                : ['today', 'month', 'allTime'];
+              const toggleTab = (pId: PeriodId) => {
+                if (activeTabs.includes(pId)) {
+                  if (activeTabs.length <= 3) return;
+                  onChangeDisplayPrefs({
+                    ...displayPrefs,
+                    periodTabOrder: activeTabs.filter((id) => id !== pId),
+                  });
+                } else {
+                  if (activeTabs.length >= 6) return;
+                  onChangeDisplayPrefs({
+                    ...displayPrefs,
+                    periodTabOrder: [...activeTabs, pId],
+                  });
+                }
+              };
+              const moveTab = (idx: number, delta: -1 | 1) => {
+                const target = idx + delta;
+                if (target < 0 || target >= activeTabs.length) return;
+                const next = activeTabs.slice();
+                const [item] = next.splice(idx, 1);
+                next.splice(target, 0, item);
+                onChangeDisplayPrefs({ ...displayPrefs, periodTabOrder: next });
+              };
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-semibold text-[var(--tm-text-primary)]">
+                          统计周期按钮
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] text-[11px] tabular-nums text-[var(--tm-text-secondary)]">
+                          {isCustomized ? `自定义 ${activeTabs.length} 项` : '默认三栏'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--tm-text-muted)] leading-relaxed mt-1">
+                        可在顶部周期栏固定 3–6 个常用范围（含昨日、本周、近7天、近30天）并调整排列顺序。
+                      </p>
+                    </div>
+                    {isCustomized && (
+                      <button
+                        id="reset-period-tabs"
+                        type="button"
+                        onClick={() =>
+                          onChangeDisplayPrefs({ ...displayPrefs, periodTabOrder: [] })
+                        }
+                        className="min-h-[40px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-xs font-medium text-[var(--tm-accent-text)] shrink-0 active:scale-[0.98] transition-all"
+                      >
+                        恢复默认
+                      </button>
+                    )}
+                  </div>
+
+                  <div
+                    role="group"
+                    aria-label="选择显示的统计周期按钮"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {ALL_PERIOD_OPTIONS.map((pId) => {
+                      const selected = activeTabs.includes(pId);
+                      const disabled =
+                        (selected && activeTabs.length <= 3) ||
+                        (!selected && activeTabs.length >= 6);
+                      return (
+                        <button
+                          key={pId}
+                          type="button"
+                          data-period-pref-toggle={pId}
+                          aria-pressed={selected}
+                          disabled={disabled}
+                          onClick={() => toggleTab(pId)}
+                          className={`min-h-[40px] px-3 rounded-xl text-xs font-semibold border transition-all active:scale-[0.98] disabled:opacity-45 ${
+                            selected
+                              ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                              : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
+                          }`}
+                        >
+                          {PERIOD_LABELS[pId]}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {activeTabs.map((pId, idx) => (
+                      <div
+                        key={pId}
+                        data-period-pref-item={pId}
+                        className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono-tabular text-[11px] text-[var(--tm-text-muted)] w-4">
+                            {idx + 1}.
+                          </span>
+                          <span className="font-medium text-[var(--tm-text-primary)]">
+                            {PERIOD_LABELS[pId]}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            data-period-move-up={pId}
+                            disabled={idx === 0}
+                            aria-label={`上移 ${PERIOD_LABELS[pId]}`}
+                            onClick={() => moveTab(idx, -1)}
+                            className="min-h-[36px] min-w-[36px] rounded-lg bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] flex items-center justify-center text-[var(--tm-text-secondary)] disabled:opacity-35 transition-colors"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            data-period-move-down={pId}
+                            disabled={idx === activeTabs.length - 1}
+                            aria-label={`下移 ${PERIOD_LABELS[pId]}`}
+                            onClick={() => moveTab(idx, 1)}
+                            className="min-h-[36px] min-w-[36px] rounded-lg bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] flex items-center justify-center text-[var(--tm-text-secondary)] disabled:opacity-35 transition-colors"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </section>
       )}

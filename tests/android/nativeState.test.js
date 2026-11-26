@@ -188,10 +188,15 @@ test('approval alerts sanitize items, open overview on tap and reset on reconnec
   assert.equal(state.approvals.items.length, 0);
 });
 
-test('display preferences sanitize separateQoderClients, exactTrendTokens, theme, systemDark and survive Hub connection changes', async () => {
+test('display preferences sanitize separateQoderClients, exactTrendTokens, theme, periodTabOrder, systemDark and survive Hub connection changes', async () => {
   const { createInitialState, receiveNativeMessage } = await stateModule;
   let state = createInitialState();
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian' });
+  assert.deepEqual(state.displayPrefs, {
+    separateQoderClients: false,
+    exactTrendTokens: false,
+    theme: 'obsidian',
+    periodTabOrder: [],
+  });
   assert.equal(state.systemDark, true);
   assert.equal(state.imeVisible, false);
 
@@ -200,9 +205,15 @@ test('display preferences sanitize separateQoderClients, exactTrendTokens, theme
     separateQoderClients: true,
     exactTrendTokens: true,
     theme: 'daylight',
+    periodTabOrder: ['today', 'yesterday', 'last7', 'month', 'today', 'invalid'],
     systemDark: false,
   });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'daylight' });
+  assert.deepEqual(state.displayPrefs, {
+    separateQoderClients: true,
+    exactTrendTokens: true,
+    theme: 'daylight',
+    periodTabOrder: ['today', 'yesterday', 'last7', 'month'],
+  });
   assert.equal(state.systemDark, false);
 
   state = receiveNativeMessage(state, {
@@ -212,23 +223,104 @@ test('display preferences sanitize separateQoderClients, exactTrendTokens, theme
     theme: 'not-a-real-theme',
     systemDark: 'yes',
   });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'daylight' });
+  assert.deepEqual(state.displayPrefs, {
+    separateQoderClients: true,
+    exactTrendTokens: true,
+    theme: 'daylight',
+    periodTabOrder: ['today', 'yesterday', 'last7', 'month'],
+  });
   assert.equal(state.systemDark, false);
 
-  state = receiveNativeMessage(state, { type: 'displayPrefs', theme: '  AUTO  ', systemDark: true });
+  // Fewer than 3 valid tabs resets to default []
+  state = receiveNativeMessage(state, {
+    type: 'displayPrefs',
+    theme: '  AUTO  ',
+    periodTabOrder: ['today', 'yesterday'],
+    systemDark: true,
+  });
   assert.equal(state.displayPrefs.theme, 'auto');
+  assert.deepEqual(state.displayPrefs.periodTabOrder, []);
   assert.equal(state.systemDark, true);
 
   state = receiveNativeMessage(state, { type: 'imeVisibility', visible: true });
   assert.equal(state.imeVisible, true);
 
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://another-hub.example.com' });
-  assert.deepEqual(state.displayPrefs, { separateQoderClients: true, exactTrendTokens: true, theme: 'auto' });
+  assert.deepEqual(state.displayPrefs, {
+    separateQoderClients: true,
+    exactTrendTokens: true,
+    theme: 'auto',
+    periodTabOrder: [],
+  });
   assert.equal(state.systemDark, true);
   assert.equal(state.imeVisible, true);
 
   state = receiveNativeMessage(state, { type: 'imeVisibility', visible: false });
   assert.equal(state.imeVisible, false);
+});
+
+test('fixedRangeResult tracks requestIds, pauses on background lifecycle, and clears on reconnect', async () => {
+  const { createInitialState, receiveNativeMessage } = await stateModule;
+  const { beginFixedRangeQuery } = await import('../../ui/src/fixedRangeState.js');
+  let state = createInitialState();
+  state = {
+    ...state,
+    fixedRange: beginFixedRangeQuery(state.fixedRange, {
+      period: 'yesterday',
+      requestId: 'fr-1',
+      signature: 'sig-1',
+    }),
+  };
+  assert.equal(state.fixedRange.yesterday?.loading, true);
+
+  // Stale requestId is ignored
+  const afterStale = receiveNativeMessage(state, {
+    type: 'fixedRangeResult',
+    period: 'yesterday',
+    requestId: 'fr-stale',
+    scanned: { pc1: { start: '2026-11-25', end: '2026-11-25', period: { totalTokens: 999 } } },
+  });
+  assert.equal(afterStale.fixedRange.yesterday?.loading, true);
+  assert.equal(afterStale.fixedRange.yesterday?.scanned, null);
+
+  // Matching requestId populates sanitized scanned slices and deviceHistories
+  state = receiveNativeMessage(state, {
+    type: 'fixedRangeResult',
+    period: 'yesterday',
+    requestId: 'fr-1',
+    scanned: {
+      pc1: {
+        revision: 'rev-1',
+        start: '2026-11-25',
+        end: '2026-11-25',
+        period: { totalTokens: 1200, costUsd: 0.45 },
+      },
+      badSlice: { start: 'not-a-date', end: '2026-11-25', period: {} },
+    },
+    deviceHistories: [{ deviceId: 'pc2', updatedAt: '2026-11-26T00:00:00Z', historyAvailable: true, history: { daily: [] } }],
+  });
+  assert.equal(state.fixedRange.yesterday?.loading, false);
+  assert.equal(state.fixedRange.yesterday?.scanned?.pc1?.period?.totalTokens, 1200);
+  assert.equal('badSlice' in (state.fixedRange.yesterday?.scanned || {}), false);
+  assert.equal(state.fixedRange.yesterday?.deviceHistories?.length, 1);
+
+  // Backgrounding pauses in-flight loading without dropping already resolved cache
+  state = {
+    ...state,
+    fixedRange: beginFixedRangeQuery(state.fixedRange, {
+      period: 'last7',
+      requestId: 'fr-2',
+      signature: 'sig-2',
+    }),
+  };
+  assert.equal(state.fixedRange.last7?.loading, true);
+  state = receiveNativeMessage(state, { type: 'lifecycle', foreground: false });
+  assert.equal(state.fixedRange.last7?.loading, false);
+  assert.equal(state.fixedRange.yesterday?.scanned?.pc1?.period?.totalTokens, 1200);
+
+  // Connection change resets fixedRange cache
+  state = receiveNativeMessage(state, { type: 'connection', url: 'https://new-hub.example.com' });
+  assert.deepEqual(state.fixedRange, {});
 });
 
 test('limitAccountPresentation sanitizes custom labels/order and resets on reconnect', async () => {

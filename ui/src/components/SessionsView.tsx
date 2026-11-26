@@ -27,6 +27,8 @@ interface SessionsViewProps {
   };
   period: PeriodId;
   deviceId: string;
+  fixedRangeStatus?: 'native' | 'ready' | 'partial' | 'loading' | 'unavailable';
+  detailsAvailable?: boolean;
   search: string;
   onSearchChange: (val: string) => void;
   tool: string;
@@ -91,6 +93,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   selected,
   period,
   deviceId,
+  fixedRangeStatus = 'native',
+  detailsAvailable = true,
   search,
   onSearchChange,
   tool,
@@ -186,6 +190,26 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
         icon={<MessageSquare className="w-6 h-6" />}
         title="累计会话明细不通过 Hub 同步"
         description="请选择今日或本月查看会话，累计总量仍可在总览查看。"
+      />
+    );
+  }
+
+  if (fixedRangeStatus === 'loading' && !selected.period) {
+    return (
+      <EmptyState
+        icon={<MessageSquare className="w-6 h-6" />}
+        title="正在同步会话明细…"
+        description="正在向 Hub 读取当前固定统计区间的会话记录。"
+      />
+    );
+  }
+
+  if (detailsAvailable === false) {
+    return (
+      <EmptyState
+        icon={<MessageSquare className="w-6 h-6" />}
+        title="当前范围暂无已同步的会话明细"
+        description="此范围的 Token 与费用来自历史记录汇总；当采集设备上传固定区间扫描后，可在此查看会话。"
       />
     );
   }
@@ -393,6 +417,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               const effort = MonitorModel.sessionReasoningEffort(row);
               const sources = MonitorModel.sessionDevices(row, stats, period, deviceId);
               const usageDisplay = MonitorModel.sessionUsageDisplay(row);
+              const presentation = MonitorModel.sessionListPresentation(row);
+              const ageTs = row.lastUsedAt || row.startedAt;
+              const ageShort = MonitorModel.sessionAgeShort(ageTs, now);
+              const ageText = MonitorModel.sessionAgeText(ageTs, now);
 
               return (
                 <section
@@ -429,9 +457,18 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-sm font-semibold text-[var(--tm-text-primary)] leading-snug mt-2 mb-1.5 break-words">
-                      {row.title || row.projectLabel || row.sessionId || row.key}
+                    <div className="text-sm font-semibold text-[var(--tm-text-primary)] leading-snug mt-2 mb-1 break-words">
+                      {presentation.heading}
                     </div>
+
+                    {!isOpen && presentation.showInlineSessionId && (row.sessionId || row.key) && (
+                      <div
+                        data-session-inline-id={row.sessionId || row.key}
+                        className="text-[11px] font-mono-tabular text-[var(--tm-text-muted)] truncate mb-1.5"
+                      >
+                        {row.sessionId || row.key}
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-[var(--tm-text-muted)]">
                       {sources.length ? (
@@ -456,6 +493,20 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                         <span className="font-mono-tabular shrink-0">
                           {formatShortTime(row.lastUsedAt)}
                         </span>
+                        {ageShort && (
+                          <>
+                            <span className="shrink-0" aria-hidden="true">
+                              ·
+                            </span>
+                            <span
+                              role="img"
+                              aria-label={ageText}
+                              className="font-mono-tabular shrink-0"
+                            >
+                              {ageShort}
+                            </span>
+                          </>
+                        )}
                         <span className="shrink-0" aria-hidden="true">
                           ·
                         </span>
@@ -676,10 +727,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                                       )}
                                     </div>
                                     <div className="text-xs font-medium text-[var(--tm-text-primary)] break-words">
-                                      {member.title ||
-                                        member.projectLabel ||
-                                        member.sessionId ||
-                                        member.key}
+                                      {member.title?.trim() ||
+                                        `${clientName(member.client)} · ${MonitorModel.sessionModelLabel(member)}`}
                                     </div>
                                     <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] font-mono-tabular">
                                       <span className="min-w-0 truncate">

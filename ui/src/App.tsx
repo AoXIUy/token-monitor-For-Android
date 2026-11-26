@@ -29,6 +29,7 @@ import { SessionDetailView } from './components/SessionDetailView';
 import { SessionsView } from './components/SessionsView';
 import { SettingsView } from './components/SettingsView';
 import { EmptyState, InlineAlert, SegmentedControl } from './components/ui/Primitives';
+import { fixedRangeStatsSignature, isDerivedPeriodId } from './fixedRangeState';
 import { useNativeMonitor } from './hooks/useNativeMonitor';
 import { MonitorModel } from './model/monitorModel';
 import { receiveNativeMessage } from './nativeState';
@@ -40,7 +41,7 @@ import type {
   ReportGranularity,
   ConnectionStatus,
 } from './types/monitor';
-import { formatShortTime, PAGE_LABELS } from './utils/formatters';
+import { formatShortTime, PAGE_LABELS, PERIOD_LABELS, PERIOD_SHORT_LABELS } from './utils/formatters';
 
 type Monitor = ReturnType<typeof useNativeMonitor>;
 
@@ -86,6 +87,8 @@ function Dashboard({
   queryAntigravityManager,
   cancelAntigravityManager,
   updateAgManagerFilter,
+  queryFixedRange,
+  cancelFixedRange,
   saveLimitsPrefs,
   saveDisplayPrefs,
   pickCaCertificate,
@@ -128,6 +131,7 @@ function Dashboard({
   const [deadlineTick, setDeadlineTick] = useState(0);
   const [revealAppUpdate, setRevealAppUpdate] = useState(false);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [rangeMenuOpen, setRangeMenuOpen] = useState(false);
   const [reportWindowOpen, setReportWindowOpen] = useState(false);
   const [reportWindowTab, setReportWindowTab] = useState<ReportWindowTab>('ai');
   const [inputFocused, setInputFocused] = useState(false);
@@ -225,7 +229,72 @@ function Dashboard({
   }, [page, revealAppUpdate]);
 
   const nowTick = Date.now();
-  const selected = MonitorModel.select(stats, device, period, nowTick);
+  const customPeriodTabs = state.displayPrefs.periodTabOrder;
+  const hasCustomPeriodTabs = customPeriodTabs.length >= 3;
+  const fixedRangeSig =
+    stats && isDerivedPeriodId(period) ? fixedRangeStatsSignature(stats, period) : '';
+  const currentFixedEntry = isDerivedPeriodId(period) ? state.fixedRange[period] ?? null : null;
+
+  useEffect(() => {
+    if (hasCustomPeriodTabs && !customPeriodTabs.includes(period)) {
+      update((previous) => ({ ...previous, period: customPeriodTabs[0] }));
+    }
+  }, [hasCustomPeriodTabs, customPeriodTabs, period, update]);
+
+  useEffect(() => {
+    if (hasCustomPeriodTabs && rangeMenuOpen) {
+      setRangeMenuOpen(false);
+    }
+  }, [hasCustomPeriodTabs, rangeMenuOpen]);
+
+  useEffect(() => {
+    if (!foreground || !connection) {
+      cancelFixedRange();
+      return;
+    }
+    const needsFixedRange =
+      Boolean(stats) &&
+      isDerivedPeriodId(period) &&
+      Boolean(fixedRangeSig) &&
+      (page === 'overview' || page === 'sessions' || page === 'sessionDetail' || devicePickerOpen);
+    if (!needsFixedRange || !isDerivedPeriodId(period)) return;
+    if (
+      currentFixedEntry &&
+      currentFixedEntry.signature === fixedRangeSig &&
+      (currentFixedEntry.loading ||
+        currentFixedEntry.scanned !== null ||
+        currentFixedEntry.deviceHistories !== null ||
+        Boolean(currentFixedEntry.error))
+    ) {
+      return;
+    }
+    queryFixedRange(period, fixedRangeSig);
+  }, [
+    foreground,
+    connection,
+    stats,
+    period,
+    fixedRangeSig,
+    page,
+    devicePickerOpen,
+    currentFixedEntry,
+    queryFixedRange,
+    cancelFixedRange,
+  ]);
+
+  const fixedRangeRes = MonitorModel.resolveFixedRange(
+    stats,
+    period,
+    isDerivedPeriodId(period) ? state.fixedRange[period] ?? null : null,
+    nowTick,
+  );
+  const effectiveStats = fixedRangeRes.projectedStats || stats;
+  const selected = MonitorModel.select(effectiveStats, device, period, nowTick);
+  const detailsAvailable = !isDerivedPeriodId(period)
+    ? true
+    : device
+      ? Boolean(fixedRangeRes.deviceDetailsAvailable[device])
+      : fixedRangeRes.detailsAvailable;
 
   const setPage = (next: PageId) => {
     setDevicePickerOpen(false);
@@ -292,7 +361,7 @@ function Dashboard({
 
   useEffect(() => {
     if (
-      !stats ||
+      !effectiveStats ||
       !foreground ||
       document.hidden ||
       !['overview', 'sessions', 'sessionDetail'].includes(page)
@@ -301,7 +370,7 @@ function Dashboard({
     const now = Date.now();
     const detail =
       page === 'sessionDetail'
-        ? MonitorModel.sessionDetail(stats, detailKey, { deviceId: device, period, now })
+        ? MonitorModel.sessionDetail(effectiveStats, detailKey, { deviceId: device, period, now })
         : null;
     const rows =
       page === 'sessionDetail'
@@ -313,7 +382,7 @@ function Dashboard({
     for (const row of rows) {
       const reading = MonitorModel.sessionStatus(row, {
         now,
-        stats,
+        stats: effectiveStats,
         deviceId: device,
         period: detail?.period || period,
         connected: statusHealthy,
@@ -329,7 +398,7 @@ function Dashboard({
     );
     return () => clearTimeout(timer);
   }, [
-    stats,
+    effectiveStats,
     foreground,
     page,
     detailKey,
@@ -348,6 +417,9 @@ function Dashboard({
         queryAntigravityManager();
       }
       return;
+    }
+    if (isDerivedPeriodId(period) && fixedRangeSig && connection) {
+      queryFixedRange(period, fixedRangeSig);
     }
     if (window.HubNative?.refresh) {
       window.HubNative.refresh();
@@ -893,24 +965,89 @@ function Dashboard({
           {showFilters && (
             <div id="filters" className="mb-3 space-y-2">
               {showPeriods && (
-                <SegmentedControl<PeriodId>
-                  id="periods"
-                  ariaLabel="统计周期"
-                  value={period}
-                  onChange={(pId) => {
-                    setPeriod(pId);
-                    setOpenSessions(new Set());
-                  }}
-                  options={[
-                    { value: 'today', label: '今日', dataAttrs: { 'data-period': 'today' } },
-                    { value: 'month', label: '本月', dataAttrs: { 'data-period': 'month' } },
-                    { value: 'allTime', label: '累计', dataAttrs: { 'data-period': 'allTime' } },
-                  ]}
-                />
+                <>
+                  <SegmentedControl<PeriodId>
+                    id="periods"
+                    ariaLabel="统计周期"
+                    value={period}
+                    onChange={(pId) => {
+                      setPeriod(pId);
+                      setOpenSessions(new Set());
+                    }}
+                    options={
+                      hasCustomPeriodTabs
+                        ? customPeriodTabs.map((pId) => ({
+                            value: pId,
+                            label:
+                              customPeriodTabs.length >= 5
+                                ? PERIOD_SHORT_LABELS[pId]
+                                : PERIOD_LABELS[pId],
+                            dataAttrs: { 'data-period': pId },
+                          }))
+                        : (() => {
+                            const middlePeriod: PeriodId = isDerivedPeriodId(period)
+                              ? period
+                              : 'month';
+                            return [
+                              {
+                                value: 'today' as PeriodId,
+                                label: PERIOD_LABELS.today,
+                                dataAttrs: { 'data-period': 'today' },
+                              },
+                              {
+                                value: middlePeriod,
+                                label: PERIOD_LABELS[middlePeriod],
+                                dataAttrs: { 'data-period': middlePeriod },
+                              },
+                              {
+                                value: 'allTime' as PeriodId,
+                                label: PERIOD_LABELS.allTime,
+                                dataAttrs: { 'data-period': 'allTime' },
+                              },
+                            ];
+                          })()
+                    }
+                  />
+
+                  {!hasCustomPeriodTabs && (rangeMenuOpen || isDerivedPeriodId(period)) && (
+                    <div
+                      id="period-range-options"
+                      role="group"
+                      aria-label="选择固定统计范围"
+                      className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"
+                    >
+                      {(['yesterday', 'week', 'last7', 'month', 'last30'] as PeriodId[]).map(
+                        (rangeId) => {
+                          const active = period === rangeId;
+                          return (
+                            <button
+                              key={rangeId}
+                              type="button"
+                              data-fixed-period={rangeId}
+                              aria-pressed={active}
+                              onClick={() => {
+                                setPeriod(rangeId);
+                                setOpenSessions(new Set());
+                                if (rangeId === 'month') setRangeMenuOpen(false);
+                              }}
+                              className={`min-h-[40px] shrink-0 px-3 rounded-full text-xs font-semibold border transition-all active:scale-[0.98] whitespace-nowrap ${
+                                active
+                                  ? 'bg-[var(--tm-accent-soft-bg)] border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                                  : 'glass-inset text-[var(--tm-text-secondary)] hover:border-[var(--tm-border-strong)]'
+                              }`}
+                            >
+                              {PERIOD_LABELS[rangeId]}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <button
                     id="device-picker-trigger"
                     type="button"
@@ -958,6 +1095,25 @@ function Dashboard({
                     )}
                     <ChevronDown className="w-3.5 h-3.5 text-[var(--tm-text-muted)] shrink-0" aria-hidden="true" />
                   </button>
+
+                  {showPeriods && !hasCustomPeriodTabs && (
+                    <button
+                      id="period-range-trigger"
+                      type="button"
+                      data-period-range-toggle="true"
+                      aria-expanded={rangeMenuOpen || isDerivedPeriodId(period)}
+                      aria-label="切换昨日、本周、近7天或近30天统计范围"
+                      onClick={() => setRangeMenuOpen((prev) => !prev)}
+                      className={`min-h-[44px] px-2.5 py-1.5 rounded-full glass-pill-bar hover:border-[var(--tm-border-strong)] active:scale-[0.98] inline-flex items-center gap-1 text-xs font-medium shrink-0 transition-all ${
+                        isDerivedPeriodId(period) || rangeMenuOpen
+                          ? 'border-[var(--tm-accent-soft-border)] text-[var(--tm-accent-text)]'
+                          : 'text-[var(--tm-text-secondary)]'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                      <span>{isDerivedPeriodId(period) ? PERIOD_LABELS[period] : '范围'}</span>
+                    </button>
+                  )}
 
                   {/* Retained hidden select for programmatic test/automation compatibility */}
                   <select
@@ -1133,12 +1289,15 @@ function Dashboard({
                 <>
                   <ApprovalsPanel approvals={approvals} />
                   <OverviewView
-                    stats={stats}
+                    stats={effectiveStats!}
                     selected={selected}
                     period={period}
                     deviceId={device}
                     breakdownKind={breakdownKind}
                     onBreakdownChange={setBreakdownKind}
+                    fixedRangeStatus={fixedRangeRes.status}
+                    fixedRangeRange={fixedRangeRes.range}
+                    detailsAvailable={detailsAvailable}
                     statusHealthy={statusHealthy}
                     foreground={foreground}
                     fetchedAt={fetchedAt}
@@ -1206,10 +1365,12 @@ function Dashboard({
 
               {page === 'sessions' && (
                 <SessionsView
-                  stats={stats}
+                  stats={effectiveStats!}
                   selected={selected}
                   period={period}
                   deviceId={device}
+                  fixedRangeStatus={fixedRangeRes.status}
+                  detailsAvailable={detailsAvailable}
                   search={search}
                   onSearchChange={(val) => {
                     setSearch(val);
@@ -1236,7 +1397,7 @@ function Dashboard({
               {page === 'sessionDetail' && (
                 <SessionDetailView
                   key={detailKey}
-                  stats={stats}
+                  stats={effectiveStats!}
                   detailKey={detailKey}
                   deviceId={device}
                   period={period}
@@ -1257,7 +1418,7 @@ function Dashboard({
 
         <DevicePickerDialog
           open={devicePickerOpen && showFilters}
-          stats={stats}
+          stats={effectiveStats}
           selectedDeviceId={device}
           period={period}
           page={page}

@@ -67,8 +67,14 @@
       "sourceProject": "https://github.com/AoXIUy/token-monitor",
       "sourcePath": "src/shared/sessionRealtime.js",
       "sourceCommit": "4361dd9234824bd7040adb653833fb4b8de397af"
+    },
+    {
+      "path": "src/shared/fixedPeriodRanges.js",
+      "sha256": "18934c9e11187a549308df5359408a13ef81112ba91a837218891216725daf9a",
+      "sourcePath": "src/electron/renderer/fixedPeriodRanges.js",
+      "sourceCommit": "3ea0ec251a3724622fe21a81ad37eea74570617f"
     }
   ],
-  "upstreamVersion": "0.97.0",
-  "upstreamCommit": "9d745c106ac5030045dade55c0d1aea279cdcfd7"
+  "upstreamVersion": "0.98.0",
+  "upstreamCommit": "3ea0ec251a3724622fe21a81ad37eea74570617f"
 }

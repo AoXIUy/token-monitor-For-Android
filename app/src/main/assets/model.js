@@ -11,14 +11,27 @@
     node ? require('../../../../src/shared/limits/historyModel') : root.TokenMonitorLimitsHistoryModel,
     node ? require('../../../../src/shared/clientCatalog') : root.TokenMonitorClientCatalog,
     node ? require('../../../../src/shared/limits/windowLabels') : root.TokenMonitorLimitWindowLabels,
-    node ? require('../../../../src/shared/currency') : root.TokenMonitorCurrency
+    node ? require('../../../../src/shared/currency') : root.TokenMonitorCurrency,
+    node ? require('../../../../src/shared/fixedPeriodRanges') : root.TokenMonitorFixedPeriodRanges
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.MonitorModel = api;
-})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels, currencyApi) {
+})(typeof window !== 'undefined' ? window : null, function createModel(balance, sessionLive, sessionGroups, deviceKinds, windowText, historyModel, clientCatalog, windowLabels, currencyApi, fixedPeriodRanges) {
   const REMOTE_STATUS_MAX_AGE_MS = 30_000;
+  const SYNC_WEEK_STARTS_ON = 1;
+  const DERIVED_PERIODS = ['yesterday', 'week', 'last7', 'last30'];
+  const PERIOD_TAB_OPTIONS = ['today', 'yesterday', 'week', 'last7', 'month', 'last30', 'allTime'];
   const QODER_DEFAULT_SLOT_KEY = 'sha256:c325fbf2f2b9a182e7edbdf6f2163efde2b6b8c460a7c93bcc607c8cf31a5b52';
   const ANTIGRAVITY_GROUP_ORDER = ['gemini', 'claude/gpt', 'gemini 4 argon'];
+  function isDerivedPeriod(value) {
+    return fixedPeriodRanges?.isDerived ? fixedPeriodRanges.isDerived(value) : DERIVED_PERIODS.includes(value);
+  }
+  function normalizePeriodTabOrder(value) {
+    if (fixedPeriodRanges?.normalizePeriodTabOrder) return fixedPeriodRanges.normalizePeriodTabOrder(value);
+    if (!Array.isArray(value)) return [];
+    const order = [...new Set(value.filter(id => PERIOD_TAB_OPTIONS.includes(id)))];
+    return order.length < 3 ? [] : order.slice(0, 6);
+  }
   function isCalendarDayKey(value) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const ms = Date.parse(`${value}T00:00:00Z`);
@@ -54,12 +67,381 @@
   }
   function expired(device, period, now = Date.now()) {
     if (period === 'allTime') return false;
+    if (isDerivedPeriod(period)) {
+      if (device?.periods?.[period]) return false;
+      return fixedPeriodRanges?.deviceDayState ? !fixedPeriodRanges.deviceDayState(device, { now }) : false;
+    }
     const end = Date.parse(device?.periodWindows?.[period]?.endsAt);
     if (Number.isFinite(end)) return now >= end;
     const updated = Date.parse(device?.updatedAt);
     if (!Number.isFinite(updated)) return false;
     const length = period === 'today' ? 10 : 7;
     return new Date(updated).toISOString().slice(0, length) !== new Date(now).toISOString().slice(0, length);
+  }
+  function emptyFixedPeriod() {
+    return {
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+      unclassifiedTokens: 0,
+      costUsd: 0,
+      capabilities: { tokenComponents: true },
+      clients: {},
+      clientCosts: {},
+      models: {},
+      modelCosts: {},
+      projects: {},
+      sessions: {},
+    };
+  }
+  function addNumericMap(target, source, roundIntegers = false) {
+    for (const [k, v] of Object.entries(source || {})) {
+      const n = numeric(v);
+      if (n === null) continue;
+      const next = (numeric(target[k]) ?? 0) + n;
+      target[k] = roundIntegers ? Math.max(0, Math.round(next)) : Number(next.toFixed(6));
+    }
+  }
+  function mergeSessionRow(existing, incoming, deviceMeta) {
+    if (!existing) {
+      return {
+        ...incoming,
+        sourceDevice: deviceMeta
+          ? { deviceId: deviceMeta.deviceId, name: deviceMeta.hostname || deviceMeta.deviceId, deviceKind: deviceKind(deviceMeta.deviceKind) }
+          : incoming?.sourceDevice,
+      };
+    }
+    const merged = { ...existing };
+    const existingTime = Date.parse(existing.lastUsedAt || '') || 0;
+    const incomingTime = Date.parse(incoming.lastUsedAt || '') || 0;
+    if (incomingTime >= existingTime) {
+      for (const field of ['title', 'projectLabel', 'lastUsedAt', 'latestModel', 'reasoningEffort',
+        'turnEnded', 'contextTokens', 'contextWindow', 'promptCacheExpiresAt', 'liveActivity']) {
+        if (incoming[field] !== undefined && incoming[field] !== '') merged[field] = incoming[field];
+      }
+    }
+    if (incoming.startedAt && (!existing.startedAt || Date.parse(incoming.startedAt) < Date.parse(existing.startedAt))) {
+      merged.startedAt = incoming.startedAt;
+    }
+    for (const field of ['totalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens',
+      'reasoningTokens', 'unclassifiedTokens', 'messageCount', 'timedOutputTokens', 'timedDurationMs']) {
+      const a = numeric(existing[field]);
+      const b = numeric(incoming[field]);
+      merged[field] = a !== null && b !== null ? a + b : (a ?? b);
+    }
+    const costA = numeric(existing.costUsd);
+    const costB = numeric(incoming.costUsd);
+    merged.costUsd = costA !== null && costB !== null ? Number((costA + costB).toFixed(6)) : (costA ?? costB);
+    const unpriced = count(existing.unpricedTokens) + count(incoming.unpricedTokens);
+    if (unpriced > 0) merged.unpricedTokens = unpriced;
+    merged.tokenDataUnavailable = existing.tokenDataUnavailable === true && incoming.tokenDataUnavailable === true;
+    if (!merged.tokenDataUnavailable) delete merged.tokenDataUnavailable;
+    merged.archived = Boolean(existing.archived || existing.isArchived) && Boolean(incoming.archived || incoming.isArchived);
+    if (!merged.archived) {
+      delete merged.archived;
+      delete merged.isArchived;
+    }
+    if (existing.cacheReported === true || incoming.cacheReported === true) merged.cacheReported = true;
+    merged.models = { ...(existing.models || {}) };
+    addNumericMap(merged.models, incoming.models, true);
+    merged.modelCosts = { ...(existing.modelCosts || {}) };
+    addNumericMap(merged.modelCosts, incoming.modelCosts, false);
+    merged.providers = { ...(existing.providers || {}) };
+    addNumericMap(merged.providers, incoming.providers, true);
+    merged.sourceDevice = existing.sourceDevice?.deviceId && deviceMeta?.deviceId && existing.sourceDevice.deviceId === deviceMeta.deviceId
+      ? existing.sourceDevice
+      : { ambiguous: true };
+    return merged;
+  }
+  function mergePeriodInto(target, source, deviceMeta, includeDetails) {
+    if (!source || typeof source !== 'object') return target;
+    target.totalTokens = Math.max(0, Math.round(count(target.totalTokens) + count(source.totalTokens)));
+    const srcInput = numeric(source.inputTokens);
+    if (srcInput !== null) {
+      target.inputTokens = Math.max(0, Math.round(count(target.inputTokens) + srcInput));
+    } else {
+      // History-derived periods carry total/cacheRead/cacheWrite/output/unclassified without explicit inputTokens.
+      const derivedClassified = Math.max(0, count(source.totalTokens) - count(source.unclassifiedTokens));
+      const derivedInput = Math.max(0, derivedClassified - count(source.cacheReadTokens) - count(source.cacheWriteTokens) - count(source.outputTokens));
+      target.inputTokens = Math.max(0, Math.round(count(target.inputTokens) + derivedInput));
+    }
+    target.outputTokens = Math.max(0, Math.round(count(target.outputTokens) + count(source.outputTokens)));
+    target.cacheReadTokens = Math.max(0, Math.round(count(target.cacheReadTokens) + count(source.cacheReadTokens)));
+    target.cacheWriteTokens = Math.max(0, Math.round(count(target.cacheWriteTokens) + count(source.cacheWriteTokens)));
+    target.reasoningTokens = Math.max(0, Math.round(count(target.reasoningTokens) + count(source.reasoningTokens)));
+    target.unclassifiedTokens = Math.max(0, Math.round(count(target.unclassifiedTokens) + count(source.unclassifiedTokens)));
+    const unpriced = count(target.unpricedTokens) + count(source.unpricedTokens);
+    if (unpriced > 0) target.unpricedTokens = unpriced;
+    const srcCost = numeric(source.costUsd);
+    if (srcCost !== null) {
+      target.costUsd = Number(((numeric(target.costUsd) ?? 0) + srcCost).toFixed(6));
+    }
+    if (count(source.totalTokens) > 0 && source.capabilities?.tokenComponents !== true) {
+      target.capabilities = { ...(target.capabilities || {}), tokenComponents: false };
+    }
+    addNumericMap(target.clients, source.clients, true);
+    addNumericMap(target.clientCosts, source.clientCosts, false);
+    addNumericMap(target.models, source.models, true);
+    addNumericMap(target.modelCosts, source.modelCosts, false);
+    if (includeDetails) {
+      for (const [projKey, proj] of Object.entries(source.projects || {})) {
+        if (!proj || typeof proj !== 'object') continue;
+        const prev = target.projects[projKey];
+        const pCost = numeric(proj.costUsd);
+        const prevCost = prev ? numeric(prev.costUsd) : 0;
+        target.projects[projKey] = {
+          label: prev?.label || proj.label || projKey,
+          tokens: count(prev?.tokens) + count(proj.tokens),
+          costUsd: pCost !== null && prevCost !== null ? Number((prevCost + pCost).toFixed(6)) : (prev ? prev.costUsd : pCost),
+        };
+      }
+      for (const [sessKey, sess] of Object.entries(source.sessions || {})) {
+        if (!sess || typeof sess !== 'object') continue;
+        target.sessions[sessKey] = mergeSessionRow(target.sessions[sessKey], sess, deviceMeta);
+      }
+    }
+    return target;
+  }
+  function normalizeFixedPeriod(rawPeriod, includeDetails = true) {
+    const out = emptyFixedPeriod();
+    out.capabilities = { tokenComponents: rawPeriod?.capabilities?.tokenComponents === true };
+    mergePeriodInto(out, rawPeriod, null, includeDetails);
+    if (numeric(rawPeriod?.costUsd) === null) out.costUsd = null;
+    if (rawPeriod?.derivedFixedRange === true) out.derivedFixedRange = true;
+    return out;
+  }
+  function historyFallbackForMissingDevices(selection, missingDevices, deviceHistories, options) {
+    if (!fixedPeriodRanges || !Array.isArray(deviceHistories)) return null;
+    const byId = new Map(deviceHistories.map(source => [String(source?.deviceId || ''), source]));
+    const sources = missingDevices.map(device => {
+      const fetched = byId.get(String(device?.deviceId || ''));
+      // Never let an older /api/devices response disguise a newer device snapshot as zero usage.
+      const source = fetched && fetched.updatedAt === device.updatedAt ? fetched : device;
+      return {
+        ...device,
+        history: source?.history || null,
+        historyAvailable: source?.historyAvailable === true && Array.isArray(source?.history?.daily),
+      };
+    });
+    const snapshot = fixedPeriodRanges.fixedPeriodSnapshotFromDevices(selection, sources, {
+      ...options,
+      historyAvailable: true,
+    });
+    return snapshot.status === 'ready' ? snapshot.devices : null;
+  }
+  function resolveFixedRange(stats, periodName, payload = null, now = Date.now()) {
+    if (!isDerivedPeriod(periodName)) {
+      return {
+        status: 'native',
+        period: periodName,
+        range: null,
+        detailsAvailable: true,
+        deviceDetailsAvailable: {},
+        projectedStats: stats,
+        reason: '',
+      };
+    }
+    if (!stats || !fixedPeriodRanges) {
+      return {
+        status: 'unavailable',
+        period: periodName,
+        range: null,
+        detailsAvailable: false,
+        deviceDetailsAvailable: {},
+        projectedStats: null,
+        reason: 'unavailable',
+      };
+    }
+    // Support pre-populated preview/fixture periods when no async Hub payload is needed.
+    if (!payload && stats.periods?.[periodName]) {
+      const deviceDetailsAvailable = {};
+      for (const dev of stats.devices || []) {
+        deviceDetailsAvailable[dev.deviceId] = Boolean(dev.periods?.[periodName] && !dev.periods[periodName].derivedFixedRange);
+      }
+      return {
+        status: 'ready',
+        period: periodName,
+        range: stats.nativeRangeWindows?.[periodName] || null,
+        detailsAvailable: stats.periods[periodName].derivedFixedRange !== true,
+        deviceDetailsAvailable,
+        projectedStats: stats,
+        reason: '',
+      };
+    }
+    if (!payload || payload.loading === true) {
+      return {
+        status: 'loading',
+        period: periodName,
+        range: null,
+        detailsAvailable: false,
+        deviceDetailsAvailable: {},
+        projectedStats: null,
+        reason: 'loading',
+      };
+    }
+    if (payload.error && !payload.scanned && !payload.deviceHistories) {
+      return {
+        status: 'unavailable',
+        period: periodName,
+        range: null,
+        detailsAvailable: false,
+        deviceDetailsAvailable: {},
+        projectedStats: null,
+        reason: String(payload.error),
+      };
+    }
+    const rangeOptions = { now, weekStartsOn: SYNC_WEEK_STARTS_ON };
+    const devices = Array.isArray(stats.devices) ? stats.devices : [];
+    if (devices.length === 0) {
+      const empty = emptyFixedPeriod();
+      const range = fixedPeriodRanges.rangeForSelection(periodName, rangeOptions);
+      return {
+        status: 'ready',
+        period: periodName,
+        range,
+        detailsAvailable: true,
+        deviceDetailsAvailable: {},
+        projectedStats: { ...stats, periods: { ...(stats.periods || {}), [periodName]: empty } },
+        reason: '',
+      };
+    }
+    const entries = devices.map((device) => {
+      const day = fixedPeriodRanges.deviceDayState(device, rangeOptions);
+      const expectedRange = day && fixedPeriodRanges.rangeForSelection(periodName, {
+        ...rangeOptions,
+        todayKey: day.currentKey,
+      });
+      const expectedRev = stats.fixedRangeRevisions?.[device.deviceId];
+      const scannedEntry = payload.scanned?.[device.deviceId];
+      const matchesRevision = !expectedRev || !scannedEntry?.revision || scannedEntry.revision === expectedRev;
+      const validScanned = Boolean(
+        expectedRange
+        && matchesRevision
+        && scannedEntry?.start === expectedRange.start
+        && scannedEntry?.end === expectedRange.end
+        && scannedEntry?.period
+        && typeof scannedEntry.period === 'object'
+      );
+      return {
+        device,
+        range: expectedRange,
+        scannedPeriod: validScanned ? normalizeFixedPeriod(scannedEntry.period, true) : null,
+      };
+    });
+    const scannedCount = entries.filter(e => e.scannedPeriod !== null).length;
+    const deviceDetailsAvailable = {};
+    if (scannedCount > 0) {
+      const missing = entries.filter(e => !e.scannedPeriod).map(e => e.device);
+      const fallback = missing.length > 0
+        ? historyFallbackForMissingDevices(periodName, missing, payload.deviceHistories, rangeOptions)
+        : [];
+      const fleetComplete = missing.length === 0 || fallback !== null;
+      const derivedById = new Map((fallback || []).map(row => [String(row.deviceId), row]));
+      const fleetPeriod = emptyFixedPeriod();
+      let bounds = null;
+      const projectedDevices = entries.map(({ device, range, scannedPeriod }) => {
+        if (scannedPeriod) {
+          deviceDetailsAvailable[device.deviceId] = true;
+          if (fleetComplete) mergePeriodInto(fleetPeriod, scannedPeriod, device, !fallback?.length);
+          if (range) {
+            bounds = {
+              start: !bounds || range.start < bounds.start ? range.start : bounds.start,
+              end: !bounds || range.end > bounds.end ? range.end : bounds.end,
+            };
+          }
+          return { ...device, periods: { ...(device.periods || {}), [periodName]: scannedPeriod } };
+        }
+        deviceDetailsAvailable[device.deviceId] = false;
+        const derived = derivedById.get(String(device.deviceId));
+        if (derived?.period) {
+          const normDerived = normalizeFixedPeriod(derived.period, false);
+          normDerived.derivedFixedRange = true;
+          if (fleetComplete) mergePeriodInto(fleetPeriod, normDerived, device, false);
+          if (derived.range) {
+            bounds = {
+              start: !bounds || derived.range.start < bounds.start ? derived.range.start : bounds.start,
+              end: !bounds || derived.range.end > bounds.end ? derived.range.end : bounds.end,
+            };
+          }
+          return { ...device, periods: { ...(device.periods || {}), [periodName]: normDerived } };
+        }
+        // An idle device with empty History contributes 0 tokens once History is verified complete.
+        if (fleetComplete) {
+          const zeroPeriod = emptyFixedPeriod();
+          zeroPeriod.derivedFixedRange = true;
+          return { ...device, periods: { ...(device.periods || {}), [periodName]: zeroPeriod } };
+        }
+        return { ...device, periods: { ...(device.periods || {}), [periodName]: null } };
+      });
+      const detailsAvailable = fleetComplete && (!fallback || fallback.length === 0);
+      if (!detailsAvailable) fleetPeriod.derivedFixedRange = true;
+      return {
+        status: fleetComplete ? 'ready' : 'partial',
+        period: periodName,
+        range: bounds,
+        detailsAvailable,
+        deviceDetailsAvailable,
+        projectedStats: {
+          ...stats,
+          periods: { ...(stats.periods || {}), [periodName]: fleetComplete ? fleetPeriod : null },
+          devices: projectedDevices,
+        },
+        reason: fleetComplete ? '' : (payload.historyError || 'historyUnavailable'),
+      };
+    }
+    // Pure History fallback (older Hub or Cloudflare Worker without fixed-range uploads).
+    const fallbackRows = historyFallbackForMissingDevices(periodName, devices, payload.deviceHistories, rangeOptions);
+    if (!fallbackRows) {
+      return {
+        status: 'unavailable',
+        period: periodName,
+        range: null,
+        detailsAvailable: false,
+        deviceDetailsAvailable: {},
+        projectedStats: null,
+        reason: String(payload.historyError || 'historyUnavailable'),
+      };
+    }
+    const byId = new Map(fallbackRows.map(row => [String(row.deviceId), row]));
+    const fleetPeriod = emptyFixedPeriod();
+    fleetPeriod.derivedFixedRange = true;
+    let bounds = null;
+    const projectedDevices = devices.map((device) => {
+      deviceDetailsAvailable[device.deviceId] = false;
+      const derived = byId.get(String(device.deviceId));
+      if (derived?.period) {
+        const normDerived = normalizeFixedPeriod(derived.period, false);
+        normDerived.derivedFixedRange = true;
+        mergePeriodInto(fleetPeriod, normDerived, device, false);
+        if (derived.range) {
+          bounds = {
+            start: !bounds || derived.range.start < bounds.start ? derived.range.start : bounds.start,
+            end: !bounds || derived.range.end > bounds.end ? derived.range.end : bounds.end,
+          };
+        }
+        return { ...device, periods: { ...(device.periods || {}), [periodName]: normDerived } };
+      }
+      const zeroPeriod = emptyFixedPeriod();
+      zeroPeriod.derivedFixedRange = true;
+      return { ...device, periods: { ...(device.periods || {}), [periodName]: zeroPeriod } };
+    });
+    if (!bounds) bounds = fixedPeriodRanges.rangeForSelection(periodName, rangeOptions);
+    return {
+      status: 'ready',
+      period: periodName,
+      range: bounds,
+      detailsAvailable: false,
+      deviceDetailsAvailable,
+      projectedStats: {
+        ...stats,
+        periods: { ...(stats.periods || {}), [periodName]: fleetPeriod },
+        devices: projectedDevices,
+      },
+      reason: '',
+    };
   }
   function select(stats, deviceId, periodName, now = Date.now()) {
     const device = deviceId ? (stats?.devices || []).find((row) => row.deviceId === deviceId) : null;
@@ -264,7 +646,11 @@
     if (options.deviceId && !device) return null;
     const periods = (device || stats)?.periods;
     const now = options.now ?? Date.now();
-    const preferred = options.period === 'today' ? ['today', 'month'] : ['month', 'today'];
+    const preferred = options.period && isDerivedPeriod(options.period)
+      ? [options.period, 'month', 'today']
+      : options.period === 'today'
+        ? ['today', 'month']
+        : ['month', 'today'];
     for (const period of preferred) {
       if (device && expired(device, period, now)) continue;
       const rows = periods?.[period]?.sessions;
@@ -528,6 +914,59 @@
     }
     return models.length > 1 ? `${models.length} 个模型` : models[0] || '模型未知';
   }
+  function sessionAgeShort(value, now = Date.now()) {
+    const ms = typeof value === 'number' ? value : Date.parse(value || '');
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    const minutes = Math.round(Math.max(0, now - ms) / 60000);
+    if (minutes < 1) return '<1m';
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.round(hours / 24)}d`;
+  }
+  function sessionAgeText(value, now = Date.now()) {
+    const ms = typeof value === 'number' ? value : Date.parse(value || '');
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    const minutes = Math.round(Math.max(0, now - ms) / 60000);
+    if (minutes < 1) return '刚刚';
+    if (minutes < 60) return `${minutes} 分钟前`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} 小时前`;
+    return `${Math.round(hours / 24)} 天前`;
+  }
+  function sessionListPresentation(row) {
+    const title = typeof row?.title === 'string' ? row.title.trim() : '';
+    const projectLabel = typeof row?.projectLabel === 'string' ? row.projectLabel.trim() : '';
+    const isGroup = Array.isArray(row?.groupRows) && row.groupRows.length > 0;
+    const toolModelHeading = `${clientLabel(row?.client)} · ${sessionModelLabel(row)}`;
+    if (title) {
+      return {
+        heading: title,
+        detailHeading: title,
+        titled: true,
+        usesProjectHeading: false,
+        showInlineSessionId: false,
+      };
+    }
+    // Standalone untitled sessions use the project name on the list while
+    // retaining tool · model for Session Details and keeping the ID visible.
+    if (!isGroup && projectLabel) {
+      return {
+        heading: projectLabel,
+        detailHeading: toolModelHeading,
+        titled: false,
+        usesProjectHeading: true,
+        showInlineSessionId: true,
+      };
+    }
+    return {
+      heading: toolModelHeading,
+      detailHeading: toolModelHeading,
+      titled: false,
+      usesProjectHeading: false,
+      showInlineSessionId: !isGroup,
+    };
+  }
   function quota(provider, window, options = {}) {
     const showUsed = options.showUsed !== false;
     const rawLabel = String(window?.label || '').trim();
@@ -709,5 +1148,5 @@
       ? (row.topUps || []).reduce((sum, entry) => sum + count(entry.amountMinor), 0) / 100
       : numeric(row.amountMinor) === null ? null : row.amountMinor / 100;
   }
-  return { numeric, count, clientLabel, compact, money, escape, expired, select, breakdown, deviceBreakdown, sessions, sessionUsageDisplay, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitSelectionKey, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
+  return { numeric, count, clientLabel, compact, money, escape, isDerivedPeriod, normalizePeriodTabOrder, resolveFixedRange, expired, select, breakdown, deviceBreakdown, sessions, sessionUsageDisplay, sessionListPresentation, sessionAgeShort, sessionAgeText, filterSessionTools, filterSessionStatuses, deviceKind, sessionDevices, sessionDetail, sessionStatus, sessionReasoningEffort, sessionLatestModel, sessionModelLabel, sessionCacheEfficiency, cacheEfficiency, cacheSessions, limitSelectionKey, limitAccount, limitGroups, limitSpend, limitBalanceDetails, limitWindows, limitHasHistory, quota, quotaTrendBounds, daily, activityDays, widgetHistory, components, subscriptionAmount };
 });

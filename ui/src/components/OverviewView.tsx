@@ -35,7 +35,14 @@ import {
   PeriodId,
   ReportGranularity,
 } from '../types/monitor';
-import { clientTone, formatExact, PERIOD_LABELS, clientName, providerName } from '../utils/formatters';
+import {
+  clientTone,
+  formatExact,
+  formatRelativeCountdown,
+  PERIOD_LABELS,
+  clientName,
+  providerName,
+} from '../utils/formatters';
 import { sha256Hex } from '../utils/limitsPrefs';
 
 interface OverviewViewProps {
@@ -50,6 +57,9 @@ interface OverviewViewProps {
   deviceId: string;
   breakdownKind: BreakdownKind;
   onBreakdownChange: (kind: BreakdownKind) => void;
+  fixedRangeStatus?: 'native' | 'ready' | 'partial' | 'loading' | 'unavailable';
+  fixedRangeRange?: { start: string; end: string } | null;
+  detailsAvailable?: boolean;
   statusHealthy?: boolean;
   foreground?: boolean;
   fetchedAt?: number;
@@ -309,6 +319,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   deviceId,
   breakdownKind,
   onBreakdownChange,
+  fixedRangeStatus = 'native',
+  fixedRangeRange = null,
+  detailsAvailable = true,
   statusHealthy = true,
   foreground = true,
   fetchedAt = 0,
@@ -336,6 +349,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const [showAllBreakdown, setShowAllBreakdown] = useState(false);
   const [expandedBreakdownDevices, setExpandedBreakdownDevices] = useState<Set<string>>(() => new Set());
   const [showAllLimits, setShowAllLimits] = useState(false);
+  const [overviewSessionsMode, setOverviewSessionsMode] = useState<'detailed' | 'compact'>('detailed');
 
   useEffect(() => {
     setShowAllBreakdown(false);
@@ -354,7 +368,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const p = selected.period;
 
   const sessionPulse = useMemo(() => {
-    if (!p || period === 'allTime') return null;
+    if (!p || period === 'allTime' || detailsAvailable === false) return null;
     const allRows = MonitorModel.sessions(p);
     if (!allRows.length) return null;
     const statusOptions = {
@@ -485,6 +499,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           provider,
           account,
           primary,
+          validQuotas,
           secondaryQuotas,
           dataTier,
           hasCollectedData,
@@ -575,6 +590,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   }, [p, deviceRows, separateQoderClients]);
 
   if (!p) {
+    if (fixedRangeStatus === 'loading') {
+      return (
+        <EmptyState
+          title="正在同步此范围统计…"
+          description="正在向 Hub 读取固定区间扫描与设备历史记录。"
+        />
+      );
+    }
+    if (fixedRangeStatus === 'partial' || fixedRangeStatus === 'unavailable') {
+      return (
+        <EmptyState
+          title={selected.expired ? '此设备的统计周期已结束' : '当前范围暂无可用统计'}
+          description="等待采集设备上传固定区间扫描，或在采集端开启历史记录同步。"
+        />
+      );
+    }
     return (
       <EmptyState
         title={selected.expired ? '此设备的统计周期已结束' : '暂无统计数据'}
@@ -739,9 +770,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       {/* 1. Hero 核心遥测看板 */}
       <section className="glass-hero rounded-3xl p-4 sm:p-5 relative overflow-hidden">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-[var(--tm-accent-text)] tracking-wide">
-            {PERIOD_LABELS[period]} Token 用量
-          </span>
+          <div className="inline-flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-xs font-semibold text-[var(--tm-accent-text)] tracking-wide">
+              {PERIOD_LABELS[period]} Token 用量
+            </span>
+            {fixedRangeRange && (
+              <span
+                data-fixed-range-badge
+                className="px-2 py-0.5 rounded-full bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] text-[11px] font-mono-tabular text-[var(--tm-text-secondary)]"
+              >
+                {fixedRangeRange.start === fixedRangeRange.end
+                  ? fixedRangeRange.start
+                  : `${fixedRangeRange.start} ~ ${fixedRangeRange.end}`}
+              </span>
+            )}
+          </div>
 
           <div className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
             {deviceId ? (
@@ -992,16 +1035,43 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   </div>
                 }
                 action={
-                  onNavigate ? (
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('sessions')}
-                      className="inline-flex items-center gap-0.5 min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all tabular-nums whitespace-nowrap"
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      role="group"
+                      aria-label="会话速览展示密度"
+                      className="inline-flex items-center rounded-xl bg-[var(--tm-bg-control)] border border-[var(--tm-border-default)] p-0.5 text-[11px]"
                     >
-                      <span>全部 ({sessionPulse.totalCount})</span>
-                      <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
-                  ) : undefined
+                      {(['detailed', 'compact'] as const).map((mId) => {
+                        const active = overviewSessionsMode === mId;
+                        return (
+                          <button
+                            key={mId}
+                            type="button"
+                            data-overview-sessions-mode={mId}
+                            aria-pressed={active}
+                            onClick={() => setOverviewSessionsMode(mId)}
+                            className={`min-h-[34px] px-2 rounded-lg font-semibold transition-colors whitespace-nowrap ${
+                              active
+                                ? 'bg-[var(--tm-selection-bg)] text-[var(--tm-selection-text)]'
+                                : 'text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
+                            }`}
+                          >
+                            {mId === 'detailed' ? '详细' : '紧凑'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {onNavigate && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('sessions')}
+                        className="inline-flex items-center gap-0.5 min-h-[44px] px-3 rounded-xl bg-[var(--tm-bg-control)] hover:bg-[var(--tm-bg-control-hover)] border border-[var(--tm-border-default)] text-[11px] font-semibold text-[var(--tm-accent-text)] active:scale-[0.97] transition-all tabular-nums whitespace-nowrap"
+                      >
+                        <span>全部 ({sessionPulse.totalCount})</span>
+                        <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 }
               />
 
@@ -1010,6 +1080,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   const tone = clientTone(row.client);
                   const targetKey = row.detailKey || row.key;
                   const usageDisplay = MonitorModel.sessionUsageDisplay(row);
+                  const presentation = MonitorModel.sessionListPresentation(row);
+                  const sources = !deviceId
+                    ? MonitorModel.sessionDevices(row, stats, period, deviceId)
+                    : [];
+                  const ageTs = row.lastUsedAt || row.startedAt;
+                  const ageShort = MonitorModel.sessionAgeShort(ageTs, now);
+                  const ageText = MonitorModel.sessionAgeText(ageTs, now);
+                  const isLiveActive = status.state === 'running' || status.state === 'waiting';
+                  const showAge =
+                    Boolean(ageShort) &&
+                    !(overviewSessionsMode === 'compact' && isLiveActive && ageShort === '<1m');
                   const inferred = status.source === 'inferred';
                   const stateTone =
                     status.state === 'running'
@@ -1029,6 +1110,49 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       : status.state === 'ended'
                       ? 'bg-[var(--tm-info)]'
                       : 'bg-[var(--tm-text-muted)]';
+                  if (overviewSessionsMode === 'compact') {
+                    return (
+                      <button
+                        key={row.key}
+                        type="button"
+                        data-overview-session={targetKey}
+                        onClick={() =>
+                          onOpenSessionDetail
+                            ? onOpenSessionDetail(targetKey)
+                            : onNavigate?.('sessions')
+                        }
+                        className="w-full min-h-[44px] text-left px-3 py-2 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.99] transition-all flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <i className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
+                          <span className="text-xs font-medium text-[var(--tm-text-primary)] truncate min-w-0">
+                            {presentation.heading}
+                          </span>
+                          {sources.length > 0 && (
+                            <span className="text-[11px] text-[var(--tm-text-muted)] shrink-0 max-w-[96px] truncate">
+                              · {sources[0].hostname}
+                              {sources.length > 1 ? ` +${sources.length - 1}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 font-mono-tabular text-[11px]">
+                          {showAge && (
+                            <span
+                              role="img"
+                              aria-label={ageText}
+                              className="text-[var(--tm-text-muted)]"
+                            >
+                              {ageShort}
+                            </span>
+                          )}
+                          <span className="text-xs font-semibold text-[var(--tm-text-primary)]">
+                            {usageDisplay.tokensText}
+                          </span>
+                          <i className={`w-1.5 h-1.5 rounded-full shrink-0 ${stateDot}`} aria-hidden="true" />
+                        </div>
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={row.key}
@@ -1045,7 +1169,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         <div className="flex items-center gap-1.5">
                           <i className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
                           <span className="text-xs font-medium text-[var(--tm-text-primary)] truncate">
-                            {row.title || row.projectLabel || row.sessionId || row.key}
+                            {presentation.heading}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--tm-text-muted)] truncate">
@@ -1054,6 +1178,30 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           <span className="font-mono-tabular truncate">
                             {MonitorModel.sessionModelLabel(row)}
                           </span>
+                          {sources.length > 0 && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="inline-flex items-center gap-1 shrink-0 max-w-[110px] truncate">
+                                <DeviceIcon kind={sources[0].deviceKind} className="w-3 h-3 shrink-0" />
+                                <span className="truncate">
+                                  {sources[0].hostname}
+                                  {sources.length > 1 ? ` +${sources.length - 1}` : ''}
+                                </span>
+                              </span>
+                            </>
+                          )}
+                          {showAge && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span
+                                role="img"
+                                aria-label={ageText}
+                                className="font-mono-tabular shrink-0"
+                              >
+                                {ageShort}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1137,7 +1285,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         provider,
                         account,
                         primary,
-                        secondaryQuotas,
+                        validQuotas,
                         isWarn,
                         isFresh,
                       }) => {
@@ -1164,7 +1312,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                             type="button"
                             data-overview-limit={account.key}
                             onClick={() => onNavigate?.('limits')}
-                            className="w-full text-left px-3.5 py-3 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.99] transition-all space-y-2"
+                            className="w-full text-left px-3.5 py-3 rounded-2xl bg-[var(--tm-bg-row)] hover:bg-[var(--tm-bg-row-hover)] border border-[var(--tm-border-subtle)] active:scale-[0.99] transition-all space-y-2.5"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -1188,39 +1336,84 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                               )}
                             </div>
 
-                            <div className="flex items-baseline justify-between gap-2 text-xs">
-                              <span className="text-[11px] text-[var(--tm-text-secondary)] truncate min-w-0">
-                                {q ? q.label : '额度详情'}
-                              </span>
-                              <span
-                                className={`text-xs font-mono-tabular font-semibold shrink-0 ${
-                                  isWarn
-                                    ? 'text-[var(--tm-danger-text)]'
-                                    : 'text-[var(--tm-accent-text)]'
-                                }`}
-                              >
-                                {q ? formatQuotaVal(q) : '查看详情'}
-                              </span>
-                            </div>
-
-                            {q && q.percent !== null && (
-                              <ProgressMeter
-                                percent={q.percent}
-                                tone={isWarn ? 'danger' : 'sky'}
-                              />
-                            )}
-
-                            {(q?.detail || secondaryQuotas.length > 0) && (
-                              <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tm-text-muted)] tabular-nums flex-wrap">
-                                {q?.detail && <span className="truncate">{q.detail}</span>}
-                                {secondaryQuotas.length > 0 && (
-                                  <span className="truncate text-[var(--tm-text-secondary)]">
-                                    {secondaryQuotas
-                                      .map((sq) => `${sq.label}: ${formatQuotaVal(sq)}`)
-                                      .join(' · ')}
-                                  </span>
-                                )}
+                            {validQuotas.length > 0 ? (
+                              <div className="space-y-2">
+                                {validQuotas.map(({ win, q: wq }, wIdx) => {
+                                  const winWarn =
+                                    wq.percent !== null &&
+                                    (wq.remaining ? wq.percent < 15 : wq.percent > 85);
+                                  const resetHint = win?.resetsAt
+                                    ? formatRelativeCountdown(
+                                        win.resetsAt,
+                                        now,
+                                        win.boundaryKind === 'expiry' ? '已到期' : '即将重置',
+                                      )
+                                    : win?.resetDescription || '';
+                                  return (
+                                    <div
+                                      key={`${wq.label}-${wIdx}`}
+                                      data-overview-limit-window={wIdx}
+                                      className="space-y-1"
+                                    >
+                                      <div className="flex items-baseline justify-between gap-2 text-xs">
+                                        <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
+                                          <span className="text-[11px] text-[var(--tm-text-secondary)] truncate">
+                                            {wq.label}
+                                          </span>
+                                          {resetHint && (
+                                            <span className="text-[10.5px] font-mono-tabular text-[var(--tm-text-muted)] truncate">
+                                              · {resetHint}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span
+                                          className={`text-xs font-mono-tabular font-semibold shrink-0 ${
+                                            winWarn
+                                              ? 'text-[var(--tm-danger-text)]'
+                                              : 'text-[var(--tm-accent-text)]'
+                                          }`}
+                                        >
+                                          {formatQuotaVal(wq)}
+                                        </span>
+                                      </div>
+                                      {wq.percent !== null && (
+                                        <ProgressMeter
+                                          percent={wq.percent}
+                                          tone={winWarn ? 'danger' : 'sky'}
+                                        />
+                                      )}
+                                      {wq.detail && (
+                                        <div className="text-[11px] text-[var(--tm-text-muted)] tabular-nums truncate">
+                                          {wq.detail}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
+                            ) : (
+                              <>
+                                <div className="flex items-baseline justify-between gap-2 text-xs">
+                                  <span className="text-[11px] text-[var(--tm-text-secondary)] truncate min-w-0">
+                                    {q ? q.label : '额度详情'}
+                                  </span>
+                                  <span
+                                    className={`text-xs font-mono-tabular font-semibold shrink-0 ${
+                                      isWarn
+                                        ? 'text-[var(--tm-danger-text)]'
+                                        : 'text-[var(--tm-accent-text)]'
+                                    }`}
+                                  >
+                                    {q ? formatQuotaVal(q) : '查看详情'}
+                                  </span>
+                                </div>
+                                {q && q.percent !== null && (
+                                  <ProgressMeter
+                                    percent={q.percent}
+                                    tone={isWarn ? 'danger' : 'sky'}
+                                  />
+                                )}
+                              </>
                             )}
                           </button>
                         );
@@ -1680,7 +1873,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
         ) : (
           <p className="text-center text-xs text-[var(--tm-text-muted)] py-6">
-            {searchKeyword ? '无匹配的分布项' : '此周期暂无明细'}
+            {searchKeyword
+              ? '无匹配的分布项'
+              : effectiveBreakdownKind === 'projects' && detailsAvailable === false
+                ? '当前范围包含历史记录汇总，暂不含项目分布明细'
+                : '此周期暂无明细'}
           </p>
         )}
 

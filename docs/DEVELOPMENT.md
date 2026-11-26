@@ -21,7 +21,7 @@
 
 `LocalContentClient` 使用 AndroidX `WebViewAssetLoader`，仅在固定 HTTPS 源上映射明确允许的 APK 资源。未知地址必须返回阻止响应，不能回退到网络。网页禁用直接联网及文件访问；Hub 请求通过原生层执行。
 
-`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices/<id>/history`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()`、Antigravity 账号池快照 `antigravityManagerEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，默认使用系统证书校验并允许按 HTTPS 连接配置独立的自定义 CA / 自签名证书。凭据与自定义 CA PEM 由 Android Keystore AES-256-GCM 加密保存，网页只能提交新值或查看脱敏摘要，不能读取已保存 secret 或原始 PEM。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
+`ConnectionSpec` 限制 Hub 地址，所有请求均为只读 GET（包括 `/api/stats`、`/api/subscriptions`、`/api/sync/settings/limitAccountPresentation`、`/api/devices`、`/api/devices/<id>/history`、固定统计区间 `fixedRangesIndexEndpoint()` / `fixedRangesPageEndpoint()`、在线对话 `conversationEndpoint()`、项目分析报告 `reportsListEndpoint()` / `reportDetailEndpoint()`、Antigravity 账号池快照 `antigravityManagerEndpoint()` 以及可选的 `GET /api/approval-alerts`）。所有请求使用 `Authorization: Bearer`，拒绝重定向，默认使用系统证书校验并允许按 HTTPS 连接配置独立的自定义 CA / 自签名证书。凭据与自定义 CA PEM 由 Android Keystore AES-256-GCM 加密保存，网页只能提交新值或查看脱敏摘要，不能读取已保存 secret 或原始 PEM。连接变化需要清空旧页面、通知和微件状态，并拒绝旧请求的迟到响应；只读审批提醒边界详见 [APPROVAL_ALERTS.md](APPROVAL_ALERTS.md)。
 
 自定义 CA / TLS 加固边界由 `CertificateTrustPolicy`（纯 Java 17，无 `android.*` 依赖）与 `res/xml/network_security_config.xml` 共同维护：
 - **证书导入与校验**：通过系统 SAF（`ACTION_OPEN_DOCUMENT`，不修改 Activity 启动 Intent）或设置页粘贴 PEM 导入 `.pem` / `.crt` / `.der`，限制 ≤ 24 KiB、最多 4 张证书、拒绝私钥块（`PRIVATE KEY`）、要求 RSA ≥ 2048 / EC ≥ 256 / EdDSA 并在导入时校验有效期。原生层返回短期 `draftToken` 与脱敏元数据（SHA-256 指纹、Subject、Issuer、有效期），不在 WebView、微件或日志中暴露原始 PEM；编辑配置时新增、替换或清除自定义 CA 均改变信任边界，必须重新输入 `secret`。
@@ -31,11 +31,13 @@
 
 Antigravity 账号池只读视图（额度页内 `AG 账号池` 分段）使用独立的有界单线程队列 `agManagerNetwork` 通过 `ConnectionSpec.antigravityManagerEndpoint()` 查询 `GET /api/antigravity-manager`（响应上限 512 KiB，HTTP 404 降级提示 `unsupported_hub`），并复用 `MainActivity` 连接代次与请求标识拒绝迟到响应。桌面端凭据、设备指纹及账号切换/导入操作均不经过 Hub，Android 端仅做脱敏只读展示。
 
+固定统计区间（`yesterday` / `week` / `last7` / `last30`）使用独立的有界单线程队列 `fixedRangeNetwork`：当 `stats.fixedRangeRevisions` 提供设备修订号时，通过 `ConnectionSpec.fixedRangesIndexEndpoint(deviceId)`（上限 512 KiB）与 `fixedRangesPageEndpoint(deviceId, revision, page)`（上限 1 MiB，`0 <= page < 32`）按设备时区的预期日历窗口（其中同步 `week` 固定以周一为起点）拉取并缓存区间扫描结果；若有设备尚未上报固定区间扫描，则按需请求一次 `GET /api/devices`（上限 16 MiB，仅保留 `deviceId`、`updatedAt`、`historyAvailable` 与 `history.daily` 数值行，剥离会话/项目明细；且必须与当前 `stats.devices[].updatedAt` 一致才允许合并），由共享 `fixedPeriodRanges.js` 与 `model.js` 组合生成多设备汇总。仅由历史记录回退构成的设备或全局视图标记 `detailsAvailable = false`（不伪造会话或项目明细），而已完成扫描的单台设备即使在其他设备缺少历史记录时仍可单独查看其区间总量与会话明细。切换连接或退入后台时立即取消在途请求，从固定区间打开的 Codex / Antigravity 会话也会将其已验证的 `(deviceId, sessionKey)` 纳入当前在线对话白名单。
+
 在线对话使用独立有界执行队列，通过 `ConnectionSpec.conversationEndpoint()` 从设备 ID、会话键和分页游标构建固定 GET 地址，网页不能传入 URL 或文件路径。仅允许当前原生统计快照中对应设备的 Antigravity / Codex 会话键。正文响应限制 384 KiB；连接代次和查询代次共同拒绝迟到结果。返回列表、切换来源或进入后台时取消读取并清除页面正文，不进入历史数据库、微件或完成通知。详见 [SESSION_CONVERSATIONS.md](SESSION_CONVERSATIONS.md)。
 
 原生外层容器根据系统栏、DisplayCutout 和键盘边距缩小整个 WebView 视区，不能只给 WebView 加 padding。已处理的 Insets 继续传给子视图时清零，网页不重复添加安全区留白。验收时覆盖刘海模拟、横竖屏、手势 / 三键导航和键盘弹出收起。
 
-外观主题由纯 Java 的 `ThemePolicy`（允许 `obsidian` / `daylight` / `amber` / `emerald` / `nebula` / `frost` 与 `auto`，非法或旧版缺省配置回退 `obsidian`）与 `DisplayPrefs` 持久化，`auto` 按 `Configuration.UI_MODE_NIGHT_MASK` 解析为 `obsidian` 或 `daylight`。`MainActivity` 在启动创建视图与运行期切换时同步窗口、外层视区、WebView 背景色以及系统状态栏 / 导航栏配色与图标明暗（API 30+ 使用 `WindowInsetsController`，API 26–29 使用 `SYSTEM_UI_FLAG_LIGHT_*`），并经 `HubNative.initialDisplayPrefs()` 在 React 首次挂载前写入文档主题属性，避免启动闪烁（FOUC）。
+外观主题与顶部周期栏偏好由纯 Java 的 `ThemePolicy`（允许 `obsidian` / `daylight` / `amber` / `emerald` / `nebula` / `frost` 与 `auto`，非法或旧版缺省配置回退 `obsidian`）与 `DisplayPrefs` 持久化（含 `periodTabOrder`，校验去重后允许固定 3–6 个有效周期 ID，不足 3 项时回退默认空数组 `[]`），`auto` 按 `Configuration.UI_MODE_NIGHT_MASK` 解析为 `obsidian` 或 `daylight`。`MainActivity` 在启动创建视图与运行期切换时同步窗口、外层视区、WebView 背景色以及系统状态栏 / 导航栏配色与图标明暗（API 30+ 使用 `WindowInsetsController`，API 26–29 使用 `SYSTEM_UI_FLAG_LIGHT_*`），并经 `HubNative.initialDisplayPrefs()` 在 React 首次挂载前写入文档主题属性，避免启动闪烁（FOUC）。
 
 ## 软件更新
 

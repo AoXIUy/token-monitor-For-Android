@@ -34,6 +34,14 @@ export function createDemoPayload(nowMs: number = Date.now()): {
   const inTwelveMins = new Date(nowMs + 12 * 60 * 1000).toISOString();
   const tomorrowStart = new Date(nowMs + 14 * 3600 * 1000).toISOString();
   const nextMonthStart = new Date(nowMs + 18 * 24 * 3600 * 1000).toISOString();
+  const yesterdayIso = new Date(nowMs - 22 * 3600 * 1000).toISOString();
+  const threeDaysAgoIso = new Date(nowMs - 3 * 24 * 3600 * 1000).toISOString();
+  const todayDateKey = new Date(nowMs).toISOString().slice(0, 10);
+  const yesterdayDateKey = new Date(nowMs - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const last7StartKey = new Date(nowMs - 6 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const last30StartKey = new Date(nowMs - 29 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const utcDay = new Date(nowMs).getUTCDay();
+  const weekStartKey = new Date(nowMs - ((utcDay + 6) % 7) * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
   const dailyHistory = Array.from({ length: 14 }, (_, idx) => {
     const dayMs = nowMs - (13 - idx) * 24 * 3600 * 1000;
@@ -285,6 +293,148 @@ export function createDemoPayload(nowMs: number = Date.now()): {
       'distributed-inference-gateway': { label: 'distributed-inference-gateway', tokens: 9200000, costUsd: 30.50 },
     },
     sessions: todaySessions.sessions,
+  };
+
+  const fixedRangeExtraSessions: NonNullable<NonNullable<MonitorStats['periods']>['today']>['sessions'] = {
+    'codex:sess-untitled-cli-check': {
+      client: 'codex',
+      sessionId: 'sess-untitled-cli-check',
+      projectLabel: 'token-monitor-android',
+      startedAt: yesterdayIso,
+      lastUsedAt: yesterdayIso,
+      turnEnded: true,
+      totalTokens: 520000,
+      inputTokens: 140000,
+      outputTokens: 48000,
+      cacheReadTokens: 332000,
+      costUsd: 1.92,
+      messageCount: 14,
+      latestModel: 'gpt-5',
+      models: { 'gpt-5': 520000 },
+      modelCosts: { 'gpt-5': 1.92 },
+    },
+    'claude:sess-archived-sync-refactor': {
+      client: 'claude',
+      sessionId: 'sess-archived-sync-refactor',
+      title: '清理固定范围分页索引并归档旧任务分支',
+      projectLabel: 'hub-telemetry-collector',
+      startedAt: threeDaysAgoIso,
+      lastUsedAt: yesterdayIso,
+      turnEnded: true,
+      archived: true,
+      totalTokens: 840000,
+      inputTokens: 190000,
+      outputTokens: 62000,
+      cacheReadTokens: 588000,
+      costUsd: 3.24,
+      messageCount: 19,
+      latestModel: 'claude-sonnet-4-20250514',
+      models: { 'claude-sonnet-4-20250514': 840000 },
+      modelCosts: { 'claude-sonnet-4-20250514': 3.24 },
+    },
+    'antigravity:t3-acp-thread-01': {
+      client: 'antigravity',
+      sessionId: 't3-acp-thread-01',
+      t3ThreadId: 'thread-acp-9f31b2',
+      title: 'T3 Code ACP 协议桥接与会话跟踪验证',
+      projectLabel: 'distributed-inference-gateway',
+      startedAt: yesterdayIso,
+      lastUsedAt: yesterdayIso,
+      turnEnded: true,
+      totalTokens: 610000,
+      inputTokens: 150000,
+      outputTokens: 55000,
+      cacheReadTokens: 405000,
+      costUsd: 2.31,
+      messageCount: 17,
+      latestModel: 'gemini-2.5-pro',
+      models: { 'gemini-2.5-pro': 610000 },
+      modelCosts: { 'gemini-2.5-pro': 2.31 },
+    },
+  };
+
+  const yesterdayPeriod: NonNullable<MonitorStats['periods']>['yesterday'] = {
+    totalTokens: 3760000,
+    inputTokens: 820000,
+    outputTokens: 284000,
+    cacheReadTokens: 2496000,
+    cacheWriteTokens: 160000,
+    costUsd: 14.29,
+    capabilities: { tokenComponents: true },
+    clients: { claude: 1680000, antigravity: 1120000, codex: 640000, cursor: 320000 },
+    clientCosts: { claude: 6.72, antigravity: 4.31, codex: 2.30, cursor: 0.96 },
+    models: {
+      'claude-sonnet-4-20250514': 1680000,
+      'gemini-2.5-pro': 1120000,
+      'gpt-5': 640000,
+      'deepseek-r1': 320000,
+    },
+    modelCosts: {
+      'claude-sonnet-4-20250514': 6.72,
+      'gemini-2.5-pro': 4.31,
+      'gpt-5': 2.30,
+      'deepseek-r1': 0.96,
+    },
+    projects: {
+      'token-monitor-android': { label: 'token-monitor-android', tokens: 1620000, costUsd: 6.18 },
+      'hub-telemetry-collector': { label: 'hub-telemetry-collector', tokens: 1290000, costUsd: 4.92 },
+      'distributed-inference-gateway': { label: 'distributed-inference-gateway', tokens: 850000, costUsd: 3.19 },
+    },
+    sessions: fixedRangeExtraSessions,
+  };
+
+  const weekPeriod: NonNullable<MonitorStats['periods']>['week'] = {
+    totalTokens: 14820000,
+    inputTokens: 3180000,
+    outputTokens: 1140000,
+    cacheReadTokens: 9820000,
+    cacheWriteTokens: 680000,
+    unpricedTokens: 42000,
+    costUsd: 56.40,
+    capabilities: { tokenComponents: true },
+    clients: { claude: 6840000, antigravity: 4180000, codex: 2420000, cursor: 1380000 },
+    clientCosts: { claude: 27.30, antigravity: 15.80, codex: 8.90, cursor: 4.40 },
+    models: {
+      'claude-sonnet-4-20250514': 6840000,
+      'gemini-2.5-pro': 4180000,
+      'gpt-5': 2420000,
+      'deepseek-r1': 1380000,
+    },
+    modelCosts: {
+      'claude-sonnet-4-20250514': 27.30,
+      'gemini-2.5-pro': 15.80,
+      'gpt-5': 8.90,
+      'deepseek-r1': 4.40,
+    },
+    projects: {
+      'token-monitor-android': { label: 'token-monitor-android', tokens: 6420000, costUsd: 24.80 },
+      'hub-telemetry-collector': { label: 'hub-telemetry-collector', tokens: 4980000, costUsd: 18.90 },
+      'distributed-inference-gateway': { label: 'distributed-inference-gateway', tokens: 3420000, costUsd: 12.70 },
+    },
+    sessions: { ...todaySessions.sessions, ...fixedRangeExtraSessions },
+  };
+
+  const last7Period: NonNullable<MonitorStats['periods']>['last7'] = {
+    ...weekPeriod,
+    totalTokens: 23045600,
+    inputTokens: 4920000,
+    outputTokens: 1785600,
+    cacheReadTokens: 15280000,
+    cacheWriteTokens: 1060000,
+    costUsd: 87.58,
+    clients: { claude: 10640000, antigravity: 6485600, codex: 3780000, cursor: 2140000 },
+    clientCosts: { claude: 42.40, antigravity: 24.58, codex: 13.80, cursor: 6.80 },
+  };
+
+  const last30Period: NonNullable<MonitorStats['periods']>['last30'] = {
+    ...monthPeriod,
+    totalTokens: 46850000,
+    inputTokens: 10040000,
+    outputTokens: 3620000,
+    cacheReadTokens: 30990000,
+    cacheWriteTokens: 2200000,
+    costUsd: 174.60,
+    sessions: { ...todaySessions.sessions, ...fixedRangeExtraSessions },
   };
 
   const allTimePeriod: NonNullable<MonitorStats['periods']>['allTime'] = {
@@ -592,9 +742,19 @@ export function createDemoPayload(nowMs: number = Date.now()): {
   ];
 
   const stats: MonitorStats = {
+    nativeRangeWindows: {
+      yesterday: { start: yesterdayDateKey, end: yesterdayDateKey },
+      week: { start: weekStartKey, end: todayDateKey },
+      last7: { start: last7StartKey, end: todayDateKey },
+      last30: { start: last30StartKey, end: todayDateKey },
+    },
     periods: {
       today: todaySessions,
+      yesterday: yesterdayPeriod,
+      week: weekPeriod,
+      last7: last7Period,
       month: monthPeriod,
+      last30: last30Period,
       allTime: allTimePeriod,
     },
     limits: {
@@ -617,7 +777,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
         updatedAt: nowIso,
         receivedAt: nowIso,
         periodWindows: {
-          today: { endsAt: tomorrowStart },
+          today: { key: todayDateKey, endsAt: tomorrowStart },
           month: { endsAt: nextMonthStart },
         },
         periods: {
@@ -630,10 +790,30 @@ export function createDemoPayload(nowMs: number = Date.now()): {
             cacheWriteTokens: 120000,
             costUsd: 10.62,
           },
+          yesterday: {
+            ...yesterdayPeriod,
+            totalTokens: 2340000,
+            costUsd: 8.92,
+          },
+          week: {
+            ...weekPeriod,
+            totalTokens: 9240000,
+            costUsd: 35.20,
+          },
+          last7: {
+            ...last7Period,
+            totalTokens: 14385600,
+            costUsd: 54.80,
+          },
           month: {
             ...monthPeriod,
             totalTokens: 24120000,
             costUsd: 92.40,
+          },
+          last30: {
+            ...last30Period,
+            totalTokens: 29450000,
+            costUsd: 112.10,
           },
           allTime: {
             ...allTimePeriod,
@@ -657,7 +837,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
         updatedAt: fiveMinsAgo,
         receivedAt: fiveMinsAgo,
         periodWindows: {
-          today: { endsAt: tomorrowStart },
+          today: { key: todayDateKey, endsAt: tomorrowStart },
           month: { endsAt: nextMonthStart },
         },
         periods: {
@@ -670,10 +850,30 @@ export function createDemoPayload(nowMs: number = Date.now()): {
             cacheWriteTokens: 80000,
             costUsd: 5.18,
           },
+          yesterday: {
+            ...yesterdayPeriod,
+            totalTokens: 1260000,
+            costUsd: 4.79,
+          },
+          week: {
+            ...weekPeriod,
+            totalTokens: 4860000,
+            costUsd: 18.50,
+          },
+          last7: {
+            ...last7Period,
+            totalTokens: 7540000,
+            costUsd: 28.60,
+          },
           month: {
             ...monthPeriod,
             totalTokens: 12100000,
             costUsd: 42.90,
+          },
+          last30: {
+            ...last30Period,
+            totalTokens: 14800000,
+            costUsd: 53.10,
           },
           allTime: {
             ...allTimePeriod,
@@ -697,7 +897,7 @@ export function createDemoPayload(nowMs: number = Date.now()): {
         updatedAt: twoHoursAgo,
         receivedAt: twoHoursAgo,
         periodWindows: {
-          today: { endsAt: tomorrowStart },
+          today: { key: todayDateKey, endsAt: tomorrowStart },
           month: { endsAt: nextMonthStart },
         },
         periods: {
@@ -709,9 +909,29 @@ export function createDemoPayload(nowMs: number = Date.now()): {
             costUsd: 0.62,
             capabilities: { tokenComponents: true },
           },
+          yesterday: {
+            totalTokens: 160000,
+            costUsd: 0.58,
+            capabilities: { tokenComponents: true },
+          },
+          week: {
+            totalTokens: 720000,
+            costUsd: 2.70,
+            capabilities: { tokenComponents: true },
+          },
+          last7: {
+            totalTokens: 1120000,
+            costUsd: 4.18,
+            capabilities: { tokenComponents: true },
+          },
           month: {
             totalTokens: 2200000,
             costUsd: 7.50,
+            capabilities: { tokenComponents: true },
+          },
+          last30: {
+            totalTokens: 2600000,
+            costUsd: 9.40,
             capabilities: { tokenComponents: true },
           },
           allTime: {

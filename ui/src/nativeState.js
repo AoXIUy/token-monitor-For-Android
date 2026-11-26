@@ -6,6 +6,12 @@ import {
   receiveAgManagerError,
   receiveAgManagerResult,
 } from './agManagerState.js';
+import {
+  createInitialFixedRangeState,
+  pauseFixedRangeLoading,
+  receiveFixedRangeResult,
+  sanitizePeriodTabOrder,
+} from './fixedRangeState.js';
 
 /** @type {readonly import('./types/monitor').ThemeId[]} */
 export const THEME_IDS = Object.freeze(['obsidian', 'daylight', 'amber', 'emerald', 'nebula', 'frost']);
@@ -192,12 +198,13 @@ export function createInitialState() {
     approvalsPending: false,
     connectPending: false, formError: '', connectionEpoch: 0,
     limitsPrefs: { hideUncollected: true, showRemaining: false, hiddenAccountHashes: [] },
-    displayPrefs: { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian' },
+    displayPrefs: { separateQoderClients: false, exactTrendTokens: false, theme: 'obsidian', periodTabOrder: [] },
     systemDark: true,
     imeVisible: false,
     limitAccountPresentation: {},
     reports: createInitialReportsState(),
     agManager: createInitialAgManagerState(),
+    fixedRange: createInitialFixedRangeState(),
   };
 }
 
@@ -220,6 +227,8 @@ export function receiveNativeMessage(state, message) {
       return { ...state, agManager: receiveAgManagerResult(state.agManager, message) };
     case 'antigravityManagerError':
       return { ...state, agManager: receiveAgManagerError(state.agManager, message) };
+    case 'fixedRangeResult':
+      return { ...state, fixedRange: receiveFixedRangeResult(state.fixedRange, message) };
     case 'appUpdate': {
       /** @param {string} key @param {number} limit */
       const text = (key, limit) => typeof message[key] === 'string' ? String(message[key]).slice(0, limit) : '';
@@ -355,6 +364,9 @@ export function receiveNativeMessage(state, message) {
             ? message.exactTrendTokens
             : state.displayPrefs.exactTrendTokens,
           theme: parsedTheme ?? state.displayPrefs.theme,
+          periodTabOrder: Array.isArray(message.periodTabOrder)
+            ? sanitizePeriodTabOrder(message.periodTabOrder)
+            : state.displayPrefs.periodTabOrder,
         },
         systemDark: typeof message.systemDark === 'boolean' ? message.systemDark : state.systemDark,
       };
@@ -408,6 +420,9 @@ export function receiveNativeMessage(state, message) {
       agManager: message.foreground
         ? state.agManager
         : { ...state.agManager, loading: false },
+      fixedRange: message.foreground
+        ? state.fixedRange
+        : pauseFixedRangeLoading(state.fixedRange),
     };
     case 'notifications':
       return {

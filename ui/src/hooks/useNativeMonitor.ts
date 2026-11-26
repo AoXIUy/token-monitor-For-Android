@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
-import type { DisplayPrefs, LimitsPrefs, MonitorState, ReportGranularity } from '../types/monitor';
+import type { DerivedPeriodId, DisplayPrefs, LimitsPrefs, MonitorState, ReportGranularity } from '../types/monitor';
 import { createDemoAgManager, createDemoPayload, createDemoReports } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
 import { beginReportDetail, beginReportsList } from '../reportsState';
 import { beginAgManagerQuery, setAgManagerFilter } from '../agManagerState.js';
+import { beginFixedRangeQuery, pauseFixedRangeLoading } from '../fixedRangeState.js';
 import { loadBrowserLimitsPrefs, saveBrowserLimitsPrefs, sanitizeLimitsPrefs } from '../utils/limitsPrefs';
 import {
   loadBrowserDisplayPrefs,
@@ -40,6 +41,7 @@ export function useNativeMonitor() {
   const conversationSequence = useRef(0);
   const reportsSequence = useRef(0);
   const agManagerSequence = useRef(0);
+  const fixedRangeSequence = useRef(0);
   const caCertSequence = useRef(0);
   const isBrowserPreview = typeof window !== 'undefined' && !window.HubNative;
 
@@ -117,6 +119,37 @@ export function useNativeMonitor() {
         ? { ...previous, agManager: { ...previous.agManager, loading: false } }
         : previous,
     );
+  }, [update]);
+
+  const queryFixedRange = useCallback(
+    (period: DerivedPeriodId, signature: string) => {
+      const requestId = `fr-${Date.now()}-${++fixedRangeSequence.current}`;
+      update((previous) => ({
+        ...previous,
+        fixedRange: beginFixedRangeQuery(previous.fixedRange, { period, requestId, signature }),
+      }));
+      if (window.HubNative?.queryFixedRange) {
+        window.HubNative.queryFixedRange(period, requestId);
+      } else {
+        update((previous) =>
+          receiveNativeMessage(previous, {
+            type: 'fixedRangeResult',
+            period,
+            requestId,
+            error: isBrowserPreview ? '' : 'unsupported_app',
+          }),
+        );
+      }
+    },
+    [update, isBrowserPreview],
+  );
+
+  const cancelFixedRange = useCallback(() => {
+    window.HubNative?.cancelFixedRange?.();
+    update((previous) => {
+      const paused = pauseFixedRangeLoading(previous.fixedRange);
+      return paused === previous.fixedRange ? previous : { ...previous, fixedRange: paused };
+    });
   }, [update]);
 
   const updateAgManagerFilter = useCallback(
@@ -508,6 +541,8 @@ export function useNativeMonitor() {
     queryAntigravityManager,
     cancelAntigravityManager,
     updateAgManagerFilter,
+    queryFixedRange,
+    cancelFixedRange,
     saveLimitsPrefs,
     saveDisplayPrefs,
     pickCaCertificate,

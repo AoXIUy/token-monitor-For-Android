@@ -294,10 +294,10 @@ test('v0.97.0: SessionsView and SessionDetailView wire model sorting and pending
   assert.match(detailView, /MonitorModel\.sessionUsageDisplay\(owner\.session\)/);
 });
 
-test('v0.97.0: docs/upstream-files.json records v0.97.0 and matches every shared file sha256', () => {
+test('v0.97.0: docs/upstream-files.json matches every shared file sha256', () => {
   const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/upstream-files.json'), 'utf8'));
-  assert.equal(meta.upstreamVersion, '0.97.0');
-  assert.equal(meta.upstreamCommit, '9d745c106ac5030045dade55c0d1aea279cdcfd7');
+  assert.match(String(meta.upstreamVersion), /^\d+\.\d+\.\d+$/);
+  assert.match(String(meta.upstreamCommit), /^[0-9a-f]{40}$/);
   for (const entry of meta.files) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, entry.path))).digest('hex');
     assert.equal(actual, entry.sha256, `sha256 mismatch for ${entry.path}`);

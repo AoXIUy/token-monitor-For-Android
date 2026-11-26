@@ -55,6 +55,18 @@ final class HubClient {
         return getUrl(spec, spec.antigravityManagerEndpoint(), 512 * 1024);
     }
 
+    JSONObject fixedRangesIndex(ConnectionSpec spec, String deviceId) throws Exception {
+        return getUrl(spec, spec.fixedRangesIndexEndpoint(deviceId), 512 * 1024);
+    }
+
+    JSONObject fixedRangesPage(ConnectionSpec spec, String deviceId, String revision, int page) throws Exception {
+        return getUrl(spec, spec.fixedRangesPageEndpoint(deviceId, revision, page), 1024 * 1024);
+    }
+
+    JSONObject devices(ConnectionSpec spec) throws Exception {
+        return get(spec, "/api/devices");
+    }
+
     private SSLSocketFactory socketFactoryFor(ConnectionSpec spec) throws Exception {
         String key = spec.hasCustomCa() ? spec.caFingerprintSha256 : "";
         if (cachedSocketFactory != null && key.equals(cachedCaFingerprint)) {

@@ -16,6 +16,7 @@ const sharedScripts = [
   'shared/sessionLive.js',
   'shared/sessionRealtime.js',
   'shared/sessionGroups.js',
+  'shared/fixedPeriodRanges.js',
   'model.js',
 ];
 

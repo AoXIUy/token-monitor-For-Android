@@ -47,6 +47,20 @@ public final class MainActivity extends Activity {
             new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
     private HubClient agManagerClient;
     private int agManagerGeneration;
+    private final java.util.concurrent.ThreadPoolExecutor fixedRangeNetwork = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+    private HubClient fixedRangeClient;
+    private int fixedRangeGeneration;
+    private final Object fixedRangeCacheLock = new Object();
+    private final java.util.LinkedHashMap<String, JSONObject> fixedRangeSliceCache = new java.util.LinkedHashMap<>(32, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, JSONObject> eldest) {
+            return size() > 32;
+        }
+    };
+    private String cachedDevicesHistoryKey = "";
+    private JSONArray cachedDevicesHistory;
+    private final java.util.Set<String> admittedFixedRangeSessionPairs = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
     private final Runnable poll = () -> refresh(false);
     private FrameLayout viewport;
     private WebView web;
@@ -304,6 +318,7 @@ public final class MainActivity extends Activity {
         historyError = "";
         historyBusy = false;
         pendingHistoryKey = null;
+        clearFixedRangeCaches();
         try {
             JSONObject payload = event("connection")
                     .put("url", spec == null ? "" : spec.url)
@@ -507,6 +522,7 @@ public final class MainActivity extends Activity {
         cancelConversation();
         cancelReports();
         cancelAntigravityManager();
+        cancelFixedRange();
         generation++;
         historyBusy = false;
         pendingHistoryKey = null;
@@ -697,7 +713,7 @@ public final class MainActivity extends Activity {
             try {
                 return displayPrefsPayload().toString();
             } catch (Exception ignored) {
-                return "{\"separateQoderClients\":false,\"exactTrendTokens\":false,\"theme\":\"obsidian\",\"systemDark\":false}";
+                return "{\"separateQoderClients\":false,\"exactTrendTokens\":false,\"theme\":\"obsidian\",\"periodTabOrder\":[],\"systemDark\":false}";
             }
         }
         @JavascriptInterface public void ready() {
@@ -877,6 +893,12 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void cancelAntigravityManager() {
             main.post(() -> MainActivity.this.cancelAntigravityManager());
+        }
+        @JavascriptInterface public void queryFixedRange(String period, String requestId) {
+            main.post(() -> MainActivity.this.readFixedRange(period, requestId));
+        }
+        @JavascriptInterface public void cancelFixedRange() {
+            main.post(() -> MainActivity.this.cancelFixedRange());
         }
         @JavascriptInterface public boolean copyText(String text) {
             if (text == null || text.isEmpty() || text.length() > 256 * 1024) return false;
@@ -1147,6 +1169,9 @@ public final class MainActivity extends Activity {
                 JSONObject sessions = snapshot == null ? null : snapshot.optJSONObject("sessions");
                 if (sessions != null && sessions.optJSONObject(key) != null) found = true;
             }
+            if (!found && admittedFixedRangeSessionPairs.contains(deviceId + "\u0000" + key)) {
+                found = true;
+            }
         }
         if (!found) {
             JSONObject page = new JSONObject();
@@ -1206,6 +1231,357 @@ public final class MainActivity extends Activity {
         agManagerNetwork.getQueue().clear();
         if (agManagerClient != null) agManagerClient.cancel();
         agManagerClient = null;
+    }
+
+    private void clearFixedRangeCaches() {
+        synchronized (fixedRangeCacheLock) {
+            fixedRangeSliceCache.clear();
+            cachedDevicesHistoryKey = "";
+            cachedDevicesHistory = null;
+        }
+        admittedFixedRangeSessionPairs.clear();
+    }
+
+    private void cancelFixedRange() {
+        fixedRangeGeneration++;
+        fixedRangeNetwork.getQueue().clear();
+        if (fixedRangeClient != null) fixedRangeClient.cancel();
+        fixedRangeClient = null;
+    }
+
+    private static boolean isFixedRangePeriod(String period) {
+        return "yesterday".equals(period) || "week".equals(period) || "last7".equals(period) || "last30".equals(period);
+    }
+
+    private static java.time.LocalDate parseIsoLocalDate(String value) {
+        if (value == null || !value.matches("\\d{4}-\\d{2}-\\d{2}")) return null;
+        try {
+            java.time.LocalDate parsed = java.time.LocalDate.parse(value);
+            return parsed.toString().equals(value) ? parsed : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String[] expectedDeviceFixedWindow(JSONObject device, String period, long nowMs) {
+        if (device == null) return null;
+        JSONObject periodWindows = device.optJSONObject("periodWindows");
+        JSONObject todayWin = periodWindows == null ? null : periodWindows.optJSONObject("today");
+        if (todayWin == null) return null;
+        java.time.LocalDate snapshotDay = parseIsoLocalDate(todayWin.optString("key", ""));
+        String endsAtRaw = todayWin.optString("endsAt", "");
+        if (snapshotDay == null || endsAtRaw.isEmpty()) return null;
+        long endsAtMs;
+        try {
+            endsAtMs = java.time.Instant.parse(endsAtRaw).toEpochMilli();
+        } catch (Exception ignored) {
+            return null;
+        }
+        java.time.LocalDate currentDay;
+        if (nowMs < endsAtMs) {
+            currentDay = snapshotDay;
+        } else {
+            String tz = periodWindows.optString("timeZone", "").trim();
+            if (tz.isEmpty()) return null;
+            try {
+                currentDay = java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.of(tz)).toLocalDate();
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        java.time.LocalDate start;
+        java.time.LocalDate end;
+        switch (period) {
+            case "yesterday":
+                start = currentDay.minusDays(1);
+                end = start;
+                break;
+            case "week":
+                // Synced weeks start on Monday in each device's calendar.
+                int offset = currentDay.getDayOfWeek().getValue() - 1;
+                start = currentDay.minusDays(offset);
+                end = currentDay;
+                break;
+            case "last7":
+                start = currentDay.minusDays(6);
+                end = currentDay;
+                break;
+            case "last30":
+                start = currentDay.minusDays(29);
+                end = currentDay;
+                break;
+            default:
+                return null;
+        }
+        return new String[] { start.toString(), end.toString() };
+    }
+
+    private static JSONObject decodeFixedRangeSlice(String period, JSONObject rangeMeta, java.util.List<JSONArray> pages, String revision) throws Exception {
+        if (rangeMeta == null) return null;
+        java.time.LocalDate start = parseIsoLocalDate(rangeMeta.optString("start", ""));
+        java.time.LocalDate end = parseIsoLocalDate(rangeMeta.optString("end", ""));
+        JSONObject totals = rangeMeta.optJSONObject("totals");
+        int expectedSessions = rangeMeta.optInt("sessions", -1);
+        int expectedProjects = rangeMeta.optInt("projects", -1);
+        int pageCount = rangeMeta.optInt("pageCount", -1);
+        if (start == null || end == null || start.isAfter(end) || totals == null
+                || !totals.has("totalTokens") || totals.optLong("totalTokens", -1L) < 0L
+                || expectedSessions < 0 || expectedProjects < 0 || pageCount < 0
+                || (pageCount == 0) != (expectedSessions + expectedProjects == 0)
+                || pages.size() != pageCount) {
+            return null;
+        }
+        JSONObject sessions = new JSONObject();
+        JSONObject projects = new JSONObject();
+        for (JSONArray pageRows : pages) {
+            if (pageRows == null || pageRows.length() == 0) return null;
+            for (int i = 0; i < pageRows.length(); i++) {
+                JSONArray tuple = pageRows.optJSONArray(i);
+                if (tuple == null || tuple.length() != 4) return null;
+                String rowRange = tuple.optString(0, "");
+                String kind = tuple.optString(1, "");
+                String key = tuple.optString(2, "");
+                JSONObject rowObj = tuple.optJSONObject(3);
+                if (!period.equals(rowRange) || key.isEmpty() || rowObj == null) return null;
+                if ("sessions".equals(kind)) {
+                    if (sessions.has(key)) return null;
+                    sessions.put(key, rowObj);
+                } else if ("projects".equals(kind)) {
+                    if (projects.has(key)) return null;
+                    projects.put(key, rowObj);
+                } else {
+                    return null;
+                }
+            }
+        }
+        if (sessions.length() != expectedSessions || projects.length() != expectedProjects) return null;
+        JSONObject reconstructed = new JSONObject(totals.toString());
+        reconstructed.put("sessions", sessions);
+        reconstructed.put("projects", projects);
+        return new JSONObject()
+                .put("revision", revision)
+                .put("start", start.toString())
+                .put("end", end.toString())
+                .put("period", reconstructed);
+    }
+
+    private void rememberFixedRangeSessions(String deviceId, JSONObject slice) {
+        if (deviceId == null || deviceId.isEmpty() || slice == null) return;
+        JSONObject periodObj = slice.optJSONObject("period");
+        JSONObject sessions = periodObj == null ? null : periodObj.optJSONObject("sessions");
+        if (sessions == null) return;
+        java.util.Iterator<String> keys = sessions.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (key == null || key.isEmpty()) continue;
+            synchronized (admittedFixedRangeSessionPairs) {
+                while (admittedFixedRangeSessionPairs.size() >= 2048) {
+                    java.util.Iterator<String> it = admittedFixedRangeSessionPairs.iterator();
+                    if (!it.hasNext()) break;
+                    it.next();
+                    it.remove();
+                }
+                admittedFixedRangeSessionPairs.add(deviceId + "\u0000" + key);
+            }
+        }
+    }
+
+    private static JSONObject stripPeriodDetails(JSONObject rawPeriod) throws Exception {
+        if (rawPeriod == null) return null;
+        JSONObject copy = new JSONObject(rawPeriod.toString());
+        copy.remove("sessions");
+        copy.remove("projects");
+        return copy;
+    }
+
+    private static JSONArray sanitizeDeviceHistories(JSONArray rawDevices) throws Exception {
+        JSONArray clean = new JSONArray();
+        if (rawDevices == null) return clean;
+        for (int i = 0; i < rawDevices.length(); i++) {
+            JSONObject record = rawDevices.optJSONObject(i);
+            if (record == null) continue;
+            String deviceId = record.optString("deviceId", record.optString("id", "")).trim();
+            if (deviceId.isEmpty()) continue;
+            boolean historyAvailable = record.optBoolean("historyAvailable", false)
+                    && record.has("history") && !record.isNull("history")
+                    && record.optJSONObject("history") != null;
+            JSONObject rawPeriods = record.optJSONObject("periods");
+            JSONObject periods = new JSONObject();
+            for (String pName : new String[] { "today", "month", "allTime" }) {
+                JSONObject pObj = rawPeriods != null ? rawPeriods.optJSONObject(pName) : record.optJSONObject(pName);
+                if (pObj != null) periods.put(pName, stripPeriodDetails(pObj));
+            }
+            JSONObject item = new JSONObject()
+                    .put("deviceId", deviceId)
+                    .put("hostname", record.optString("hostname", "").trim())
+                    .put("platform", record.optString("platform", "").trim())
+                    .put("updatedAt", record.optString("updatedAt", record.optString("receivedAt", "")))
+                    .put("agentVersion", record.optString("agentVersion", "").trim())
+                    .put("periodWindows", record.optJSONObject("periodWindows") != null
+                            ? new JSONObject(record.optJSONObject("periodWindows").toString())
+                            : JSONObject.NULL)
+                    .put("periods", periods)
+                    .put("historyAvailable", historyAvailable)
+                    .put("history", historyAvailable
+                            ? new JSONObject(record.optJSONObject("history").toString())
+                            : JSONObject.NULL);
+            clean.put(item);
+        }
+        return clean;
+    }
+
+    private static String devicesObservationSignature(JSONArray devices) {
+        if (devices == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < devices.length(); i++) {
+            JSONObject d = devices.optJSONObject(i);
+            if (d == null) continue;
+            sb.append(d.optString("deviceId", "")).append('@').append(d.optString("updatedAt", "")).append(';');
+        }
+        return sb.toString();
+    }
+
+    private void readFixedRange(String period, String requestId) {
+        cancelFixedRange();
+        String cleanPeriod = period == null ? "" : period.trim();
+        if (!foreground || spec == null || !isFixedRangePeriod(cleanPeriod)
+                || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,80}")) {
+            return;
+        }
+        if (latestStats == null) {
+            try {
+                emit(event("fixedRangeResult")
+                        .put("period", cleanPeriod)
+                        .put("requestId", requestId)
+                        .put("error", "stats_unavailable"));
+            } catch (Exception ignored) { }
+            return;
+        }
+        int epoch = generation;
+        int queryEpoch = fixedRangeGeneration;
+        ConnectionSpec destination = spec;
+        JSONObject statsSnapshot = latestStats;
+        HubClient request = new HubClient();
+        fixedRangeClient = request;
+        fixedRangeNetwork.execute(() -> {
+            JSONObject payload = event("fixedRangeResult");
+            try {
+                payload.put("period", cleanPeriod);
+                payload.put("requestId", requestId);
+                long nowMs = System.currentTimeMillis();
+                JSONArray devices = statsSnapshot.optJSONArray("devices");
+                JSONObject revisions = statsSnapshot.optJSONObject("fixedRangeRevisions");
+                JSONObject scanned = new JSONObject();
+                boolean needsHistoryFallback = false;
+                for (int i = 0; devices != null && i < devices.length(); i++) {
+                    JSONObject device = devices.optJSONObject(i);
+                    if (device == null) continue;
+                    String devId = device.optString("deviceId", "").trim();
+                    if (devId.isEmpty()) continue;
+                    String[] expectedWindow = expectedDeviceFixedWindow(device, cleanPeriod, nowMs);
+                    String rev = revisions == null ? "" : revisions.optString(devId, "").trim();
+                    if (expectedWindow != null && !rev.isEmpty()) {
+                        String cacheKey = epoch + "\u0000" + devId + "\u0000" + rev + "\u0000"
+                                + cleanPeriod + "\u0000" + expectedWindow[0] + "\u0000" + expectedWindow[1];
+                        JSONObject cached;
+                        synchronized (fixedRangeCacheLock) {
+                            cached = fixedRangeSliceCache.get(cacheKey);
+                        }
+                        if (cached != null) {
+                            JSONObject copy = new JSONObject(cached.toString());
+                            scanned.put(devId, copy);
+                            rememberFixedRangeSessions(devId, copy);
+                        } else {
+                            try {
+                                JSONObject index = request.fixedRangesIndex(destination, devId);
+                                JSONObject ranges = index.optJSONObject("ranges");
+                                JSONObject rangeMeta = ranges == null ? null : ranges.optJSONObject(cleanPeriod);
+                                if (rev.equals(index.optString("revision", ""))
+                                        && rangeMeta != null
+                                        && expectedWindow[0].equals(rangeMeta.optString("start", ""))
+                                        && expectedWindow[1].equals(rangeMeta.optString("end", ""))) {
+                                    int firstPage = rangeMeta.optInt("firstPage", -1);
+                                    int pageCount = rangeMeta.optInt("pageCount", -1);
+                                    if (firstPage >= 0 && pageCount >= 0
+                                            && pageCount <= ConnectionSpec.MAX_FIXED_RANGE_PAGES
+                                            && firstPage + pageCount <= ConnectionSpec.MAX_FIXED_RANGE_PAGES) {
+                                        java.util.List<JSONArray> pages = new java.util.ArrayList<>(pageCount);
+                                        boolean pagesValid = true;
+                                        for (int p = 0; p < pageCount; p++) {
+                                            JSONObject pageBody = request.fixedRangesPage(destination, devId, rev, firstPage + p);
+                                            JSONArray rows = pageBody.optJSONArray("rows");
+                                            if (rows == null) {
+                                                pagesValid = false;
+                                                break;
+                                            }
+                                            pages.add(rows);
+                                        }
+                                        if (pagesValid) {
+                                            JSONObject decoded = decodeFixedRangeSlice(cleanPeriod, rangeMeta, pages, rev);
+                                            if (decoded != null) {
+                                                synchronized (fixedRangeCacheLock) {
+                                                    fixedRangeSliceCache.put(cacheKey, new JSONObject(decoded.toString()));
+                                                }
+                                                scanned.put(devId, decoded);
+                                                rememberFixedRangeSessions(devId, decoded);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (HubClient.HubError hubErr) {
+                                if (hubErr.status == 401 || hubErr.status == 403) throw hubErr;
+                                // 404/409 or transient page mismatch falls through to History fallback.
+                            }
+                        }
+                    }
+                    if (!scanned.has(devId)) {
+                        needsHistoryFallback = true;
+                    }
+                }
+                payload.put("scanned", scanned);
+                if (needsHistoryFallback) {
+                    String historyKey = epoch + "\u0000"
+                            + statsSnapshot.optString("deviceHistoryRevision", "") + "\u0000"
+                            + devicesObservationSignature(devices);
+                    JSONArray histories = null;
+                    synchronized (fixedRangeCacheLock) {
+                        if (historyKey.equals(cachedDevicesHistoryKey) && cachedDevicesHistory != null) {
+                            histories = new JSONArray(cachedDevicesHistory.toString());
+                        }
+                    }
+                    if (histories == null) {
+                        try {
+                            JSONObject devicesBody = request.devices(destination);
+                            JSONArray sanitized = sanitizeDeviceHistories(devicesBody.optJSONArray("devices"));
+                            synchronized (fixedRangeCacheLock) {
+                                cachedDevicesHistoryKey = historyKey;
+                                cachedDevicesHistory = new JSONArray(sanitized.toString());
+                            }
+                            histories = sanitized;
+                        } catch (HubClient.HubError hubErr) {
+                            if (hubErr.status == 401 || hubErr.status == 403) throw hubErr;
+                            payload.put("historyError", mapReportHubError(hubErr));
+                        } catch (Exception devErr) {
+                            payload.put("historyError", "read_failed");
+                        }
+                    }
+                    if (histories != null) {
+                        payload.put("deviceHistories", histories);
+                    }
+                }
+            } catch (Exception error) {
+                try {
+                    payload.put("period", cleanPeriod);
+                    payload.put("requestId", requestId);
+                    payload.put("error", mapReportHubError(error));
+                } catch (Exception ignored) { }
+            }
+            main.post(() -> {
+                if (epoch != generation || queryEpoch != fixedRangeGeneration || !foreground) return;
+                fixedRangeClient = null;
+                emit(payload);
+            });
+        });
     }
 
     private void queryAntigravityManager(String requestId) {
@@ -1400,6 +1776,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         caDrafts.clear();
         pendingCaDraftPayload = null;
+        clearFixedRangeCaches();
         cancel();
         network.shutdownNow();
         certImportNetwork.shutdownNow();
@@ -1407,6 +1784,7 @@ public final class MainActivity extends Activity {
         reportsListNetwork.shutdownNow();
         reportsDetailNetwork.shutdownNow();
         agManagerNetwork.shutdownNow();
+        fixedRangeNetwork.shutdownNow();
         if (updates != null) updates.close();
         if (downloads != null) downloads.close();
         if (web != null) { web.removeJavascriptInterface("HubNative"); web.destroy(); }

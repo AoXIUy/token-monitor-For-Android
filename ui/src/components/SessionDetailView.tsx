@@ -178,6 +178,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
   const latestModelLabel = MonitorModel.sessionLatestModel(row) || '未知';
   const reasoningEffort = MonitorModel.sessionReasoningEffort(row);
   const usageDisplay = MonitorModel.sessionUsageDisplay(row);
+  const presentation = MonitorModel.sessionListPresentation(row);
   const timedDurationNum = MonitorModel.numeric(row.timedDurationMs);
 
   return (
@@ -196,7 +197,7 @@ export const SessionDetailView: React.FC<SessionDetailViewProps> = ({
         </div>
 
         <h2 className="text-lg font-bold text-[var(--tm-text-primary)] leading-snug mt-2.5 mb-1 break-words">
-          {row.title || row.projectLabel || row.sessionId || row.key}
+          {presentation.detailHeading}
         </h2>
 
         <p className="text-xs text-[var(--tm-text-secondary)] leading-relaxed break-words">
