@@ -1640,35 +1640,36 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
               lastUpdated: Math.floor(nowMs / 1000),
               groups: [
                 {
-                  displayName: 'Gemini',
-                  description: 'Gemini 3 / 4 shared pool',
+                  displayName: 'Gemini Models',
+                  description: 'Models within this group: Gemini 4 Neon, Gemini 4 Carbon, Gemini 4 Argon, Gemini 4 Hydrogen, Orchestrator (Argon), Gemini 3.8 Flash',
                   buckets: [
                     { bucketId: 'gemini-5h', window: '5h', remainingFraction: 0.92, resetTime: inFiveHours, displayName: 'Gemini 5h' },
                     { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0.78, resetTime: inFourDays, displayName: 'Gemini Weekly' },
                   ],
                 },
                 {
-                  displayName: 'Claude / GPT',
-                  description: 'Third-party reasoning pool',
+                  displayName: 'Claude and GPT models',
+                  description: 'Models within this group: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B',
                   buckets: [
                     { bucketId: 'claude-5h', window: '5h', remainingFraction: 0.85, resetTime: inTwoHours, displayName: 'Claude 5h' },
                     { bucketId: 'claude-weekly', window: 'weekly', remainingFraction: 0.64, resetTime: inFourDays, displayName: 'Claude Weekly' },
                   ],
                 },
                 {
-                  displayName: 'Hydrogen',
-                  description: 'Dedicated Gemini 4 Hydrogen pool',
+                  displayName: 'Gemini 4 Argon',
+                  description: 'Models within this group: Gemini 4 Argon, Orchestrator (Argon)',
                   buckets: [
-                    { bucketId: 'hydrogen-weekly', window: 'weekly', remainingFraction: 0.9, resetTime: inSixDays, displayName: 'Hydrogen Weekly' },
+                    { bucketId: 'argon-weekly', window: 'weekly', remainingFraction: 0.9, resetTime: inSixDays, displayName: 'Argon Weekly' },
                   ],
                 },
               ],
               models: [
-                { name: 'gemini-4-hydrogen-preview', displayName: 'Gemini 4 Hydrogen', percentage: 90, resetTime: inSixDays },
-                { name: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6', percentage: 85, resetTime: inTwoHours },
+                { name: 'gemini-4-neon-preview', displayName: 'Gemini 4 Neon', percentage: 92, resetTime: inFiveHours },
+                { name: 'gemini-4-carbon-preview', displayName: 'Gemini 4 Carbon', percentage: 92, resetTime: inFiveHours },
+                { name: 'gemini-4-argon-preview', displayName: 'Gemini 4 Argon', percentage: 90, resetTime: inSixDays },
+                { name: 'claude-opus-5-5-thinking', displayName: 'Claude Opus 5.5', percentage: 85, resetTime: inTwoHours },
                 { name: 'gpt-oss-120b-medium', displayName: 'GPT OSS 120B', percentage: 85, resetTime: inTwoHours },
-                { name: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro High', percentage: 92, resetTime: inFiveHours },
-                { name: 'gemini-3-flash', displayName: 'Gemini 3 Flash', percentage: 100, resetTime: inFiveHours },
+                { name: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', percentage: 100, resetTime: inFiveHours },
               ],
             },
           },
@@ -1752,19 +1753,19 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
               lastUpdated: Math.floor((nowMs - 240_000) / 1000),
               groups: [
                 {
-                  displayName: 'Gemini',
-                  description: '',
+                  displayName: 'Gemini Models',
+                  description: 'Models within this group: Gemini 4 Neon, Gemini 4 Carbon, Gemini 4 Argon, Gemini 3.8 Flash',
                   buckets: [
                     { bucketId: 'gemini-5h', window: '5h', remainingFraction: 1, resetTime: nowIso, displayName: 'Gemini 5h' },
                     { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0, resetTime: inFourDays, displayName: 'Gemini Weekly' },
                   ],
                 },
                 {
-                  displayName: 'Claude / GPT',
-                  description: '',
+                  displayName: 'Claude and GPT models',
+                  description: 'Models within this group: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B',
                   buckets: [
                     { bucketId: 'claude-5h', window: '5h', remainingFraction: 1, resetTime: nowIso, displayName: 'Claude 5h' },
-                    { bucketId: 'claude-weekly', window: 'weekly', remainingFraction: 1, resetTime: inSixDays, displayName: 'Claude Weekly' },
+                    { bucketId: 'claude-weekly', window: 'weekly', remainingFraction: null, resetTime: '', displayName: 'Claude Weekly', disabled: true },
                   ],
                 },
               ],
@@ -1792,11 +1793,11 @@ export function createDemoAgManager(nowMs: number = Date.now()) {
               lastUpdated: Math.floor((nowMs - 900_000) / 1000),
               groups: [
                 {
-                  displayName: 'Gemini',
-                  description: '',
+                  displayName: 'Gemini Models',
+                  description: 'Models within this group: Gemini 4 Neon, Gemini 4 Argon, Gemini 3.8 Flash',
                   buckets: [
-                    { bucketId: 'gemini-5h', window: '5h', remainingFraction: 0.72, resetTime: inFiveHours, displayName: 'Gemini 5h' },
-                    { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0.88, resetTime: inFourDays, displayName: 'Gemini Weekly' },
+                    { bucketId: 'gemini-5h', window: '5h', remainingFraction: 0, resetTime: inTwoHours, displayName: 'Gemini 5h' },
+                    { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0.72, resetTime: inFourDays, displayName: 'Gemini Weekly' },
                   ],
                 },
               ],

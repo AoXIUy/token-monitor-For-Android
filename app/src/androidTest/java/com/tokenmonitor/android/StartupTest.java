@@ -1444,7 +1444,8 @@ public final class StartupTest {
                                                         .put("isForbidden", false)
                                                         .put("groups", new org.json.JSONArray()
                                                                 .put(new org.json.JSONObject()
-                                                                        .put("displayName", "Gemini")
+                                                                        .put("displayName", "Gemini Models")
+                                                                        .put("description", "Models within this group: Gemini 4 Hydrogen, Gemini 3.8 Flash")
                                                                         .put("secretToken", "must-strip-group")
                                                                         .put("buckets", new org.json.JSONArray()
                                                                                 .put(new org.json.JSONObject()
@@ -1557,7 +1558,40 @@ public final class StartupTest {
                                                 .put("subscriptionTier", "FREE")
                                                 .put("banned", true)
                                                 .put("quota", new org.json.JSONObject()
-                                                        .put("groups", new org.json.JSONArray())
+                                                        .put("groups", new org.json.JSONArray()
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("displayName", "Gemini Models")
+                                                                        .put("description", "Models within this group: Gemini 4 Neon, Gemini 4 Argon")
+                                                                        .put("buckets", new org.json.JSONArray()
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "gemini-5h")
+                                                                                        .put("window", "5h")
+                                                                                        .put("remainingFraction", 0)
+                                                                                        .put("resetTime", inThreeHours)
+                                                                                        .put("displayName", "Gemini 5h"))
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "gemini-weekly")
+                                                                                        .put("window", "weekly")
+                                                                                        .put("remainingFraction", 0.72)
+                                                                                        .put("resetTime", inFourDays)
+                                                                                        .put("displayName", "Gemini Weekly"))))
+                                                                .put(new org.json.JSONObject()
+                                                                        .put("displayName", "Claude and GPT models")
+                                                                        .put("description", "Models within this group: Claude Opus 5.5, GPT-OSS 120B")
+                                                                        .put("buckets", new org.json.JSONArray()
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "claude-5h")
+                                                                                        .put("window", "5h")
+                                                                                        .put("remainingFraction", 1)
+                                                                                        .put("resetTime", inThreeHours)
+                                                                                        .put("displayName", "Claude 5h"))
+                                                                                .put(new org.json.JSONObject()
+                                                                                        .put("bucketId", "claude-weekly")
+                                                                                        .put("window", "weekly")
+                                                                                        .put("remainingFraction", org.json.JSONObject.NULL)
+                                                                                        .put("disabled", true)
+                                                                                        .put("resetTime", "")
+                                                                                        .put("displayName", "Claude Weekly")))))
                                                         .put("models", new org.json.JSONArray()))))))
                 .toString();
 
@@ -1617,19 +1651,22 @@ public final class StartupTest {
                         + " return text.includes('自动刷新 15m') && text.includes('总计') && text.includes('Ultra') && text.includes('Pro') && text.includes('Free') && text.includes('异常');"
                         + " })()"));
 
-                // Verify agm-1 active styling, localized slots, tier, fingerprint, capabilities, timestamp, and 5 cells.
+                // Verify agm-1 active styling, localized slots, tier, fingerprint, capabilities, timestamp, and grouped 5 cells.
                 assertEquals("true", evaluate("(() => {"
                         + " const card = document.querySelector('[data-agm-account=\"agm-1\"]');"
                         + " if (!card) return false;"
                         + " const email = card.querySelector('[data-selectable=\"true\"]');"
                         + " const text = card.innerText;"
+                        + " const groups = card.querySelectorAll('[data-agm-quota-group]');"
                         + " const bars = card.querySelectorAll('[role=\"progressbar\"]');"
                         + " const fifthWrap = bars[4] ? bars[4].parentElement : null;"
                         + " return Boolean(email) && email.className.includes('text-sky-300')"
                         + " && text.includes('经典款') && text.includes('IDE') && text.includes('◆ ULTRA') && text.includes('独立指纹')"
                         + " && text.includes('Hydrogen') && text.includes('Claude 4.6') && text.includes('GPT-120B')"
                         + " && /\\d{4}\\/\\d{2}\\/\\d{2} \\d{2}:\\d{2}/.test(text)"
-                        + " && bars.length === 5 && Boolean(fifthWrap) && fifthWrap.className.includes('col-span-2') && fifthWrap.innerText.includes('Hydrogen · weekly');"
+                        + " && groups.length === 3 && text.includes('Gemini') && text.includes('Hydrogen · 3.8 Flash') && text.includes('Claude / GPT') && text.includes('Hydrogen')"
+                        + " && text.includes('5h') && text.includes('每周')"
+                        + " && bars.length === 5 && Boolean(fifthWrap) && fifthWrap.className.includes('col-span-2') && fifthWrap.innerText.includes('每周');"
                         + " })()"));
 
                 // Verify agm-2 models-only fallback grid (3 cells, odd 3rd cell spans full width).
@@ -1719,6 +1756,14 @@ public final class StartupTest {
 
                 evaluate("Array.from(document.querySelectorAll('#ag-manager-devices button')).find(b => b.innerText.includes('Backup-PC')).click()");
                 awaitScript("document.querySelectorAll('[data-agm-account]').length === 1 && document.querySelector('[data-agm-account=\"agm-4\"]').innerText.includes('已封禁')");
+                assertEquals("true", evaluate("(() => {"
+                        + " const card = document.querySelector('[data-agm-account=\"agm-4\"]');"
+                        + " const sup = card ? card.querySelector('[data-agm-superseded=\"true\"]') : null;"
+                        + " const dis = card ? card.querySelector('[data-agm-disabled=\"true\"]') : null;"
+                        + " return Boolean(sup) && sup.innerText.includes('受5h限制')"
+                        + " && Boolean(dis) && dis.innerText.includes('已停用') && dis.querySelector('[role=\"progressbar\"]') === null"
+                        + " && document.documentElement.scrollWidth <= window.innerWidth + 1;"
+                        + " })()"));
                 evaluate("Array.from(document.querySelectorAll('#ag-manager-devices button')).find(b => b.innerText.includes('Main-PC')).click()");
                 awaitScript("document.querySelectorAll('[data-agm-account]').length === 3");
 

@@ -475,9 +475,11 @@ export interface MonitorState {
 export interface AgManagerQuotaBucket {
   bucketId: string;
   window: string;
-  remainingFraction: number;
+  remainingFraction: number | null;
   resetTime: string;
   displayName: string;
+  disabled?: boolean;
+  description?: string;
 }
 
 export interface AgManagerQuotaGroup {
@@ -502,11 +504,23 @@ export interface AgManagerQuotaCell {
   id: string;
   family: 'gemini' | 'claude' | 'other';
   title: string;
+  periodLabel?: string;
   resetText: string;
   resetTone: '5h' | 'weekly' | '';
   pct: number;
   isFull: boolean;
+  disabled?: boolean;
+  supersededBy5h?: boolean;
+  groupTitle?: string;
   ariaLabel: string;
+}
+
+export interface AgManagerQuotaGroupView {
+  id: string;
+  family: 'gemini' | 'claude' | 'other';
+  title: string;
+  modelsHint: string;
+  cells: AgManagerQuotaCell[];
 }
 
 export interface AgManagerAccountSummary {

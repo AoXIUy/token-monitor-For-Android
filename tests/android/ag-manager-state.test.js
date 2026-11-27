@@ -161,6 +161,16 @@ test('agManagerState sanitizes quota.groups cleanly, clamps fractions, and strip
                         remainingFraction: -0.2,
                         resetTime: '2026-11-28T10:00:00Z',
                         displayName: 'Gemini Weekly',
+                        disabled: true,
+                        description: 'Temporarily disabled\nfor maintenance',
+                      },
+                      {
+                        bucketId: 'gemini-disabled-null',
+                        window: '5h',
+                        remainingFraction: null,
+                        disabled: true,
+                        resetTime: '',
+                        displayName: 'Gemini Disabled Null',
                       },
                       {
                         bucketId: 'invalid-null-fraction',
@@ -198,15 +208,21 @@ test('agManagerState sanitizes quota.groups cleanly, clamps fractions, and strip
   assert.equal(acc.quota.lastUpdated, 1763892000);
   assert.equal(acc.quota.groups.length, 1);
   assert.equal(acc.quota.groups[0].displayName, 'Gemini');
-  assert.equal(acc.quota.groups[0].buckets.length, 2);
+  assert.equal(acc.quota.groups[0].buckets.length, 3);
   assert.deepEqual(acc.quota.groups[0].buckets[0], {
     bucketId: 'gemini-5h',
     window: '5h',
     remainingFraction: 1,
     resetTime: '2026-11-23T15:00:00Z',
     displayName: 'Gemini 5h',
+    disabled: false,
+    description: '',
   });
   assert.equal(acc.quota.groups[0].buckets[1].remainingFraction, 0);
+  assert.equal(acc.quota.groups[0].buckets[1].disabled, true);
+  assert.equal(acc.quota.groups[0].buckets[1].description, 'Temporarily disabled for maintenance');
+  assert.equal(acc.quota.groups[0].buckets[2].disabled, true);
+  assert.equal(acc.quota.groups[0].buckets[2].remainingFraction, null);
 });
 
 test('formatAgSlotLabel maps known slots and uppercases unknown ones', async () => {
@@ -793,4 +809,133 @@ test('agManagerState deduplicates repeated deviceIds and model names to keep Rea
   assert.equal(state.devices[0].hostname, 'Primary');
   assert.equal(state.devices[0].accounts[0].quota.models.length, 2);
   assert.equal(state.devices[0].accounts[0].quota.models[0].percentage, 80);
+});
+
+test('inferAgCapabilityPills prioritizes flagship Gemini 4 codenames, highest Claude version, and group descriptions', async () => {
+  const { inferAgCapabilityPills } = await stateModule;
+
+  const flagshipFromModels = inferAgCapabilityPills({
+    quota: {
+      groups: [
+        {
+          displayName: 'Gemini Models',
+          description: 'Models within this group: Gemini 4 Neon, Gemini 4 Carbon, Gemini 4 Argon, Gemini 4 Hydrogen, Gemini 3.8 Flash',
+          buckets: [],
+        },
+        {
+          displayName: 'Claude and GPT models',
+          description: 'Models within this group: Claude Opus 4.6, Claude Sonnet 5.5, GPT-OSS 120B',
+          buckets: [],
+        },
+      ],
+      models: [
+        { name: 'gemini-4-argon-preview', displayName: 'Gemini 4 Argon', percentage: 100, resetTime: '' },
+        { name: 'gemini-4-carbon-preview', displayName: 'Gemini 4 Carbon', percentage: 100, resetTime: '' },
+        { name: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6', percentage: 80, resetTime: '' },
+      ],
+    },
+  });
+  assert.deepEqual(flagshipFromModels, [
+    { label: 'Neon', tone: 'violet' },
+    { label: 'Claude 5.5', tone: 'amber' },
+    { label: 'GPT-120B', tone: 'emerald' },
+  ]);
+
+  const groupOnly = inferAgCapabilityPills({
+    quota: {
+      groups: [
+        {
+          displayName: 'Gemini Models',
+          description: 'Models within this group: Orchestrator (Carbon)',
+          buckets: [],
+        },
+      ],
+      models: [],
+    },
+  });
+  assert.deepEqual(groupOnly, [
+    { label: 'Carbon', tone: 'violet' },
+  ]);
+});
+
+test('buildAgQuotaGroups renders grouped windows, model hints, disabled state, 5h-superseded weekly state, and availability scoring', async () => {
+  const { buildAgQuotaGroups, buildAgQuotaCells, scoreAgAccountAvailability } = await stateModule;
+  const nowMs = Date.parse('2026-11-23T10:00:00Z');
+
+  const groups = buildAgQuotaGroups({
+    quota: {
+      groups: [
+        {
+          displayName: 'Claude and GPT models',
+          description: 'Models within this group: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B',
+          buckets: [
+            { bucketId: 'claude-5h', window: '5h', remainingFraction: 1, resetTime: '2026-11-23T15:00:00Z', displayName: '5h' },
+            { bucketId: 'claude-weekly', window: 'weekly', remainingFraction: null, disabled: true, resetTime: '', displayName: 'Weekly' },
+          ],
+        },
+        {
+          displayName: 'Gemini Models',
+          description: 'Models within this group: Gemini 4 Neon, Gemini 4 Carbon, Gemini 4 Argon, Gemini 4 Argon, Gemini 3.8 Flash.',
+          buckets: [
+            { bucketId: 'gemini-session', window: 'session', remainingFraction: 0, resetTime: '2026-11-23T12:00:00Z', displayName: 'Session' },
+            { bucketId: 'gemini-weekly', window: 'weekly', remainingFraction: 0.72, resetTime: '2026-11-27T10:00:00Z', displayName: 'Weekly' },
+          ],
+        },
+        {
+          displayName: 'Gemini 4 Argon',
+          description: 'Models within this group: Orchestrator (Argon)',
+          buckets: [
+            { bucketId: 'argon-weekly', window: 'weekly', remainingFraction: 0.54, resetTime: '2026-11-28T10:00:00Z', displayName: 'Argon Weekly' },
+          ],
+        },
+      ],
+      models: [],
+    },
+  }, nowMs);
+
+  assert.equal(groups.length, 3);
+  assert.deepEqual(groups.map((g) => g.title), ['Gemini', 'Claude / GPT', 'Gemini 4 Argon']);
+  assert.equal(groups[0].modelsHint, 'Neon · Carbon · Argon · 3.8 Flash');
+  assert.equal(groups[1].modelsHint, 'Claude 5.5 · GPT-120B');
+  assert.equal(groups[2].modelsHint, 'Argon');
+
+  assert.equal(groups[0].cells[0].periodLabel, '5h');
+  assert.equal(groups[0].cells[0].pct, 0);
+  assert.equal(groups[0].cells[0].supersededBy5h, false);
+  assert.equal(groups[0].cells[1].periodLabel, '每周');
+  assert.equal(groups[0].cells[1].pct, 72);
+  assert.equal(groups[0].cells[1].supersededBy5h, true);
+
+  assert.equal(groups[1].cells[0].pct, 100);
+  assert.equal(groups[1].cells[0].disabled, false);
+  assert.equal(groups[1].cells[1].disabled, true);
+  assert.equal(groups[1].cells[1].pct, 0);
+  assert.equal(groups[1].cells[1].supersededBy5h, false);
+
+  assert.equal(groups[2].cells.length, 1);
+  assert.equal(groups[2].cells[0].isFull, true);
+
+  // Pro account listing Argon only in Gemini Models description should not spawn a fake dedicated Argon pool or return models-only fallback wrongly
+  assert.deepEqual(buildAgQuotaGroups({ quota: { groups: [], models: [{ name: 'gemini-3-flash', displayName: 'Flash', percentage: 90 }] } }, nowMs), []);
+
+  // Disabled buckets must be skipped in buildAgQuotaCells and ignored by availability scoring
+  const partialAccount = {
+    id: 'p1',
+    email: 'partial@example.com',
+    quota: {
+      groups: [
+        {
+          displayName: 'Gemini Models',
+          description: 'Models within this group: Gemini 4 Neon, Gemini 4 Argon',
+          buckets: [
+            { bucketId: 'g-5h', window: '5h', remainingFraction: 1, resetTime: '2026-11-23T15:00:00Z', displayName: '5h' },
+            { bucketId: 'g-weekly', window: 'weekly', remainingFraction: null, disabled: true, resetTime: '', displayName: 'Weekly' },
+          ],
+        },
+      ],
+      models: [],
+    },
+  };
+  assert.equal(buildAgQuotaCells(partialAccount, nowMs).length, 1);
+  assert.equal(scoreAgAccountAvailability(partialAccount), 100 + 100 * 0.001);
 });

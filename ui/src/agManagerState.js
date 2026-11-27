@@ -48,16 +48,31 @@ function normalizeTier(value) {
 function sanitizeQuotaBucket(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const obj = /** @type {Record<string, unknown>} */ (raw);
+  const disabled = obj.disabled === true;
+  const resetTime = cleanText(obj.resetTime ?? obj.reset_time, 64);
   const rawFraction = obj.remainingFraction ?? obj.remaining_fraction;
-  if (rawFraction === undefined || rawFraction === null || rawFraction === '') return null;
-  const fractionNum = Number(rawFraction);
-  if (!Number.isFinite(fractionNum)) return null;
+  const hasRawFraction = rawFraction !== undefined && rawFraction !== null && rawFraction !== '';
+  /** @type {number | null} */
+  let remainingFraction = null;
+  if (hasRawFraction) {
+    const fractionNum = Number(rawFraction);
+    if (!Number.isFinite(fractionNum)) {
+      if (!disabled) return null;
+    } else {
+      remainingFraction = Math.max(0, Math.min(1, fractionNum));
+    }
+  } else if (!disabled) {
+    if (!resetTime) return null;
+    remainingFraction = 0;
+  }
   return {
     bucketId: cleanText(obj.bucketId ?? obj.bucket_id, 128),
     window: cleanText(obj.window, 32),
-    remainingFraction: Math.max(0, Math.min(1, fractionNum)),
-    resetTime: cleanText(obj.resetTime ?? obj.reset_time, 64),
+    remainingFraction,
+    resetTime,
     displayName: cleanText(obj.displayName ?? obj.display_name, 128),
+    disabled,
+    description: cleanText(obj.description, 256),
   };
 }
 
@@ -390,58 +405,94 @@ export function formatAgCompactTimestamp(rawTs) {
 }
 
 /**
- * Infer up to 3 capability pills from an account's quota models
- * (Gemini 4+ codename, Claude version/family, GPT variant).
+ * Infer up to 3 capability pills from an account's quota models and groups
+ * (Gemini 4+ flagship codename, highest Claude version, GPT variant).
  *
  * @param {import('./types/monitor').AgManagerAccountSummary | null | undefined} account
  * @returns {import('./types/monitor').AgManagerCapabilityPill[]}
  */
 export function inferAgCapabilityPills(account) {
   const models = Array.isArray(account?.quota?.models) ? account.quota.models : [];
-  if (models.length === 0) return [];
+  const groups = Array.isArray(account?.quota?.groups) ? account.quota.groups : [];
+  if (models.length === 0 && groups.length === 0) return [];
   /** @type {import('./types/monitor').AgManagerCapabilityPill[]} */
   const pills = [];
+  const g4Priority = ['neon', 'carbon', 'hydrogen', 'argon'];
 
-  let g4Code = '';
-  let claudeLabel = '';
+  /** @type {string[]} */
+  const texts = [];
+  for (const model of models) {
+    if (model?.name) texts.push(String(model.name).trim().toLowerCase());
+    if (model?.displayName) texts.push(String(model.displayName).trim().toLowerCase());
+  }
+  for (const group of groups) {
+    if (group?.displayName) texts.push(String(group.displayName).trim().toLowerCase());
+    if (group?.description) texts.push(String(group.description).trim().toLowerCase());
+  }
+
+  /** @type {string[]} */
+  const g4Codes = [];
+  /** @param {string} candidate */
+  const addG4Code = (candidate) => {
+    const clean = String(candidate || '').trim().toLowerCase();
+    if (clean && !GENERIC_CAPABILITY_WORDS.has(clean) && !g4Codes.includes(clean)) {
+      g4Codes.push(clean);
+    }
+  };
+
+  /** @type {{ score: number, label: string } | null} */
+  let bestClaude = null;
+  let sawClaude = false;
   let gptLabel = '';
 
-  for (const model of models) {
-    const rawName = String(model?.name || '').trim().toLowerCase();
-    if (!rawName) continue;
+  for (const text of texts) {
+    if (!text) continue;
 
-    if (!g4Code) {
-      if (rawName.includes('argon') || rawName.includes('orchestrator-g1-pro')) {
-        g4Code = 'Argon';
-      } else if (rawName.startsWith('gemini-')) {
-        const match = rawName.match(/^gemini-(\d+)(?:\.\d+)?-([a-z]+)/);
-        if (match) {
-          const major = Number.parseInt(match[1], 10);
-          const candidate = match[2];
-          if (major >= 4 && candidate && !GENERIC_CAPABILITY_WORDS.has(candidate)) {
-            g4Code = candidate.charAt(0).toUpperCase() + candidate.slice(1);
-          }
+    if (
+      text.includes('orchestrator-g1-pro')
+      || (text.includes('argon') && (text.includes('gemini') || text.includes('orchestrator')))
+    ) {
+      addG4Code('argon');
+    }
+    for (const match of text.matchAll(/gemini-(\d+)(?:\.\d+)?-([a-z]+)/g)) {
+      if (Number.parseInt(match[1], 10) >= 4) addG4Code(match[2]);
+    }
+    for (const match of text.matchAll(/gemini\s+(\d+)(?:\.\d+)?\s+([a-z]+)/g)) {
+      if (Number.parseInt(match[1], 10) >= 4) addG4Code(match[2]);
+    }
+    for (const match of text.matchAll(/gemini-pro-orchestrator-([a-z]+)/g)) {
+      addG4Code(match[1] === 'g1' ? 'argon' : match[1]);
+    }
+    for (const match of text.matchAll(/orchestrator\s*\(([a-z]+)\)/g)) {
+      addG4Code(match[1]);
+    }
+
+    if (/\bclaude\b|claude-/.test(text)) {
+      sawClaude = true;
+      for (const verMatch of text.matchAll(/claude(?:[-_\s]+(?:sonnet|opus|haiku))?[-_\s]*(\d+)(?:[.-](\d+))?/g)) {
+        const major = Number.parseInt(verMatch[1], 10);
+        const minor = verMatch[2] ? Number.parseInt(verMatch[2], 10) : 0;
+        const score = major * 1000 + minor;
+        const label = verMatch[2] ? `Claude ${major}.${minor}` : `Claude ${major}`;
+        if (!bestClaude || score > bestClaude.score) {
+          bestClaude = { score, label };
         }
       }
     }
 
-    if (!claudeLabel && rawName.startsWith('claude')) {
-      const verMatch = rawName.match(/claude-(?:sonnet|opus|haiku)?-?(\d+)(?:[-.](\d+))?/);
-      if (verMatch) {
-        claudeLabel = verMatch[2] ? `Claude ${verMatch[1]}.${verMatch[2]}` : `Claude ${verMatch[1]}`;
-      } else {
-        claudeLabel = 'Claude';
+    if (/\bgpt\b|gpt-/.test(text)) {
+      const sizeMatch = text.match(/(\d+[abkm])\b/i);
+      const nextGpt = sizeMatch ? `GPT-${sizeMatch[1].toUpperCase()}` : 'GPT';
+      if (!gptLabel || (gptLabel === 'GPT' && nextGpt !== 'GPT')) {
+        gptLabel = nextGpt;
       }
-    }
-
-    if (!gptLabel && rawName.startsWith('gpt')) {
-      const sizeMatch = rawName.match(/(\d+[abkm])\b/i);
-      gptLabel = sizeMatch ? `GPT-${sizeMatch[1].toUpperCase()}` : 'GPT';
     }
   }
 
-  if (g4Code) pills.push({ label: g4Code, tone: 'violet' });
-  if (claudeLabel) pills.push({ label: claudeLabel, tone: 'amber' });
+  const bestG4 = g4Priority.find((code) => g4Codes.includes(code)) || g4Codes[0] || '';
+  if (bestG4) pills.push({ label: bestG4.charAt(0).toUpperCase() + bestG4.slice(1), tone: 'violet' });
+  if (bestClaude?.label) pills.push({ label: bestClaude.label, tone: 'amber' });
+  else if (sawClaude) pills.push({ label: 'Claude', tone: 'amber' });
   if (gptLabel) pills.push({ label: gptLabel, tone: 'emerald' });
   return pills.slice(0, 3);
 }
@@ -467,13 +518,19 @@ function formatAgResetCountdown(resetIso, nowMs) {
 
 /** @param {import('./types/monitor').AgManagerQuotaBucket} bucket */
 function is5hBucket(bucket) {
-  const text = `${bucket?.window || ''} ${bucket?.bucketId || ''}`.toLowerCase();
-  return text.includes('5h') || text.includes('hour');
+  const win = String(bucket?.window || '').trim().toLowerCase();
+  if (win === 'session') return true;
+  const text = `${win} ${bucket?.bucketId || ''} ${bucket?.displayName || ''}`.toLowerCase();
+  return text.includes('5h')
+    || text.includes('5-hour')
+    || text.includes('five-hour')
+    || text.includes('five hour')
+    || text.includes('hour');
 }
 
 /** @param {import('./types/monitor').AgManagerQuotaBucket} bucket */
 function isWeeklyBucket(bucket) {
-  const text = `${bucket?.window || ''} ${bucket?.bucketId || ''}`.toLowerCase();
+  const text = `${bucket?.window || ''} ${bucket?.bucketId || ''} ${bucket?.displayName || ''}`.toLowerCase();
   return text.includes('week') || text.includes('7d');
 }
 
@@ -486,7 +543,50 @@ function isClaudeOr3pGroup(group) {
 /** @param {import('./types/monitor').AgManagerQuotaGroup} group */
 function isDedicatedCodenameGroup(group) {
   const text = `${group?.displayName || ''} ${(group?.buckets || []).map((b) => `${b.bucketId || ''} ${b.displayName || ''}`).join(' ')}`.toLowerCase();
-  return /\b(argon|hydrogen|carbon|helium|wtu)\b/.test(text);
+  return /\b(argon|neon|hydrogen|carbon|helium|wtu)\b/.test(text);
+}
+
+/** @param {import('./types/monitor').AgManagerQuotaGroup | null | undefined} group */
+export function normalizeAgQuotaGroupTitle(group) {
+  const raw = String(group?.displayName || '').trim().replace(/\s+/g, ' ');
+  const lower = raw.toLowerCase();
+  if (/^gemini(?:\s+models)?$/.test(lower)) return 'Gemini';
+  if (/^claude\s*(?:and|&|\/)\s*gpt(?:\s+models)?$/.test(lower)) return 'Claude / GPT';
+  if (/^gemini\s+4\s+argon$/.test(lower)) return 'Gemini 4 Argon';
+  return raw || '配额';
+}
+
+/** @param {import('./types/monitor').AgManagerQuotaGroup | null | undefined} group */
+export function extractAgQuotaGroupModelsHint(group) {
+  const desc = String(group?.description || '').trim();
+  const match = desc.match(/models within this group:\s*(.+)$/i);
+  if (!match) return '';
+  const seen = new Set();
+  /** @type {string[]} */
+  const labels = [];
+  for (const part of match[1].split(',')) {
+    const clean = part.trim().replace(/[.。]+$/, '');
+    if (!clean) continue;
+    let label = clean;
+    const orchMatch = clean.match(/^orchestrator\s*\(([^)]+)\)$/i);
+    if (orchMatch) {
+      label = orchMatch[1].trim();
+    } else if (/^gemini\s+4(?:\.\d+)?\s+/i.test(clean)) {
+      label = clean.replace(/^gemini\s+4(?:\.\d+)?\s+/i, '').trim();
+    } else if (/^gemini\s+/i.test(clean)) {
+      label = clean.replace(/^gemini\s+/i, '').trim();
+    } else if (/^claude\s+(?:opus|sonnet|haiku)\s+(.+)$/i.test(clean)) {
+      label = `Claude ${clean.replace(/^claude\s+(?:opus|sonnet|haiku)\s+/i, '').trim()}`;
+    } else if (/^gpt-oss\s+/i.test(clean)) {
+      label = clean.replace(/^gpt-oss\s+/i, 'GPT-').trim();
+    }
+    const dedupeKey = label.toLowerCase();
+    if (label && !seen.has(dedupeKey)) {
+      seen.add(dedupeKey);
+      labels.push(label);
+    }
+  }
+  return labels.join(' · ');
 }
 
 /**
@@ -507,7 +607,7 @@ function classifyGroupFamily(group) {
 function classifyModelFamily(model) {
   const text = `${model?.name || ''} ${model?.displayName || ''}`.toLowerCase();
   if (/claude|gpt/.test(text)) return 'claude';
-  if (/gemini|argon|hydrogen|carbon|helium/.test(text)) return 'gemini';
+  if (/gemini|neon|argon|hydrogen|carbon|helium/.test(text)) return 'gemini';
   return 'other';
 }
 
@@ -515,6 +615,129 @@ function classifyModelFamily(model) {
 function clampPct(pct) {
   const n = Number(pct);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
+}
+
+/**
+ * @param {import('./types/monitor').AgManagerQuotaBucket | null | undefined} bucket
+ * @returns {number | null}
+ */
+function bucketPctOrNull(bucket) {
+  if (bucket?.disabled === true || typeof bucket?.remainingFraction !== 'number' || !Number.isFinite(bucket.remainingFraction)) {
+    return null;
+  }
+  return clampPct(bucket.remainingFraction * 100);
+}
+
+/**
+ * Build per-pool quota group views matching Antigravity 2.35+ grouped display
+ * (Gemini, Claude / GPT, Gemini 4 Argon, extras), including models hints,
+ * explicit 5h / weekly period labels, disabled buckets, and 5h === 0%
+ * superseding active weekly quota.
+ *
+ * @param {import('./types/monitor').AgManagerAccountSummary | null | undefined} account
+ * @param {number} [nowMs]
+ * @returns {import('./types/monitor').AgManagerQuotaGroupView[]}
+ */
+export function buildAgQuotaGroups(account, nowMs = Date.now()) {
+  const groups = Array.isArray(account?.quota?.groups) ? account.quota.groups : [];
+  if (groups.length === 0) return [];
+
+  const claudeGroup = groups.find((g) => isClaudeOr3pGroup(g)) || null;
+  const nonClaude = groups.filter((g) => g !== claudeGroup);
+  const geminiGroup = nonClaude.find((g) => !isDedicatedCodenameGroup(g) && String(g.displayName || '').toLowerCase().includes('gemini'))
+    || nonClaude.find((g) => !isDedicatedCodenameGroup(g))
+    || null;
+  const argonGroup = nonClaude.find((g) => (
+    g !== geminiGroup
+    && `${g.displayName || ''} ${(g.buckets || []).map((b) => b.bucketId || '').join(' ')}`.toLowerCase().includes('argon')
+  )) || null;
+  const extraGroups = groups.filter((g) => g !== geminiGroup && g !== claudeGroup && g !== argonGroup);
+  /** @type {import('./types/monitor').AgManagerQuotaGroup[]} */
+  const orderedGroups = [];
+  for (const candidate of [geminiGroup, claudeGroup, argonGroup, ...extraGroups]) {
+    if (candidate) orderedGroups.push(candidate);
+  }
+
+  /** @param {import('./types/monitor').AgManagerQuotaGroup} group */
+  const splitBuckets = (group) => {
+    const buckets = Array.isArray(group?.buckets) ? group.buckets : [];
+    const b5h = buckets.find((b) => is5hBucket(b)) || null;
+    const bWeekly = buckets.find((b) => b !== b5h && isWeeklyBucket(b)) || null;
+    const others = buckets.filter((b) => b !== b5h && b !== bWeekly);
+    return { b5h, bWeekly, others };
+  };
+
+  /** @type {import('./types/monitor').AgManagerQuotaGroupView[]} */
+  const groupViews = [];
+  let extraIdx = 0;
+
+  for (const group of orderedGroups) {
+    const { b5h, bWeekly, others } = splitBuckets(group);
+    /** @type {Array<{ bucket: import('./types/monitor').AgManagerQuotaBucket, periodKind: '5h' | 'weekly' | '', periodLabel: string }>} */
+    const bucketEntries = [];
+    if (b5h) bucketEntries.push({ bucket: b5h, periodKind: '5h', periodLabel: '5h' });
+    if (bWeekly) bucketEntries.push({ bucket: bWeekly, periodKind: 'weekly', periodLabel: '每周' });
+    for (const bucket of others) {
+      /** @type {'5h' | 'weekly' | ''} */
+      const periodKind = is5hBucket(bucket) ? '5h' : (isWeeklyBucket(bucket) ? 'weekly' : '');
+      bucketEntries.push({
+        bucket,
+        periodKind,
+        periodLabel: String(bucket.displayName || bucket.window || bucket.bucketId || '配额'),
+      });
+    }
+    if (bucketEntries.length === 0) continue;
+
+    const title = normalizeAgQuotaGroupTitle(group);
+    const modelsHint = extractAgQuotaGroupModelsHint(group);
+    const isClaude = group === claudeGroup || isClaudeOr3pGroup(group);
+    const isGemini = !isClaude && (group === geminiGroup || isDedicatedCodenameGroup(group) || title.toLowerCase().includes('gemini'));
+    /** @type {'gemini' | 'claude' | 'other'} */
+    const family = isClaude ? 'claude' : (isGemini ? 'gemini' : 'other');
+    const groupId = group === geminiGroup
+      ? 'gemini'
+      : group === claudeGroup
+        ? 'claude'
+        : group === argonGroup
+          ? 'argon'
+          : `extra-${extraIdx++}`;
+
+    const b5hPct = b5h ? bucketPctOrNull(b5h) : null;
+    const fiveHourExhausted = Boolean(b5h && b5h.disabled !== true && b5hPct === 0);
+
+    /** @type {import('./types/monitor').AgManagerQuotaCell[]} */
+    const cells = bucketEntries.map(({ bucket, periodKind, periodLabel }, idx) => {
+      const pct = bucketPctOrNull(bucket);
+      const disabled = bucket.disabled === true || pct === null;
+      const resetText = formatAgResetCountdown(bucket.resetTime, nowMs);
+      const supersededBy5h = !disabled && periodKind === 'weekly' && fiveHourExhausted && pct > 0;
+      const isLastOdd = bucketEntries.length % 2 === 1 && idx === bucketEntries.length - 1;
+      return {
+        id: `${groupId}-${idx}-${bucket.bucketId || periodKind || 'bucket'}`,
+        family,
+        title: periodLabel,
+        periodLabel,
+        resetText,
+        resetTone: periodKind,
+        pct: pct ?? 0,
+        isFull: bucketEntries.length === 1 || isLastOdd,
+        disabled,
+        supersededBy5h,
+        groupTitle: title,
+        ariaLabel: `${title} ${periodLabel}: ${disabled ? '已停用' : `${pct}%`} (${resetText})`,
+      };
+    });
+
+    groupViews.push({
+      id: groupId,
+      family,
+      title,
+      modelsHint,
+      cells,
+    });
+  }
+
+  return groupViews;
 }
 
 /**
@@ -541,7 +764,8 @@ export function buildAgQuotaCells(account, nowMs = Date.now()) {
 
     /** @param {import('./types/monitor').AgManagerQuotaGroup | null} group */
     const splitBuckets = (group) => {
-      const buckets = Array.isArray(group?.buckets) ? group.buckets : [];
+      const buckets = (Array.isArray(group?.buckets) ? group.buckets : [])
+        .filter((bucket) => bucket?.disabled !== true && bucketPctOrNull(bucket) !== null);
       const b5h = buckets.find((b) => is5hBucket(b)) || null;
       const bWeekly = buckets.find((b) => b !== b5h && isWeeklyBucket(b)) || null;
       const others = buckets.filter((b) => b !== b5h && b !== bWeekly);
@@ -552,7 +776,7 @@ export function buildAgQuotaCells(account, nowMs = Date.now()) {
     const cBuckets = splitBuckets(claudeGroup);
 
     /** @param {import('./types/monitor').AgManagerQuotaBucket} bucket */
-    const toPct = (bucket) => clampPct(Number(bucket?.remainingFraction || 0) * 100);
+    const toPct = (bucket) => bucketPctOrNull(bucket) ?? 0;
     /** @type {import('./types/monitor').AgManagerQuotaCell[]} */
     const cells = [];
 
@@ -646,6 +870,7 @@ export function buildAgQuotaCells(account, nowMs = Date.now()) {
     for (const group of extraGroups) {
       const family = classifyGroupFamily(group);
       for (const bucket of group.buckets || []) {
+        if (bucket?.disabled === true || bucketPctOrNull(bucket) === null) continue;
         pushExtra(group.displayName || bucket.displayName || 'Quota', bucket, family);
       }
     }
@@ -822,13 +1047,16 @@ export function summarizeAgDevice(device) {
 /**
  * Score an AG account for quota-first ordering.
  * Healthy high-quota accounts sort highest; empty-snapshot healthy accounts rank below 0%; abnormal accounts rank lowest (-1).
+ * Ignores disabled quota buckets so they do not artificially lower an account's availability score.
  *
  * @param {import('./types/monitor').AgManagerAccountSummary | null | undefined} account
  * @returns {number}
  */
 export function scoreAgAccountAvailability(account) {
   if (!account || isAgAccountAbnormal(account)) return -1;
-  const cells = buildAgQuotaCells(account);
+  const groups = buildAgQuotaGroups(account);
+  const activeGroupCells = groups.flatMap((group) => group.cells).filter((cell) => !cell.disabled);
+  const cells = activeGroupCells.length > 0 ? activeGroupCells : buildAgQuotaCells(account);
   if (cells.length === 0) return -0.5;
   let sum = 0;
   let min = 100;

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import {
   buildAgQuotaCells,
+  buildAgQuotaGroups,
   formatAgCompactTimestamp,
   formatAgDeviceLabels,
   formatAgSlotLabel,
@@ -398,7 +399,11 @@ function AccountCard({
   const isActive = activeClients.length > 0;
   const abnormal = isAgAccountAbnormal(account);
   const models = account.quota?.models || [];
-  const quotaCells = useMemo(() => buildAgQuotaCells(account, nowMs), [account, nowMs]);
+  const quotaGroups = useMemo(() => buildAgQuotaGroups(account, nowMs), [account, nowMs]);
+  const quotaCells = useMemo(
+    () => (quotaGroups.length > 0 ? [] : buildAgQuotaCells(account, nowMs)),
+    [account, quotaGroups.length, nowMs],
+  );
   const capabilityPills = useMemo(() => inferAgCapabilityPills(account), [account]);
   const slotLabels = useMemo(() => {
     const seen = new Set<string>();
@@ -590,12 +595,116 @@ function AccountCard({
         </div>
       )}
 
-      {/* 2-column compact quota meter grid */}
-      {quotaCells.length > 0 ? (
+      {/* Grouped quota pools or compact models-only fallback grid */}
+      {quotaGroups.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {quotaGroups.map((group) => (
+            <section
+              key={group.id}
+              data-agm-quota-group={group.id}
+              className="rounded-xl bg-[var(--tm-bg-row)] border border-[var(--tm-border-subtle)] p-2 flex flex-col gap-1.5 min-w-0"
+            >
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="inline-flex items-center gap-1.5 min-w-0 shrink-0">
+                  <QuotaFamilyIcon family={group.family} />
+                  <span className="text-[11.5px] font-semibold text-[var(--tm-text-primary)] whitespace-nowrap">
+                    {group.title}
+                  </span>
+                </div>
+                {group.modelsHint && (
+                  <span
+                    title={group.modelsHint}
+                    className="text-[10px] text-[var(--tm-text-muted)] truncate min-w-0 text-right"
+                  >
+                    {group.modelsHint}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {group.cells.map((cell) => {
+                  const pct = Math.max(0, Math.min(100, Math.round(cell.pct)));
+                  const label = cell.periodLabel || quotaCellLabel(cell);
+                  const isDisabled = cell.disabled === true;
+                  const isSuperseded = cell.supersededBy5h === true;
+                  const resetMuted = isDisabled || pct >= 100 || cell.resetText === '—';
+                  const resetClass = resetMuted
+                    ? 'text-[var(--tm-text-muted)] opacity-70'
+                    : cell.resetText === '已就绪'
+                      ? 'text-[var(--tm-success-text)]'
+                      : pct <= 15
+                        ? 'text-[var(--tm-danger-text)]'
+                        : quotaResetToneClass(cell.resetTone);
+                  return (
+                    <div
+                      key={cell.id}
+                      aria-label={cell.ariaLabel}
+                      data-agm-disabled={isDisabled ? 'true' : undefined}
+                      data-agm-superseded={isSuperseded ? 'true' : undefined}
+                      className={`rounded-lg border px-2.5 py-2 flex flex-col gap-1.5 min-w-0 ${
+                        isDisabled
+                          ? 'border-dashed border-[var(--tm-border-subtle)] bg-[var(--tm-bg-control)] opacity-75'
+                          : isSuperseded
+                            ? 'border-[var(--tm-border-subtle)] bg-[var(--tm-bg-control)] opacity-80'
+                            : 'border-[var(--tm-border-subtle)] bg-[var(--tm-bg-control)]'
+                      } ${cell.isFull ? 'col-span-2' : ''}`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 min-w-0">
+                        <span className="text-[11px] font-medium text-[var(--tm-text-secondary)] truncate min-w-0">
+                          {label}
+                        </span>
+                        {isDisabled ? (
+                          <span className="text-[11px] font-medium text-[var(--tm-text-muted)] whitespace-nowrap shrink-0">
+                            已停用
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-xs font-bold font-mono-tabular whitespace-nowrap shrink-0 ${quotaPercentTextClass(pct)}`}
+                          >
+                            {pct}%
+                          </span>
+                        )}
+                      </div>
+                      {!isDisabled && (
+                        <div
+                          role="progressbar"
+                          aria-label={cell.ariaLabel}
+                          aria-valuenow={pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          className="h-1.5 w-full rounded-full bg-[var(--tm-track-bg)] overflow-hidden"
+                        >
+                          <div
+                            style={{ width: `${pct}%` }}
+                            className={`h-full rounded-full transition-[width] duration-300 ${quotaBarFillClass(pct)}`}
+                          />
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-1.5 min-w-0">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0 ${resetClass}`}
+                        >
+                          <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          <span>{cell.resetText}</span>
+                        </span>
+                        {isSuperseded && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--tm-warning-soft-bg)] text-[var(--tm-warning-text)] border border-[var(--tm-warning-soft-border)] truncate min-w-0">
+                            受5h限制
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : quotaCells.length > 0 ? (
         <div className="grid grid-cols-2 gap-1.5">
           {quotaCells.map((cell) => {
             const pct = Math.max(0, Math.min(100, Math.round(cell.pct)));
             const label = quotaCellLabel(cell);
+            const resetMuted = pct >= 100 || cell.resetText === '—';
             return (
               <div
                 key={cell.id}
@@ -633,9 +742,13 @@ function AccountCard({
                 <div className="flex items-center justify-between gap-1 min-w-0">
                   <span
                     className={`inline-flex items-center gap-1 text-[11px] font-medium tabular-nums whitespace-nowrap ${
-                      cell.resetText === '已就绪'
-                        ? 'text-[var(--tm-success-text)]'
-                        : quotaResetToneClass(cell.resetTone)
+                      resetMuted
+                        ? 'text-[var(--tm-text-muted)] opacity-70'
+                        : cell.resetText === '已就绪'
+                          ? 'text-[var(--tm-success-text)]'
+                          : pct <= 15
+                            ? 'text-[var(--tm-danger-text)]'
+                            : quotaResetToneClass(cell.resetTone)
                     }`}
                   >
                     <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
