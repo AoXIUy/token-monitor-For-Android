@@ -2424,7 +2424,8 @@ public final class StartupTest {
 
                 scenario.close();
                 scenario = ActivityScenario.launch(MainActivity.class);
-                awaitScript("document.querySelectorAll('#periods [data-period]').length === 4"
+                awaitScript("Boolean(document.getElementById('header-reports-button'))"
+                        + " && document.querySelectorAll('#periods [data-period]').length === 4"
                         + " && Boolean(document.querySelector('#periods [data-period=\"yesterday\"]'))");
 
                 // Reset custom period tabs back to default 3-slot mode.
