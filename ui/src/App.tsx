@@ -696,8 +696,8 @@ function Dashboard({
           ...previous.appUpdate,
           checking: false,
           checkedAt: Date.now(),
-          currentVersion: previous.appUpdate.currentVersion || '1.28.0',
-          latestVersion: previous.appUpdate.currentVersion || '1.28.0',
+          currentVersion: previous.appUpdate.currentVersion || '1.29.0',
+          latestVersion: previous.appUpdate.currentVersion || '1.29.0',
           available: false,
         }),
       );
