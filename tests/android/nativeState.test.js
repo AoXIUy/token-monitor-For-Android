@@ -318,6 +318,76 @@ test('fixedRangeResult tracks requestIds, pauses on background lifecycle, and cl
   assert.equal(state.fixedRange.last7?.loading, false);
   assert.equal(state.fixedRange.yesterday?.scanned?.pc1?.period?.totalTokens, 1200);
 
+  // Refreshing same period retains scanned/deviceHistories and strips unverified titles when revision rotates (#1685)
+  let titledState = receiveNativeMessage(createInitialState(), {
+    type: 'fixedRangeResult',
+    period: 'yesterday',
+    requestId: '',
+    scanned: {},
+  });
+  titledState = {
+    ...titledState,
+    fixedRange: beginFixedRangeQuery(titledState.fixedRange, {
+      period: 'yesterday',
+      requestId: 'fr-titled-1',
+      signature: 'sig-a',
+      revisions: { pc1: 'rev-a' },
+    }),
+  };
+  titledState = receiveNativeMessage(titledState, {
+    type: 'fixedRangeResult',
+    period: 'yesterday',
+    requestId: 'fr-titled-1',
+    scanned: {
+      pc1: {
+        revision: 'rev-a',
+        start: '2026-11-25',
+        end: '2026-11-25',
+        period: {
+          totalTokens: 500,
+          sessions: { 'codex:s1': { client: 'codex', sessionId: 's1', title: 'Private Title', totalTokens: 500 } },
+        },
+      },
+    },
+  });
+  const refreshingVerified = beginFixedRangeQuery(titledState.fixedRange, {
+    period: 'yesterday',
+    requestId: 'fr-titled-2',
+    signature: 'sig-b',
+    revisions: { pc1: 'rev-a' },
+  });
+  assert.equal(refreshingVerified.yesterday?.loading, true);
+  assert.equal(refreshingVerified.yesterday?.scanned?.pc1?.period?.sessions?.['codex:s1']?.title, 'Private Title');
+
+  const refreshingRevoked = beginFixedRangeQuery(titledState.fixedRange, {
+    period: 'yesterday',
+    requestId: 'fr-titled-3',
+    signature: 'sig-c',
+    revisions: { pc1: 'rev-b' },
+  });
+  assert.equal(refreshingRevoked.yesterday?.loading, true);
+  assert.equal(refreshingRevoked.yesterday?.scanned?.pc1?.period?.totalTokens, 500);
+  assert.equal(refreshingRevoked.yesterday?.scanned?.pc1?.period?.sessions?.['codex:s1']?.title, undefined);
+
+  // Paged session recovery supports today and month when sessionDetailsOmitted > 0 (#1682)
+  const { fixedRangeStatsSignature, needsPagedSessions } = await import('../../ui/src/fixedRangeState.js');
+  const omittedStats = {
+    fixedRangeRevisions: { pc1: 'rev-d1' },
+    sessionDetailsOmitted: { today: 3 },
+    devices: [
+      {
+        deviceId: 'pc1',
+        updatedAt: '2026-11-27T10:00:00Z',
+        sessionDetailsOmitted: { today: 3 },
+        periodWindows: { today: { key: '2026-11-27', endsAt: '2026-11-28T00:00:00Z' } },
+      },
+    ],
+  };
+  assert.equal(needsPagedSessions(omittedStats, 'today'), true);
+  assert.equal(needsPagedSessions(omittedStats, 'month'), false);
+  assert.ok(fixedRangeStatsSignature(omittedStats, 'today').length > 0);
+  assert.equal(fixedRangeStatsSignature(omittedStats, 'month'), '');
+
   // Connection change resets fixedRange cache
   state = receiveNativeMessage(state, { type: 'connection', url: 'https://new-hub.example.com' });
   assert.deepEqual(state.fixedRange, {});

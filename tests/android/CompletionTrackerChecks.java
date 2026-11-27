@@ -65,6 +65,13 @@ public final class CompletionTrackerChecks {
         tracker = new SessionCompletionTracker();
         tick(tracker, 0, active(0), row("claude:b", 0, 0, 0, true, false), row("antigravity:c", 0, 0, 0, true, false));
         size(3, tick(tracker, 1000, ended(1000), row("claude:b", 1000, 1000, 1000, false, true), row("antigravity:c", 1000, 1000, 1000, false, true)), "Independent sessions each complete");
+
+        // Upstream v0.99.0 (#1689): Antigravity Desktop/CLI/ACP turnEnded false -> true with unchanged prompt timestamp
+        tracker = new SessionCompletionTracker();
+        size(0, tick(tracker, 0, new SessionCompletionTracker.Observation("antigravity:turn", "antigravity", "Turn", T, T, T, false, true)), "Initial Antigravity ended turn is silent");
+        size(0, tick(tracker, 1000, new SessionCompletionTracker.Observation("antigravity:turn", "antigravity", "Turn", T + 1000, T + 1000, T + 1000, true, false)), "Antigravity prompt turn start arms");
+        size(1, tick(tracker, 2000, new SessionCompletionTracker.Observation("antigravity:turn", "antigravity", "Turn", T + 1000, T + 1000, T + 1000, false, true)), "Antigravity turn finish with same prompt lastUsedAt notifies once");
+        size(0, tick(tracker, 3000, new SessionCompletionTracker.Observation("antigravity:turn", "antigravity", "Turn", T + 1000, T + 1000, T + 1000, false, true)), "Repeated Antigravity finished turn stays silent");
         String first = ended(1000).eventId();
         if (!first.equals(ended(1000).eventId()) || first.equals(ended(2000).eventId())) throw new AssertionError("Event identity is not stable");
         checks++;

@@ -4,6 +4,9 @@
 export const DERIVED_PERIOD_IDS = Object.freeze(['yesterday', 'week', 'last7', 'last30']);
 
 /** @type {readonly import('./types/monitor').PeriodId[]} */
+export const PAGED_SESSION_PERIOD_IDS = Object.freeze(['today', 'month']);
+
+/** @type {readonly import('./types/monitor').PeriodId[]} */
 export const ALLOWED_PERIOD_TABS = Object.freeze([
   'today',
   'yesterday',
@@ -17,6 +20,28 @@ export const ALLOWED_PERIOD_TABS = Object.freeze([
 /** @param {unknown} value @returns {value is import('./types/monitor').DerivedPeriodId} */
 export function isDerivedPeriodId(value) {
   return typeof value === 'string' && DERIVED_PERIOD_IDS.includes(/** @type {any} */ (value));
+}
+
+/** @param {unknown} value @returns {value is import('./types/monitor').PeriodId} */
+export function isFixedRangeQueryPeriod(value) {
+  return isDerivedPeriodId(value) || value === 'today' || value === 'month';
+}
+
+/**
+ * @param {import('./types/monitor').MonitorStats | null} stats
+ * @param {import('./types/monitor').PeriodId} period
+ * @returns {boolean}
+ */
+export function needsPagedSessions(stats, period) {
+  if (!stats || (period !== 'today' && period !== 'month')) return false;
+  if (!((stats.sessionDetailsOmitted?.[period] ?? 0) > 0)) return false;
+  const revisions = stats.fixedRangeRevisions || {};
+  return (stats.devices || []).some(
+    (device) =>
+      (device?.sessionDetailsOmitted?.[period] ?? 0) > 0 &&
+      Boolean(device?.periodWindows?.today?.key) &&
+      Boolean(Object.prototype.hasOwnProperty.call(revisions, device.deviceId) && revisions[device.deviceId]),
+  );
 }
 
 /** @param {unknown} raw @returns {import('./types/monitor').PeriodId[]} */
@@ -46,45 +71,117 @@ export function createInitialFixedRangeState() {
  * @returns {string}
  */
 export function fixedRangeStatsSignature(stats, period) {
-  if (!stats || !isDerivedPeriodId(period)) return '';
-  // Pre-populated fixture/demo periods need no async network fetch.
-  if (stats.periods?.[period] && !stats.fixedRangeRevisions) return '';
+  if (!stats) return '';
+  if (!isDerivedPeriodId(period)) {
+    if (!needsPagedSessions(stats, period)) return '';
+  } else if (stats.periods?.[period] && !stats.fixedRangeRevisions) {
+    // Pre-populated fixture/demo periods need no async network fetch.
+    return '';
+  }
   const revisions = Object.entries(stats.fixedRangeRevisions || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const devices = (stats.devices || []).map((device) => [
     device.deviceId || '',
     device.updatedAt || '',
     device.periodWindows?.today?.key || '',
     device.periodWindows?.today?.endsAt || '',
+    device.sessionDetailsOmitted?.[period] || 0,
   ]);
   return JSON.stringify([period, revisions, stats.deviceHistoryRevision || '', devices]);
 }
 
+/** @param {unknown} value */
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+/**
+ * Keep session titles on retained slices only while the device's range revision
+ * remains verified in the current Hub stats snapshot (#1685).
+ * @param {Record<string, import('./types/monitor').FixedRangeSlice> | null | undefined} scanned
+ * @param {Record<string, string> | null | undefined} revisions
+ * @returns {Record<string, import('./types/monitor').FixedRangeSlice> | null}
+ */
+function retainVerifiedScannedTitles(scanned, revisions) {
+  if (!scanned || !isPlainObject(scanned)) return null;
+  if (!revisions || !isPlainObject(revisions)) {
+    /** @type {Record<string, import('./types/monitor').FixedRangeSlice>} */
+    const strippedAll = {};
+    for (const [devId, slice] of Object.entries(scanned)) {
+      strippedAll[devId] = stripSliceTitles(slice);
+    }
+    return strippedAll;
+  }
+  let changed = false;
+  /** @type {Record<string, import('./types/monitor').FixedRangeSlice>} */
+  const out = {};
+  for (const [devId, slice] of Object.entries(scanned)) {
+    const currentRev = revisions[devId];
+    if (slice?.revision && currentRev === slice.revision) {
+      out[devId] = slice;
+    } else {
+      changed = true;
+      out[devId] = stripSliceTitles(slice);
+    }
+  }
+  return changed ? out : scanned;
+}
+
+/**
+ * @param {import('./types/monitor').FixedRangeSlice} slice
+ * @returns {import('./types/monitor').FixedRangeSlice}
+ */
+function stripSliceTitles(slice) {
+  const sessions = slice?.period?.sessions;
+  if (!sessions || !isPlainObject(sessions)) return slice;
+  let anyTitled = false;
+  /** @type {Record<string, Omit<import('./types/monitor').SessionRow, 'key'>>} */
+  const nextSessions = {};
+  for (const [key, sess] of Object.entries(sessions)) {
+    if (sess && typeof sess === 'object' && sess.title) {
+      anyTitled = true;
+      const copy = { ...sess };
+      delete copy.title;
+      nextSessions[key] = copy;
+    } else {
+      nextSessions[key] = sess;
+    }
+  }
+  if (!anyTitled) return slice;
+  return {
+    ...slice,
+    period: {
+      ...slice.period,
+      sessions: nextSessions,
+    },
+  };
+}
+
 /**
  * @param {import('./types/monitor').FixedRangeState} state
- * @param {{ period: import('./types/monitor').DerivedPeriodId, requestId: string, signature: string }} query
+ * @param {{ period: import('./types/monitor').PeriodId, requestId: string, signature: string, revisions?: Record<string, string> | null }} query
  * @returns {import('./types/monitor').FixedRangeState}
  */
-export function beginFixedRangeQuery(state, { period, requestId, signature }) {
-  if (!isDerivedPeriodId(period) || !requestId) return state;
+export function beginFixedRangeQuery(state, { period, requestId, signature, revisions }) {
+  if (!isFixedRangeQueryPeriod(period) || !requestId) return state;
   const previous = state[period];
-  const keepSnapshot = Boolean(previous && previous.signature === signature);
+  const retainedScanned = previous?.scanned
+    ? previous.signature === signature || revisions === undefined
+      ? previous.scanned
+      : retainVerifiedScannedTitles(previous.scanned, revisions)
+    : null;
+  const retainedHistories = previous?.deviceHistories ?? null;
   return {
     ...state,
     [period]: {
       loading: true,
       requestId,
       signature,
-      scanned: keepSnapshot ? previous?.scanned ?? null : null,
-      deviceHistories: keepSnapshot ? previous?.deviceHistories ?? null : null,
+      scanned: retainedScanned,
+      deviceHistories: retainedHistories,
       historyError: '',
       error: '',
     },
   };
-}
-
-/** @param {unknown} value */
-function isPlainObject(value) {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 /**
@@ -94,7 +191,7 @@ function isPlainObject(value) {
  */
 export function receiveFixedRangeResult(state, message) {
   const period = message.period;
-  if (!isDerivedPeriodId(period)) return state;
+  if (!isFixedRangeQueryPeriod(period)) return state;
   const current = state[period];
   const requestId = typeof message.requestId === 'string' ? message.requestId.trim().slice(0, 80) : '';
   if (!current || (current.requestId && requestId && current.requestId !== requestId)) {
@@ -125,13 +222,14 @@ export function receiveFixedRangeResult(state, message) {
     : null;
   const historyError = typeof message.historyError === 'string' ? message.historyError.slice(0, 120) : '';
   const error = typeof message.error === 'string' ? message.error.slice(0, 120) : '';
+  const retainOnTransientError = Boolean(error && error !== 'unauthorized' && scanned === null && deviceHistories === null);
   return {
     ...state,
     [period]: {
       ...current,
       loading: false,
-      scanned,
-      deviceHistories,
+      scanned: retainOnTransientError ? current.scanned : scanned,
+      deviceHistories: retainOnTransientError ? current.deviceHistories : deviceHistories,
       historyError,
       error,
     },
@@ -146,7 +244,7 @@ export function pauseFixedRangeLoading(state) {
   let changed = false;
   /** @type {import('./types/monitor').FixedRangeState} */
   const next = {};
-  for (const period of DERIVED_PERIOD_IDS) {
+  for (const period of /** @type {const} */ ([...DERIVED_PERIOD_IDS, ...PAGED_SESSION_PERIOD_IDS])) {
     const entry = state[period];
     if (!entry) continue;
     if (entry.loading) {

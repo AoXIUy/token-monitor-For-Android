@@ -1249,8 +1249,12 @@ public final class MainActivity extends Activity {
         fixedRangeClient = null;
     }
 
-    private static boolean isFixedRangePeriod(String period) {
+    private static boolean isDerivedFixedPeriod(String period) {
         return "yesterday".equals(period) || "week".equals(period) || "last7".equals(period) || "last30".equals(period);
+    }
+
+    private static boolean isFixedRangePeriod(String period) {
+        return isDerivedFixedPeriod(period) || "today".equals(period) || "month".equals(period);
     }
 
     private static java.time.LocalDate parseIsoLocalDate(String value) {
@@ -1269,6 +1273,18 @@ public final class MainActivity extends Activity {
         JSONObject todayWin = periodWindows == null ? null : periodWindows.optJSONObject("today");
         if (todayWin == null) return null;
         java.time.LocalDate snapshotDay = parseIsoLocalDate(todayWin.optString("key", ""));
+        if ("today".equals(period) || "month".equals(period)) {
+            if (snapshotDay == null) return null;
+            JSONObject targetWin = periodWindows.optJSONObject(period);
+            String targetEndsAt = targetWin == null ? "" : targetWin.optString("endsAt", "");
+            if (!targetEndsAt.isEmpty()) {
+                try {
+                    if (nowMs >= java.time.Instant.parse(targetEndsAt).toEpochMilli()) return null;
+                } catch (Exception ignored) { }
+            }
+            java.time.LocalDate start = "month".equals(period) ? snapshotDay.withDayOfMonth(1) : snapshotDay;
+            return new String[] { start.toString(), snapshotDay.toString() };
+        }
         String endsAtRaw = todayWin.optString("endsAt", "");
         if (snapshotDay == null || endsAtRaw.isEmpty()) return null;
         long endsAtMs;
@@ -1314,6 +1330,294 @@ public final class MainActivity extends Activity {
                 return null;
         }
         return new String[] { start.toString(), end.toString() };
+    }
+
+    private static double roundSixDecimals(double value) {
+        return Math.round(value * 1_000_000d) / 1_000_000d;
+    }
+
+    private static void addJsonLongMap(JSONObject target, JSONObject source) throws Exception {
+        if (source == null) return;
+        java.util.Iterator<String> keys = source.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (key == null || source.isNull(key)) continue;
+            long val = source.optLong(key, Long.MIN_VALUE);
+            if (val == Long.MIN_VALUE) continue;
+            target.put(key, Math.max(0L, target.optLong(key, 0L) + val));
+        }
+    }
+
+    private static void addJsonDoubleMap(JSONObject target, JSONObject source) throws Exception {
+        if (source == null) return;
+        java.util.Iterator<String> keys = source.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (key == null || source.isNull(key)) continue;
+            double val = source.optDouble(key, Double.NaN);
+            if (Double.isNaN(val) || Double.isInfinite(val)) continue;
+            target.put(key, roundSixDecimals(target.optDouble(key, 0d) + val));
+        }
+    }
+
+    private static long parseIsoMillisOrZero(String value) {
+        if (value == null || value.isEmpty()) return 0L;
+        try { return java.time.Instant.parse(value).toEpochMilli(); } catch (Exception ignored) { return 0L; }
+    }
+
+    private static JSONObject mergeDailySessionRow(JSONObject existing, JSONObject incoming) throws Exception {
+        if (existing == null) return new JSONObject(incoming.toString());
+        JSONObject merged = new JSONObject(existing.toString());
+        long existingTime = parseIsoMillisOrZero(existing.optString("lastUsedAt", ""));
+        long incomingTime = parseIsoMillisOrZero(incoming.optString("lastUsedAt", ""));
+        String[] latestFields = new String[] {
+                "title", "projectId", "projectLabel", "lastUsedAt", "latestModel", "reasoningEffort",
+                "contextTokens", "contextWindow", "promptCacheExpiresAt", "liveActivity",
+                "nativeSessionId", "t3ThreadId", "subagentLabel"
+        };
+        if (incomingTime >= existingTime) {
+            for (String field : latestFields) {
+                if (incoming.has(field) && !incoming.isNull(field) && !"".equals(incoming.optString(field, "non-empty"))) {
+                    merged.put(field, incoming.get(field));
+                }
+            }
+            if (incoming.has("turnEnded") && !incoming.isNull("turnEnded")) {
+                merged.put("turnEnded", incoming.optBoolean("turnEnded"));
+            } else if (incomingTime > existingTime) {
+                merged.remove("turnEnded");
+            }
+            String inParent = incoming.optString("parentSessionId", "");
+            if (!inParent.isEmpty()) {
+                merged.put("parentSessionId", inParent);
+                String inParentClient = incoming.optString("parentClient", "");
+                if (!inParentClient.isEmpty()) merged.put("parentClient", inParentClient);
+                else merged.remove("parentClient");
+                if (incoming.optBoolean("t3ParentLink", false)) merged.put("t3ParentLink", true);
+                else merged.remove("t3ParentLink");
+            } else if (incomingTime > existingTime && merged.optBoolean("t3ParentLink", false)) {
+                merged.remove("parentSessionId");
+                merged.remove("parentClient");
+                merged.remove("t3ParentLink");
+            }
+        }
+        String inStart = incoming.optString("startedAt", "");
+        String exStart = existing.optString("startedAt", "");
+        if (!inStart.isEmpty() && (exStart.isEmpty() || parseIsoMillisOrZero(inStart) < parseIsoMillisOrZero(exStart))) {
+            merged.put("startedAt", inStart);
+        }
+        String[] sumLongFields = new String[] {
+                "totalTokens", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens",
+                "reasoningTokens", "unclassifiedTokens", "messageCount", "timedOutputTokens", "timedDurationMs"
+        };
+        for (String field : sumLongFields) {
+            boolean hasA = existing.has(field) && !existing.isNull(field);
+            boolean hasB = incoming.has(field) && !incoming.isNull(field);
+            if (hasA && hasB) merged.put(field, existing.optLong(field, 0L) + incoming.optLong(field, 0L));
+            else if (hasB) merged.put(field, incoming.optLong(field, 0L));
+        }
+        long unpriced = Math.max(0L, existing.optLong("unpricedTokens", 0L)) + Math.max(0L, incoming.optLong("unpricedTokens", 0L));
+        if (unpriced > 0L) merged.put("unpricedTokens", unpriced);
+        boolean hasCostA = existing.has("costUsd") && !existing.isNull("costUsd");
+        boolean hasCostB = incoming.has("costUsd") && !incoming.isNull("costUsd");
+        if (hasCostA && hasCostB) merged.put("costUsd", roundSixDecimals(existing.optDouble("costUsd", 0d) + incoming.optDouble("costUsd", 0d)));
+        else if (hasCostB) merged.put("costUsd", incoming.optDouble("costUsd", 0d));
+        boolean archivedBoth = (existing.optBoolean("archived", false) || existing.optBoolean("isArchived", false))
+                && (incoming.optBoolean("archived", false) || incoming.optBoolean("isArchived", false));
+        if (archivedBoth) merged.put("archived", true);
+        else {
+            merged.remove("archived");
+            merged.remove("isArchived");
+        }
+        if (existing.optBoolean("cacheReported", false) || incoming.optBoolean("cacheReported", false)) {
+            merged.put("cacheReported", true);
+        }
+        JSONObject models = existing.optJSONObject("models") != null ? new JSONObject(existing.optJSONObject("models").toString()) : new JSONObject();
+        addJsonLongMap(models, incoming.optJSONObject("models"));
+        merged.put("models", models);
+        JSONObject modelCosts = existing.optJSONObject("modelCosts") != null ? new JSONObject(existing.optJSONObject("modelCosts").toString()) : new JSONObject();
+        addJsonDoubleMap(modelCosts, incoming.optJSONObject("modelCosts"));
+        if (modelCosts.length() > 0) merged.put("modelCosts", modelCosts);
+        JSONObject providers = existing.optJSONObject("providers") != null ? new JSONObject(existing.optJSONObject("providers").toString()) : new JSONObject();
+        addJsonLongMap(providers, incoming.optJSONObject("providers"));
+        if (providers.length() > 0) merged.put("providers", providers);
+        return merged;
+    }
+
+    private static JSONObject mergeDailyRangePeriods(java.util.List<JSONObject> dailyPeriods) throws Exception {
+        long totalTokens = 0L, inputTokens = 0L, outputTokens = 0L, cacheReadTokens = 0L,
+                cacheWriteTokens = 0L, reasoningTokens = 0L, unclassifiedTokens = 0L, unpricedTokens = 0L;
+        double costUsd = 0d;
+        boolean anyCost = false;
+        boolean tokenComponents = true;
+        JSONObject clients = new JSONObject();
+        JSONObject clientCosts = new JSONObject();
+        JSONObject models = new JSONObject();
+        JSONObject modelCosts = new JSONObject();
+        JSONObject projects = new JSONObject();
+        JSONObject sessions = new JSONObject();
+        for (JSONObject day : dailyPeriods) {
+            if (day == null) continue;
+            long dayTotal = Math.max(0L, day.optLong("totalTokens", 0L));
+            totalTokens += dayTotal;
+            inputTokens += Math.max(0L, day.optLong("inputTokens", 0L));
+            outputTokens += Math.max(0L, day.optLong("outputTokens", 0L));
+            cacheReadTokens += Math.max(0L, day.optLong("cacheReadTokens", 0L));
+            cacheWriteTokens += Math.max(0L, day.optLong("cacheWriteTokens", 0L));
+            reasoningTokens += Math.max(0L, day.optLong("reasoningTokens", 0L));
+            unclassifiedTokens += Math.max(0L, day.optLong("unclassifiedTokens", 0L));
+            unpricedTokens += Math.max(0L, day.optLong("unpricedTokens", 0L));
+            if (day.has("costUsd") && !day.isNull("costUsd")) {
+                double c = day.optDouble("costUsd", Double.NaN);
+                if (!Double.isNaN(c) && !Double.isInfinite(c)) {
+                    anyCost = true;
+                    costUsd = roundSixDecimals(costUsd + c);
+                }
+            }
+            JSONObject caps = day.optJSONObject("capabilities");
+            if (dayTotal > 0L && (caps == null || !caps.optBoolean("tokenComponents", false))) {
+                tokenComponents = false;
+            }
+            addJsonLongMap(clients, day.optJSONObject("clients"));
+            addJsonDoubleMap(clientCosts, day.optJSONObject("clientCosts"));
+            addJsonLongMap(models, day.optJSONObject("models"));
+            addJsonDoubleMap(modelCosts, day.optJSONObject("modelCosts"));
+            JSONObject dayProjects = day.optJSONObject("projects");
+            if (dayProjects != null) {
+                java.util.Iterator<String> pKeys = dayProjects.keys();
+                while (pKeys.hasNext()) {
+                    String pKey = pKeys.next();
+                    JSONObject proj = dayProjects.optJSONObject(pKey);
+                    if (pKey == null || proj == null) continue;
+                    JSONObject prev = projects.optJSONObject(pKey);
+                    JSONObject nextProj = new JSONObject();
+                    nextProj.put("label", prev != null && !prev.optString("label", "").isEmpty()
+                            ? prev.optString("label") : proj.optString("label", pKey));
+                    nextProj.put("tokens", (prev == null ? 0L : Math.max(0L, prev.optLong("tokens", 0L)))
+                            + Math.max(0L, proj.optLong("tokens", 0L)));
+                    boolean hasPrevCost = prev == null || (prev.has("costUsd") && !prev.isNull("costUsd"));
+                    boolean hasProjCost = proj.has("costUsd") && !proj.isNull("costUsd");
+                    if (hasPrevCost && hasProjCost) {
+                        nextProj.put("costUsd", roundSixDecimals((prev == null ? 0d : prev.optDouble("costUsd", 0d)) + proj.optDouble("costUsd", 0d)));
+                    } else {
+                        nextProj.put("costUsd", JSONObject.NULL);
+                    }
+                    projects.put(pKey, nextProj);
+                }
+            }
+            JSONObject daySessions = day.optJSONObject("sessions");
+            if (daySessions != null) {
+                java.util.Iterator<String> sKeys = daySessions.keys();
+                while (sKeys.hasNext()) {
+                    String sKey = sKeys.next();
+                    JSONObject sess = daySessions.optJSONObject(sKey);
+                    if (sKey == null || sess == null) continue;
+                    sessions.put(sKey, mergeDailySessionRow(sessions.optJSONObject(sKey), sess));
+                }
+            }
+        }
+        JSONObject out = new JSONObject()
+                .put("totalTokens", totalTokens)
+                .put("inputTokens", inputTokens)
+                .put("outputTokens", outputTokens)
+                .put("cacheReadTokens", cacheReadTokens)
+                .put("cacheWriteTokens", cacheWriteTokens)
+                .put("reasoningTokens", reasoningTokens)
+                .put("unclassifiedTokens", unclassifiedTokens)
+                .put("costUsd", anyCost || totalTokens == 0L ? costUsd : JSONObject.NULL)
+                .put("capabilities", new JSONObject().put("tokenComponents", tokenComponents))
+                .put("clients", clients)
+                .put("clientCosts", clientCosts)
+                .put("models", models)
+                .put("modelCosts", modelCosts)
+                .put("projects", projects)
+                .put("sessions", sessions);
+        if (unpricedTokens > 0L) out.put("unpricedTokens", unpricedTokens);
+        return out;
+    }
+
+    private static JSONObject fetchAndDecodeFixedRange(
+            HubClient request,
+            ConnectionSpec destination,
+            String devId,
+            String rev,
+            String cleanPeriod,
+            String[] expectedWindow) throws Exception {
+        JSONObject index = request.fixedRangesIndex(destination, devId);
+        if (!rev.equals(index.optString("revision", ""))) return null;
+        JSONObject ranges = index.optJSONObject("ranges");
+        if (ranges == null) return null;
+        if (ranges.has(cleanPeriod)) {
+            if (!isDerivedFixedPeriod(cleanPeriod)) return null;
+            JSONObject rangeMeta = ranges.optJSONObject(cleanPeriod);
+            if (rangeMeta == null
+                    || !expectedWindow[0].equals(rangeMeta.optString("start", ""))
+                    || !expectedWindow[1].equals(rangeMeta.optString("end", ""))) {
+                return null;
+            }
+            int firstPage = rangeMeta.optInt("firstPage", -1);
+            int pageCount = rangeMeta.optInt("pageCount", -1);
+            if (firstPage < 0 || pageCount < 0
+                    || pageCount > ConnectionSpec.MAX_FIXED_RANGE_PAGES
+                    || firstPage + pageCount > ConnectionSpec.MAX_FIXED_RANGE_PAGES) {
+                return null;
+            }
+            java.util.List<JSONArray> pages = new java.util.ArrayList<>(pageCount);
+            for (int p = 0; p < pageCount; p++) {
+                JSONObject pageBody = request.fixedRangesPage(destination, devId, rev, firstPage + p);
+                JSONArray rows = pageBody.optJSONArray("rows");
+                if (rows == null) return null;
+                pages.add(rows);
+            }
+            return decodeFixedRangeSlice(cleanPeriod, rangeMeta, pages, rev);
+        }
+        // Daily range format (#1682): date keys YYYY-MM-DD up to MAX_DAILY_RANGE_PAGES (64).
+        java.time.LocalDate startDate = parseIsoLocalDate(expectedWindow[0]);
+        java.time.LocalDate endDate = parseIsoLocalDate(expectedWindow[1]);
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) return null;
+        long spanDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1L;
+        if (spanDays < 1L || spanDays > 31L) return null;
+        java.util.List<String> dayKeys = new java.util.ArrayList<>((int) spanDays);
+        java.util.LinkedHashSet<Integer> neededPages = new java.util.LinkedHashSet<>();
+        for (java.time.LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+            String dKey = d.toString();
+            JSONObject dayMeta = ranges.optJSONObject(dKey);
+            if (dayMeta == null
+                    || !dKey.equals(dayMeta.optString("start", ""))
+                    || !dKey.equals(dayMeta.optString("end", ""))) {
+                return null;
+            }
+            int fp = dayMeta.optInt("firstPage", -1);
+            int pc = dayMeta.optInt("pageCount", -1);
+            if (fp < 0 || pc < 0 || pc > ConnectionSpec.MAX_DAILY_RANGE_PAGES
+                    || fp + pc > ConnectionSpec.MAX_DAILY_RANGE_PAGES) {
+                return null;
+            }
+            dayKeys.add(dKey);
+            for (int p = 0; p < pc; p++) neededPages.add(fp + p);
+        }
+        java.util.Map<Integer, JSONArray> pageMap = new java.util.HashMap<>(neededPages.size());
+        for (Integer pageNum : neededPages) {
+            JSONObject pageBody = request.fixedRangesPage(destination, devId, rev, pageNum);
+            JSONArray rows = pageBody.optJSONArray("rows");
+            if (rows == null) return null;
+            pageMap.put(pageNum, rows);
+        }
+        java.util.List<JSONObject> dailyPeriods = new java.util.ArrayList<>(dayKeys.size());
+        for (String dKey : dayKeys) {
+            JSONObject dayMeta = ranges.optJSONObject(dKey);
+            int fp = dayMeta.optInt("firstPage", 0);
+            int pc = dayMeta.optInt("pageCount", 0);
+            java.util.List<JSONArray> dayPages = new java.util.ArrayList<>(pc);
+            for (int p = 0; p < pc; p++) dayPages.add(pageMap.get(fp + p));
+            JSONObject decodedDay = decodeFixedRangeSlice(dKey, dayMeta, dayPages, rev);
+            if (decodedDay == null) return null;
+            dailyPeriods.add(decodedDay.optJSONObject("period"));
+        }
+        return new JSONObject()
+                .put("revision", rev)
+                .put("start", expectedWindow[0])
+                .put("end", expectedWindow[1])
+                .put("period", mergeDailyRangePeriods(dailyPeriods));
     }
 
     private static JSONObject decodeFixedRangeSlice(String period, JSONObject rangeMeta, java.util.List<JSONArray> pages, String revision) throws Exception {
@@ -1473,11 +1777,16 @@ public final class MainActivity extends Activity {
                 JSONObject revisions = statsSnapshot.optJSONObject("fixedRangeRevisions");
                 JSONObject scanned = new JSONObject();
                 boolean needsHistoryFallback = false;
+                boolean derivedPeriod = isDerivedFixedPeriod(cleanPeriod);
                 for (int i = 0; devices != null && i < devices.length(); i++) {
                     JSONObject device = devices.optJSONObject(i);
                     if (device == null) continue;
                     String devId = device.optString("deviceId", "").trim();
                     if (devId.isEmpty()) continue;
+                    if (!derivedPeriod) {
+                        JSONObject omitted = device.optJSONObject("sessionDetailsOmitted");
+                        if (omitted == null || omitted.optInt(cleanPeriod, 0) <= 0) continue;
+                    }
                     String[] expectedWindow = expectedDeviceFixedWindow(device, cleanPeriod, nowMs);
                     String rev = revisions == null ? "" : revisions.optString(devId, "").trim();
                     if (expectedWindow != null && !rev.isEmpty()) {
@@ -1493,40 +1802,14 @@ public final class MainActivity extends Activity {
                             rememberFixedRangeSessions(devId, copy);
                         } else {
                             try {
-                                JSONObject index = request.fixedRangesIndex(destination, devId);
-                                JSONObject ranges = index.optJSONObject("ranges");
-                                JSONObject rangeMeta = ranges == null ? null : ranges.optJSONObject(cleanPeriod);
-                                if (rev.equals(index.optString("revision", ""))
-                                        && rangeMeta != null
-                                        && expectedWindow[0].equals(rangeMeta.optString("start", ""))
-                                        && expectedWindow[1].equals(rangeMeta.optString("end", ""))) {
-                                    int firstPage = rangeMeta.optInt("firstPage", -1);
-                                    int pageCount = rangeMeta.optInt("pageCount", -1);
-                                    if (firstPage >= 0 && pageCount >= 0
-                                            && pageCount <= ConnectionSpec.MAX_FIXED_RANGE_PAGES
-                                            && firstPage + pageCount <= ConnectionSpec.MAX_FIXED_RANGE_PAGES) {
-                                        java.util.List<JSONArray> pages = new java.util.ArrayList<>(pageCount);
-                                        boolean pagesValid = true;
-                                        for (int p = 0; p < pageCount; p++) {
-                                            JSONObject pageBody = request.fixedRangesPage(destination, devId, rev, firstPage + p);
-                                            JSONArray rows = pageBody.optJSONArray("rows");
-                                            if (rows == null) {
-                                                pagesValid = false;
-                                                break;
-                                            }
-                                            pages.add(rows);
-                                        }
-                                        if (pagesValid) {
-                                            JSONObject decoded = decodeFixedRangeSlice(cleanPeriod, rangeMeta, pages, rev);
-                                            if (decoded != null) {
-                                                synchronized (fixedRangeCacheLock) {
-                                                    fixedRangeSliceCache.put(cacheKey, new JSONObject(decoded.toString()));
-                                                }
-                                                scanned.put(devId, decoded);
-                                                rememberFixedRangeSessions(devId, decoded);
-                                            }
-                                        }
+                                JSONObject decoded = fetchAndDecodeFixedRange(
+                                        request, destination, devId, rev, cleanPeriod, expectedWindow);
+                                if (decoded != null) {
+                                    synchronized (fixedRangeCacheLock) {
+                                        fixedRangeSliceCache.put(cacheKey, new JSONObject(decoded.toString()));
                                     }
+                                    scanned.put(devId, decoded);
+                                    rememberFixedRangeSessions(devId, decoded);
                                 }
                             } catch (HubClient.HubError hubErr) {
                                 if (hubErr.status == 401 || hubErr.status == 403) throw hubErr;
@@ -1534,7 +1817,7 @@ public final class MainActivity extends Activity {
                             }
                         }
                     }
-                    if (!scanned.has(devId)) {
+                    if (derivedPeriod && !scanned.has(devId)) {
                         needsHistoryFallback = true;
                     }
                 }

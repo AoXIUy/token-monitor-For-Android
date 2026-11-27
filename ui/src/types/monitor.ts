@@ -34,7 +34,10 @@ export interface SessionRow {
   groupRole?: 'main' | 'subagent';
   subagentCount?: number;
   detailKey?: string;
+  projectId?: string;
   projectLabel?: string;
+  t3ParentLink?: boolean;
+  subagentLabel?: string;
   startedAt?: string;
   lastUsedAt?: string;
   turnEnded?: boolean;
@@ -425,7 +428,7 @@ export interface FixedRangePayloadEntry {
   error: string;
 }
 
-export type FixedRangeState = Partial<Record<DerivedPeriodId, FixedRangePayloadEntry>>;
+export type FixedRangeState = Partial<Record<PeriodId, FixedRangePayloadEntry>>;
 
 export interface MonitorState {
   conversation: SessionConversationState | null;

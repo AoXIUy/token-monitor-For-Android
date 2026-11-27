@@ -29,7 +29,7 @@ import { SessionDetailView } from './components/SessionDetailView';
 import { SessionsView } from './components/SessionsView';
 import { SettingsView } from './components/SettingsView';
 import { EmptyState, InlineAlert, SegmentedControl } from './components/ui/Primitives';
-import { fixedRangeStatsSignature, isDerivedPeriodId } from './fixedRangeState';
+import { fixedRangeStatsSignature, isDerivedPeriodId, needsPagedSessions } from './fixedRangeState';
 import { useNativeMonitor } from './hooks/useNativeMonitor';
 import { MonitorModel } from './model/monitorModel';
 import { receiveNativeMessage } from './nativeState';
@@ -231,9 +231,13 @@ function Dashboard({
   const nowTick = Date.now();
   const customPeriodTabs = state.displayPrefs.periodTabOrder;
   const hasCustomPeriodTabs = customPeriodTabs.length >= 3;
+  const wantsPagedSessions = needsPagedSessions(stats, period);
   const fixedRangeSig =
-    stats && isDerivedPeriodId(period) ? fixedRangeStatsSignature(stats, period) : '';
-  const currentFixedEntry = isDerivedPeriodId(period) ? state.fixedRange[period] ?? null : null;
+    stats && (isDerivedPeriodId(period) || wantsPagedSessions)
+      ? fixedRangeStatsSignature(stats, period)
+      : '';
+  const currentFixedEntry =
+    isDerivedPeriodId(period) || wantsPagedSessions ? state.fixedRange[period] ?? null : null;
 
   useEffect(() => {
     if (hasCustomPeriodTabs && !customPeriodTabs.includes(period)) {
@@ -254,10 +258,10 @@ function Dashboard({
     }
     const needsFixedRange =
       Boolean(stats) &&
-      isDerivedPeriodId(period) &&
+      (isDerivedPeriodId(period) || wantsPagedSessions) &&
       Boolean(fixedRangeSig) &&
-      (page === 'overview' || page === 'sessions' || page === 'sessionDetail' || devicePickerOpen);
-    if (!needsFixedRange || !isDerivedPeriodId(period)) return;
+      (page === 'overview' || page === 'sessions' || page === 'sessionDetail' || (isDerivedPeriodId(period) && devicePickerOpen));
+    if (!needsFixedRange) return;
     if (
       currentFixedEntry &&
       currentFixedEntry.signature === fixedRangeSig &&
@@ -274,6 +278,7 @@ function Dashboard({
     connection,
     stats,
     period,
+    wantsPagedSessions,
     fixedRangeSig,
     page,
     devicePickerOpen,
@@ -285,7 +290,7 @@ function Dashboard({
   const fixedRangeRes = MonitorModel.resolveFixedRange(
     stats,
     period,
-    isDerivedPeriodId(period) ? state.fixedRange[period] ?? null : null,
+    isDerivedPeriodId(period) || wantsPagedSessions ? state.fixedRange[period] ?? null : null,
     nowTick,
   );
   const effectiveStats = fixedRangeRes.projectedStats || stats;

@@ -118,9 +118,36 @@
     const existingTime = Date.parse(existing.lastUsedAt || '') || 0;
     const incomingTime = Date.parse(incoming.lastUsedAt || '') || 0;
     if (incomingTime >= existingTime) {
-      for (const field of ['title', 'projectLabel', 'lastUsedAt', 'latestModel', 'reasoningEffort',
-        'turnEnded', 'contextTokens', 'contextWindow', 'promptCacheExpiresAt', 'liveActivity']) {
+      for (const field of ['title', 'projectId', 'projectLabel', 'lastUsedAt', 'latestModel', 'reasoningEffort',
+        'contextTokens', 'contextWindow', 'promptCacheExpiresAt', 'liveActivity', 'nativeSessionId', 't3ThreadId', 'subagentLabel']) {
         if (incoming[field] !== undefined && incoming[field] !== '') merged[field] = incoming[field];
+      }
+      if (typeof incoming.turnEnded === 'boolean') {
+        merged.turnEnded = incoming.turnEnded;
+      } else if (incomingTime > existingTime) {
+        delete merged.turnEnded;
+      }
+      if (incoming.parentSessionId) {
+        merged.parentSessionId = incoming.parentSessionId;
+        if (incoming.parentClient) merged.parentClient = incoming.parentClient;
+        else delete merged.parentClient;
+        if (incoming.t3ParentLink) merged.t3ParentLink = true;
+        else delete merged.t3ParentLink;
+      } else if (incomingTime > existingTime && merged.t3ParentLink) {
+        delete merged.parentSessionId;
+        delete merged.parentClient;
+        delete merged.t3ParentLink;
+      }
+    } else {
+      for (const field of ['projectId', 'projectLabel', 'nativeSessionId', 't3ThreadId', 'subagentLabel']) {
+        if (!merged[field] && incoming[field] !== undefined && incoming[field] !== '') {
+          merged[field] = incoming[field];
+        }
+      }
+      if (!merged.parentSessionId && incoming.parentSessionId) {
+        merged.parentSessionId = incoming.parentSessionId;
+        if (incoming.parentClient) merged.parentClient = incoming.parentClient;
+        if (incoming.t3ParentLink) merged.t3ParentLink = true;
       }
     }
     if (incoming.startedAt && (!existing.startedAt || Date.parse(incoming.startedAt) < Date.parse(existing.startedAt))) {
@@ -232,8 +259,23 @@
     });
     return snapshot.status === 'ready' ? snapshot.devices : null;
   }
-  function resolveFixedRange(stats, periodName, payload = null, now = Date.now()) {
-    if (!isDerivedPeriod(periodName)) {
+  function stripPeriodTitles(period) {
+    if (!period?.sessions || typeof period.sessions !== 'object') return period;
+    const sessions = {};
+    for (const [key, sess] of Object.entries(period.sessions)) {
+      if (!sess || typeof sess !== 'object') continue;
+      if (sess.title) {
+        const copy = { ...sess };
+        delete copy.title;
+        sessions[key] = copy;
+      } else {
+        sessions[key] = sess;
+      }
+    }
+    return { ...period, sessions };
+  }
+  function resolvePagedSessionPeriod(stats, periodName, payload, now) {
+    if (!stats || (periodName !== 'today' && periodName !== 'month')) {
       return {
         status: 'native',
         period: periodName,
@@ -243,6 +285,111 @@
         projectedStats: stats,
         reason: '',
       };
+    }
+    const fleetOmittedInitial = count(stats.sessionDetailsOmitted?.[periodName]);
+    if (fleetOmittedInitial <= 0 || !payload?.scanned || typeof payload.scanned !== 'object') {
+      return {
+        status: 'native',
+        period: periodName,
+        range: null,
+        detailsAvailable: true,
+        deviceDetailsAvailable: {},
+        projectedStats: stats,
+        reason: '',
+      };
+    }
+    const devices = Array.isArray(stats.devices) ? stats.devices : [];
+    let anyRecovered = false;
+    const deviceDetailsAvailable = {};
+    const projectedDevices = devices.map((device) => {
+      if (expired(device, periodName, now)) {
+        deviceDetailsAvailable[device.deviceId] = false;
+        return device;
+      }
+      const omitted = count(device?.sessionDetailsOmitted?.[periodName]);
+      if (omitted <= 0) {
+        deviceDetailsAvailable[device.deviceId] = true;
+        return device;
+      }
+      const day = device?.periodWindows?.today?.key;
+      const expectedStart = isCalendarDayKey(day)
+        ? (periodName === 'month' ? `${day.slice(0, 7)}-01` : day)
+        : '';
+      const expectedEnd = isCalendarDayKey(day) ? day : '';
+      const expectedRev = stats.fixedRangeRevisions?.[device.deviceId];
+      const scannedEntry = payload.scanned?.[device.deviceId];
+      const revVerified = Boolean(expectedRev && (!scannedEntry?.revision || scannedEntry.revision === expectedRev));
+      const allowRetainedRev = payload.loading === true && Boolean(expectedRev);
+      const valid = Boolean(
+        expectedStart
+        && (revVerified || allowRetainedRev)
+        && scannedEntry?.start === expectedStart
+        && scannedEntry?.end === expectedEnd
+        && scannedEntry?.period
+        && typeof scannedEntry.period === 'object'
+      );
+      if (!valid) {
+        deviceDetailsAvailable[device.deviceId] = false;
+        return device;
+      }
+      anyRecovered = true;
+      deviceDetailsAvailable[device.deviceId] = true;
+      const rawPaged = normalizeFixedPeriod(scannedEntry.period, true);
+      const paged = revVerified ? rawPaged : stripPeriodTitles(rawPaged);
+      const inline = device.periods?.[periodName] || {};
+      const mergedSessions = { ...(paged.sessions || {}), ...(inline.sessions || {}) };
+      return {
+        ...device,
+        sessionDetailsOmitted: { ...(device.sessionDetailsOmitted || {}), [periodName]: 0 },
+        periods: {
+          ...(device.periods || {}),
+          [periodName]: { ...inline, sessions: mergedSessions },
+        },
+      };
+    });
+    if (!anyRecovered) {
+      return {
+        status: 'native',
+        period: periodName,
+        range: null,
+        detailsAvailable: true,
+        deviceDetailsAvailable,
+        projectedStats: stats,
+        reason: '',
+      };
+    }
+    const fleetSessions = {};
+    let remainingOmitted = 0;
+    for (const dev of projectedDevices) {
+      if (expired(dev, periodName, now)) continue;
+      remainingOmitted += count(dev?.sessionDetailsOmitted?.[periodName]);
+      for (const [sessKey, sess] of Object.entries(dev.periods?.[periodName]?.sessions || {})) {
+        if (!sess || typeof sess !== 'object') continue;
+        fleetSessions[sessKey] = mergeSessionRow(fleetSessions[sessKey], sess, dev);
+      }
+    }
+    const baseFleetPeriod = stats.periods?.[periodName] || emptyFixedPeriod();
+    return {
+      status: 'native',
+      period: periodName,
+      range: null,
+      detailsAvailable: true,
+      deviceDetailsAvailable,
+      projectedStats: {
+        ...stats,
+        sessionDetailsOmitted: { ...(stats.sessionDetailsOmitted || {}), [periodName]: remainingOmitted },
+        periods: {
+          ...(stats.periods || {}),
+          [periodName]: { ...baseFleetPeriod, sessions: fleetSessions },
+        },
+        devices: projectedDevices,
+      },
+      reason: '',
+    };
+  }
+  function resolveFixedRange(stats, periodName, payload = null, now = Date.now()) {
+    if (!isDerivedPeriod(periodName)) {
+      return resolvePagedSessionPeriod(stats, periodName, payload, now);
     }
     if (!stats || !fixedPeriodRanges) {
       return {
@@ -271,7 +418,11 @@
         reason: '',
       };
     }
-    if (!payload || payload.loading === true) {
+    const hasRetainedData = Boolean(
+      (payload?.scanned && Object.keys(payload.scanned).length > 0)
+      || (Array.isArray(payload?.deviceHistories) && payload.deviceHistories.length > 0)
+    );
+    if (!payload || (payload.loading === true && !hasRetainedData)) {
       return {
         status: 'loading',
         period: periodName,
@@ -282,7 +433,7 @@
         reason: 'loading',
       };
     }
-    if (payload.error && !payload.scanned && !payload.deviceHistories) {
+    if (payload.error && !hasRetainedData) {
       return {
         status: 'unavailable',
         period: periodName,
@@ -316,19 +467,25 @@
       });
       const expectedRev = stats.fixedRangeRevisions?.[device.deviceId];
       const scannedEntry = payload.scanned?.[device.deviceId];
-      const matchesRevision = !expectedRev || !scannedEntry?.revision || scannedEntry.revision === expectedRev;
+      const revVerified = !expectedRev || !scannedEntry?.revision || scannedEntry.revision === expectedRev;
+      const allowRetainedRev = payload.loading === true && Boolean(expectedRev);
       const validScanned = Boolean(
         expectedRange
-        && matchesRevision
+        && (revVerified || allowRetainedRev)
         && scannedEntry?.start === expectedRange.start
         && scannedEntry?.end === expectedRange.end
         && scannedEntry?.period
         && typeof scannedEntry.period === 'object'
       );
+      let normalizedScanned = null;
+      if (validScanned) {
+        normalizedScanned = normalizeFixedPeriod(scannedEntry.period, true);
+        if (!revVerified) normalizedScanned = stripPeriodTitles(normalizedScanned);
+      }
       return {
         device,
         range: expectedRange,
-        scannedPeriod: validScanned ? normalizeFixedPeriod(scannedEntry.period, true) : null,
+        scannedPeriod: normalizedScanned,
       };
     });
     const scannedCount = entries.filter(e => e.scannedPeriod !== null).length;
@@ -339,13 +496,17 @@
         ? historyFallbackForMissingDevices(periodName, missing, payload.deviceHistories, rangeOptions)
         : [];
       const fleetComplete = missing.length === 0 || fallback !== null;
+      const fallbackZeroOnly = !fallback || fallback.every(
+        (row) => count(row?.period?.totalTokens) === 0 && count(row?.period?.costUsd) === 0
+      );
+      const detailsAvailable = fleetComplete && fallbackZeroOnly;
       const derivedById = new Map((fallback || []).map(row => [String(row.deviceId), row]));
       const fleetPeriod = emptyFixedPeriod();
       let bounds = null;
       const projectedDevices = entries.map(({ device, range, scannedPeriod }) => {
         if (scannedPeriod) {
           deviceDetailsAvailable[device.deviceId] = true;
-          if (fleetComplete) mergePeriodInto(fleetPeriod, scannedPeriod, device, !fallback?.length);
+          if (fleetComplete) mergePeriodInto(fleetPeriod, scannedPeriod, device, detailsAvailable);
           if (range) {
             bounds = {
               start: !bounds || range.start < bounds.start ? range.start : bounds.start,
@@ -376,7 +537,6 @@
         }
         return { ...device, periods: { ...(device.periods || {}), [periodName]: null } };
       });
-      const detailsAvailable = fleetComplete && (!fallback || fallback.length === 0);
       if (!detailsAvailable) fleetPeriod.derivedFixedRange = true;
       return {
         status: fleetComplete ? 'ready' : 'partial',
@@ -395,6 +555,17 @@
     // Pure History fallback (older Hub or Cloudflare Worker without fixed-range uploads).
     const fallbackRows = historyFallbackForMissingDevices(periodName, devices, payload.deviceHistories, rangeOptions);
     if (!fallbackRows) {
+      if (payload.loading === true) {
+        return {
+          status: 'loading',
+          period: periodName,
+          range: null,
+          detailsAvailable: false,
+          deviceDetailsAvailable: {},
+          projectedStats: null,
+          reason: 'loading',
+        };
+      }
       return {
         status: 'unavailable',
         period: periodName,

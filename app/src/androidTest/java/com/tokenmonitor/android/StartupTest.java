@@ -2303,11 +2303,11 @@ public final class StartupTest {
                         String body;
                         if (first.contains("/api/subscriptions ")) {
                             body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
-                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=0 ")) {
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&daily=1&revision=rev-fr-1&page=0 ")) {
                             body = page0Payload;
-                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=1 ")) {
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&daily=1&revision=rev-fr-1&page=1 ")) {
                             body = page1Payload;
-                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc ")) {
+                        } else if (first.contains("/api/fixed-ranges?deviceId=scan-pc&daily=1 ")) {
                             body = indexPayload;
                         } else if (first.contains("/api/devices ")) {
                             body = devicesPayload;
@@ -2395,9 +2395,9 @@ public final class StartupTest {
                 }
                 assertEquals(0, DisplayPrefs.load(targetContext).optJSONArray("periodTabOrder").length());
 
-                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc HTTP/1.1"));
-                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=0 HTTP/1.1"));
-                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&revision=rev-fr-1&page=1 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&daily=1 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&daily=1&revision=rev-fr-1&page=0 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=scan-pc&daily=1&revision=rev-fr-1&page=1 HTTP/1.1"));
                 assertTrue(requests.contains("GET /api/devices HTTP/1.1"));
                 assertTrue(requests.stream().allMatch(line -> line.startsWith("GET ")));
                 assertFalse(authorizations.isEmpty());
@@ -2410,6 +2410,231 @@ public final class StartupTest {
                     scenario.close();
                     scenario = null;
                 }
+                server.close();
+                responder.join(5000);
+            }
+        }
+    }
+
+    @Test public void dailyFixedRangePagesZeroFallbackAndOmittedTodaySessions() throws Exception {
+        awaitConnectionPage();
+        List<String> requests = Collections.synchronizedList(new ArrayList<>());
+        java.time.LocalDate todayUtc = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate yesterdayUtc = todayUtc.minusDays(1);
+        String todayKey = todayUtc.toString();
+        String yesterdayKey = yesterdayUtc.toString();
+        String nowIso = java.time.Instant.now().toString();
+        String recentIso = java.time.Instant.now().minusSeconds(30).toString();
+        String tomorrowIso = todayUtc.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toString();
+
+        org.json.JSONObject utcWindows = new org.json.JSONObject()
+                .put("timeZone", "UTC")
+                .put("today", new org.json.JSONObject().put("key", todayKey).put("endsAt", tomorrowIso));
+
+        org.json.JSONObject inlineAgTurn = new org.json.JSONObject()
+                .put("client", "antigravity")
+                .put("sessionId", "turn-finished")
+                .put("title", "Antigravity Finished Turn")
+                .put("projectLabel", "kiro-repo")
+                .put("totalTokens", 1000)
+                .put("costUsd", 1.0)
+                .put("turnEnded", true)
+                .put("lastUsedAt", recentIso);
+
+        org.json.JSONObject inlineToday = new org.json.JSONObject()
+                .put("totalTokens", 3000)
+                .put("costUsd", 3.0)
+                .put("sessions", new org.json.JSONObject().put("antigravity:turn-finished", inlineAgTurn));
+
+        org.json.JSONObject scanDevice = new org.json.JSONObject()
+                .put("deviceId", "daily-pc")
+                .put("hostname", "Daily-Mac")
+                .put("deviceKind", "laptop")
+                .put("updatedAt", nowIso)
+                .put("stale", false)
+                .put("sessionDetailsOmitted", new org.json.JSONObject().put("today", 2))
+                .put("periodWindows", utcWindows)
+                .put("periods", new org.json.JSONObject().put("today", inlineToday));
+
+        org.json.JSONObject zeroIdleDevice = new org.json.JSONObject()
+                .put("deviceId", "zero-pc")
+                .put("hostname", "Idle-Server")
+                .put("deviceKind", "server")
+                .put("updatedAt", nowIso)
+                .put("stale", false)
+                .put("periodWindows", utcWindows)
+                .put("periods", new org.json.JSONObject()
+                        .put("today", new org.json.JSONObject().put("totalTokens", 0).put("costUsd", 0.0)));
+
+        String statsPayload = new org.json.JSONObject()
+                .put("fixedRangeRevisions", new org.json.JSONObject().put("daily-pc", "rev-daily-99"))
+                .put("deviceHistoryRevision", "hist-rev-99")
+                .put("sessionDetailsOmitted", new org.json.JSONObject().put("today", 2))
+                .put("devices", new org.json.JSONArray().put(scanDevice).put(zeroIdleDevice))
+                .put("periods", new org.json.JSONObject().put("today", inlineToday))
+                .put("subscriptionsUpdatedAt", "")
+                .toString();
+
+        String dailyIndexPayload = new org.json.JSONObject()
+                .put("deviceId", "daily-pc")
+                .put("revision", "rev-daily-99")
+                .put("pageCount", 2)
+                .put("ranges", new org.json.JSONObject()
+                        .put(todayKey, new org.json.JSONObject()
+                                .put("start", todayKey)
+                                .put("end", todayKey)
+                                .put("firstPage", 0)
+                                .put("pageCount", 1)
+                                .put("sessions", 2)
+                                .put("projects", 0)
+                                .put("totals", new org.json.JSONObject().put("totalTokens", 3000).put("costUsd", 3.0)))
+                        .put(yesterdayKey, new org.json.JSONObject()
+                                .put("start", yesterdayKey)
+                                .put("end", yesterdayKey)
+                                .put("firstPage", 1)
+                                .put("pageCount", 1)
+                                .put("sessions", 1)
+                                .put("projects", 1)
+                                .put("totals", new org.json.JSONObject()
+                                        .put("totalTokens", 2500)
+                                        .put("costUsd", 2.5)
+                                        .put("clients", new org.json.JSONObject().put("antigravity", 2500))
+                                        .put("clientCosts", new org.json.JSONObject().put("antigravity", 2.5)))))
+                .toString();
+
+        String dailyPage0 = new org.json.JSONObject()
+                .put("rows", new org.json.JSONArray()
+                        .put(new org.json.JSONArray()
+                                .put(todayKey)
+                                .put("sessions")
+                                .put("kiro:run-a")
+                                .put(new org.json.JSONObject()
+                                        .put("client", "kiro")
+                                        .put("sessionId", "run-a")
+                                        .put("t3ThreadId", "t3-kiro-99")
+                                        .put("title", "Kiro T3 Thread")
+                                        .put("projectLabel", "kiro-repo")
+                                        .put("totalTokens", 1200)
+                                        .put("costUsd", 1.2)
+                                        .put("lastUsedAt", recentIso)))
+                        .put(new org.json.JSONArray()
+                                .put(todayKey)
+                                .put("sessions")
+                                .put("kiro:run-b")
+                                .put(new org.json.JSONObject()
+                                        .put("client", "kiro")
+                                        .put("sessionId", "run-b")
+                                        .put("t3ThreadId", "t3-kiro-99")
+                                        .put("title", "Kiro T3 Thread")
+                                        .put("projectLabel", "kiro-repo")
+                                        .put("totalTokens", 800)
+                                        .put("costUsd", 0.8)
+                                        .put("lastUsedAt", recentIso))))
+                .toString();
+
+        String dailyPage1 = new org.json.JSONObject()
+                .put("rows", new org.json.JSONArray()
+                        .put(new org.json.JSONArray()
+                                .put(yesterdayKey)
+                                .put("projects")
+                                .put("kiro-repo")
+                                .put(new org.json.JSONObject().put("label", "kiro-repo").put("tokens", 2500).put("costUsd", 2.5)))
+                        .put(new org.json.JSONArray()
+                                .put(yesterdayKey)
+                                .put("sessions")
+                                .put("antigravity:acp-yesterday")
+                                .put(new org.json.JSONObject()
+                                        .put("client", "antigravity")
+                                        .put("sessionId", "acp-yesterday")
+                                        .put("t3ThreadId", "t3-acp-99")
+                                        .put("title", "T3 Sidebar ACP Session")
+                                        .put("projectLabel", "kiro-repo")
+                                        .put("totalTokens", 2500)
+                                        .put("costUsd", 2.5)
+                                        .put("turnEnded", true)
+                                        .put("lastUsedAt", yesterdayKey + "T19:00:00Z"))))
+                .toString();
+
+        String devicesPayload = new org.json.JSONObject()
+                .put("devices", new org.json.JSONArray()
+                        .put(new org.json.JSONObject()
+                                .put("deviceId", "daily-pc")
+                                .put("updatedAt", nowIso)
+                                .put("periodWindows", utcWindows)
+                                .put("historyAvailable", true)
+                                .put("history", new org.json.JSONObject().put("daily", new org.json.JSONArray())))
+                        .put(new org.json.JSONObject()
+                                .put("deviceId", "zero-pc")
+                                .put("updatedAt", nowIso)
+                                .put("periodWindows", utcWindows)
+                                .put("historyAvailable", true)
+                                .put("history", new org.json.JSONObject()
+                                        .put("daily", new org.json.JSONArray()
+                                                .put(new org.json.JSONObject().put("date", yesterdayKey).put("tokens", 0).put("cost", 0.0))))))
+                .toString();
+
+        try (ServerSocket server = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket socket = server.accept()) {
+                        socket.setSoTimeout(5000);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                        String first = reader.readLine();
+                        if (first == null) continue;
+                        requests.add(first);
+                        String line;
+                        while ((line = reader.readLine()) != null && !line.isEmpty()) { }
+                        String body;
+                        if (first.contains("/api/subscriptions ")) {
+                            body = "{\"subscriptions\":[],\"updatedAt\":\"\"}";
+                        } else if (first.contains("/api/fixed-ranges?deviceId=daily-pc&daily=1&revision=rev-daily-99&page=0 ")) {
+                            body = dailyPage0;
+                        } else if (first.contains("/api/fixed-ranges?deviceId=daily-pc&daily=1&revision=rev-daily-99&page=1 ")) {
+                            body = dailyPage1;
+                        } else if (first.contains("/api/fixed-ranges?deviceId=daily-pc&daily=1 ")) {
+                            body = dailyIndexPayload;
+                        } else if (first.contains("/api/devices ")) {
+                            body = devicesPayload;
+                        } else {
+                            body = statsPayload;
+                        }
+                        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                        socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + payload.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        socket.getOutputStream().write(payload);
+                    } catch (java.net.SocketException ignored) {
+                    } catch (Exception error) {
+                        if (!server.isClosed()) throw new RuntimeException(error);
+                    }
+                }
+            }, "test-daily-ranges-hub");
+            responder.setDaemon(true);
+            responder.start();
+            try {
+                evaluate("window.HubNative.connect('http://127.0.0.1:" + server.getLocalPort() + "', 'daily-test-secret', true)");
+                awaitScript("document.querySelector('.token-total') && document.querySelector('.token-total').innerText.includes('3K')");
+
+                // Today recovers omitted Kiro T3 grouped sessions (#1682, #1675) and shows Antigravity ended turn (#1689).
+                evaluate("document.querySelector('[data-page=\"sessions\"]').click()");
+                awaitScript("document.getElementById('content').innerText.includes('Kiro T3 Thread')"
+                        + " && !document.getElementById('content').innerText.includes('会话明细未上传')");
+                assertEquals("true", evaluate("document.querySelectorAll('section.session').length === 2"));
+                assertEquals("true", evaluate("Boolean(document.querySelector('section[data-session=\"antigravity%3Aturn-finished\"] [data-session-state=\"ended\"]'))"));
+
+                // Switch to Yesterday: zero-usage fallback device (zero-pc) does NOT hide fleet Sessions (#1685).
+                evaluate("document.getElementById('period-range-trigger').click()");
+                awaitScript("Boolean(document.querySelector('[data-fixed-period=\"yesterday\"]'))");
+                evaluate("document.querySelector('[data-fixed-period=\"yesterday\"]').click()");
+                awaitScript("document.getElementById('content').innerText.includes('T3 Sidebar ACP Session')");
+
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=daily-pc&daily=1 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=daily-pc&daily=1&revision=rev-daily-99&page=0 HTTP/1.1"));
+                assertTrue(requests.contains("GET /api/fixed-ranges?deviceId=daily-pc&daily=1&revision=rev-daily-99&page=1 HTTP/1.1"));
+                assertTrue(requests.stream().allMatch(req -> req.startsWith("GET ")));
+
+                evaluate("window.HubNative.disconnect()");
+                awaitConnectionPage();
+            } finally {
                 server.close();
                 responder.join(5000);
             }

@@ -45,20 +45,26 @@ public final class ConnectionSpecChecks {
         }
         checks++;
         if (!prefixed.fixedRangesIndexEndpoint("PC & 移动")
-                .startsWith("https://monitor.example.com/proxy/api/fixed-ranges?deviceId=PC+%26+")) {
+                .startsWith("https://monitor.example.com/proxy/api/fixed-ranges?deviceId=PC+%26+")
+                || !prefixed.fixedRangesIndexEndpoint("PC & 移动").endsWith("&daily=1")) {
             throw new AssertionError("Invalid fixedRangesIndexEndpoint");
         }
         checks++;
         if (!local.fixedRangesPageEndpoint("pc-1", "rev-uuid-01", 0)
-                .equals("http://[::1]:17321/api/fixed-ranges?deviceId=pc-1&revision=rev-uuid-01&page=0")) {
+                .equals("http://[::1]:17321/api/fixed-ranges?deviceId=pc-1&daily=1&revision=rev-uuid-01&page=0")) {
             throw new AssertionError("Invalid fixedRangesPageEndpoint");
+        }
+        checks++;
+        if (!local.fixedRangesPageEndpoint("pc-1", "rev-uuid-01", 63)
+                .equals("http://[::1]:17321/api/fixed-ranges?deviceId=pc-1&daily=1&revision=rev-uuid-01&page=63")) {
+            throw new AssertionError("Rejected valid daily fixed range page 63");
         }
         checks++;
         for (String badDevice : new String[] {"", "   ", "pc\n1"}) {
             try { prefixed.fixedRangesIndexEndpoint(badDevice); throw new AssertionError("Accepted invalid fixed range deviceId"); }
             catch (IllegalArgumentException expected) { checks++; }
         }
-        for (int badPage : new int[] {-1, 32, 999}) {
+        for (int badPage : new int[] {-1, 64, 999}) {
             try { prefixed.fixedRangesPageEndpoint("pc-1", "rev-1", badPage); throw new AssertionError("Accepted invalid fixed range page"); }
             catch (IllegalArgumentException expected) { checks++; }
         }

@@ -400,7 +400,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       topItems,
       toolHasSessions,
     };
-  }, [p, period, now, stats, deviceId, statusHealthy, foreground, fetchedAt]);
+  }, [p, period, detailsAvailable, now, stats, deviceId, statusHealthy, foreground, fetchedAt]);
 
   const limitsPulse = useMemo(() => {
     const providers = selected.providers || [];

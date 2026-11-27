@@ -16,9 +16,9 @@
     },
     {
       "path": "src/shared/sessionActivityProviders.js",
-      "sha256": "2bc87297a03fa457cc26c1f9d7285a84a0cf5e2af185637a046f5f2fe4ca46eb",
-      "sourceProject": "https://github.com/AoXIUy/token-monitor",
-      "sourcePath": "src/shared/sessionActivityProviders.js"
+      "sha256": "fe79c36bd749aecea5e43c03e4ab839c89787294faa8d47be4f44e3e5f1cb628",
+      "sourcePath": "src/shared/sessionActivityProviders.js",
+      "sourceCommit": "3788646ccf4e955b5a1d3e1e8c58daa7a30c4cc9"
     },
     {
       "path": "src/shared/sessionGroups.js",
@@ -26,9 +26,9 @@
     },
     {
       "path": "src/shared/sessionLive.js",
-      "sha256": "e61707e40cc99024736fdb3ace64173f7509469ae2168d6df6b980a4072f47f4",
+      "sha256": "278c8a86c7b2e29eeedcaeca8a9c5e468e261ee2562b6cf638953d197077528b",
       "sourcePath": "src/shared/sessionLive.js",
-      "sourceCommit": "5888563c2bc76c02bb3b6e74073daa000d7c1c47"
+      "sourceCommit": "2bec96a574deb92040567970bf6825ebfa9dc4d4"
     },
     {
       "path": "src/shared/limits/windowLabels.js",
@@ -75,6 +75,6 @@
       "sourceCommit": "3ea0ec251a3724622fe21a81ad37eea74570617f"
     }
   ],
-  "upstreamVersion": "0.98.0",
-  "upstreamCommit": "3ea0ec251a3724622fe21a81ad37eea74570617f"
+  "upstreamVersion": "0.99.0",
+  "upstreamCommit": "49831523e3bbb3ec57ad6d30001306390592c59b"
 }

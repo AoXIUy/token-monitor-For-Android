@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, receiveNativeMessage } from '../nativeState';
-import type { DerivedPeriodId, DisplayPrefs, LimitsPrefs, MonitorState, ReportGranularity } from '../types/monitor';
+import type { DisplayPrefs, LimitsPrefs, MonitorState, PeriodId, ReportGranularity } from '../types/monitor';
 import { createDemoAgManager, createDemoPayload, createDemoReports } from '../utils/demoData';
 import { beginConversation } from '../conversationState';
 import { beginReportDetail, beginReportsList } from '../reportsState';
@@ -122,11 +122,16 @@ export function useNativeMonitor() {
   }, [update]);
 
   const queryFixedRange = useCallback(
-    (period: DerivedPeriodId, signature: string) => {
+    (period: PeriodId, signature: string) => {
       const requestId = `fr-${Date.now()}-${++fixedRangeSequence.current}`;
       update((previous) => ({
         ...previous,
-        fixedRange: beginFixedRangeQuery(previous.fixedRange, { period, requestId, signature }),
+        fixedRange: beginFixedRangeQuery(previous.fixedRange, {
+          period,
+          requestId,
+          signature,
+          revisions: previous.stats?.fixedRangeRevisions ?? null,
+        }),
       }));
       if (window.HubNative?.queryFixedRange) {
         window.HubNative.queryFixedRange(period, requestId);

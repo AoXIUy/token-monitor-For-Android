@@ -57,6 +57,7 @@ final class ConnectionSpec {
     }
 
     static final int MAX_FIXED_RANGE_PAGES = 32;
+    static final int MAX_DAILY_RANGE_PAGES = 64;
 
     boolean hasCustomCa() {
         return !caCertPem.isEmpty();
@@ -86,19 +87,19 @@ final class ConnectionSpec {
     String fixedRangesIndexEndpoint(String deviceId) {
         validateQueryToken(deviceId, 256, "fixed range deviceId");
         try {
-            return url + "/api/fixed-ranges?deviceId=" + java.net.URLEncoder.encode(deviceId, "UTF-8");
+            return url + "/api/fixed-ranges?deviceId=" + java.net.URLEncoder.encode(deviceId, "UTF-8") + "&daily=1";
         } catch (java.io.UnsupportedEncodingException error) { throw new IllegalStateException(error); }
     }
 
     String fixedRangesPageEndpoint(String deviceId, String revision, int page) {
         validateQueryToken(deviceId, 256, "fixed range deviceId");
         validateQueryToken(revision, 128, "fixed range revision");
-        if (page < 0 || page >= MAX_FIXED_RANGE_PAGES) {
+        if (page < 0 || page >= MAX_DAILY_RANGE_PAGES) {
             throw new IllegalArgumentException("Invalid fixed range page");
         }
         try {
             return url + "/api/fixed-ranges?deviceId=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
-                    + "&revision=" + java.net.URLEncoder.encode(revision, "UTF-8")
+                    + "&daily=1&revision=" + java.net.URLEncoder.encode(revision, "UTF-8")
                     + "&page=" + page;
         } catch (java.io.UnsupportedEncodingException error) { throw new IllegalStateException(error); }
     }

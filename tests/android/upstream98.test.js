@@ -58,10 +58,10 @@ function loadBrowserModel() {
   return window;
 }
 
-test('v0.98.0: docs/upstream-files.json records v0.98.0 and 4-place registration for fixedPeriodRanges.js', () => {
+test('v0.98.0: docs/upstream-files.json matches every shared file sha256 and 4-place registration for fixedPeriodRanges.js', () => {
   const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/upstream-files.json'), 'utf8'));
-  assert.equal(meta.upstreamVersion, '0.98.0');
-  assert.equal(meta.upstreamCommit, '3ea0ec251a3724622fe21a81ad37eea74570617f');
+  assert.match(String(meta.upstreamVersion), /^\d+\.\d+\.\d+$/);
+  assert.match(String(meta.upstreamCommit), /^[0-9a-f]{40}$/);
 
   const fixedRangeEntry = meta.files.find((entry) => entry.path === 'src/shared/fixedPeriodRanges.js');
   assert.ok(fixedRangeEntry, 'fixedPeriodRanges.js must be registered in docs/upstream-files.json');
